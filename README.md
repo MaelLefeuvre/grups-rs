@@ -1,4 +1,4 @@
-![Build](https://github.com/github/actions/workflow/rust.yml/badge.svg)
+![Build](https://github.com/MaelLefeuvre/grupsactions/workflow/rust.yml/badge.svg)
 # grups
 rust port + update of [grups](https://github.com/sameoldmike/grups).  
 
