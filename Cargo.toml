@@ -13,3 +13,8 @@ path ="pwd_from_stdin/src/bin/main.rs"
 members = ["pwd_from_stdin"]
 
 [dependencies]
+pwd_from_stdin = { path = "pwd_from_stdin" }
+
+itertools = "0.10.3"
+rand = "0.8.5"
+ 

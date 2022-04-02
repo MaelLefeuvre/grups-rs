@@ -28,6 +28,11 @@ dependencies = [
 [[package]]
 name = "grups"
 version = "0.1.0"
+dependencies = [
+ "itertools",
+ "pwd_from_stdin",
+ "rand",
+]
 
 [[package]]
 name = "itertools"
