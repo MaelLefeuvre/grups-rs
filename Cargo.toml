@@ -17,4 +17,4 @@ pwd_from_stdin = { path = "pwd_from_stdin" }
 
 itertools = "0.10.3"
 rand = "0.8.5"
- 
+clap = {version = "3.1.2", features = ["derive"]} 

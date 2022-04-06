@@ -3,6 +3,11 @@ extern crate pwd_from_stdin;
 use crate::pwd_from_stdin::pileup;
 //use crate::pwd_from_stdin::jackknife::*;
 use crate::pwd_from_stdin::genome::*;
+use crate::pwd_from_stdin::parser::Cli;
+
+
+use clap::Parser;
+
 
 use std::{env, fs};
 use std::error::Error;
@@ -40,7 +45,7 @@ fn hash_target_positions(path: &String, sep: &str) -> Result<HashSet<SNPCoord>, 
     Ok(target_positions)
 }
 
-fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: Vec<u16>, names: Vec<&str>, allow_self_comparison: bool, genome: &Vec<Chromosome>, blocksize: u32) -> Vec<pileup::Comparison> {
+fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: Vec<u16>, names: Vec<String>, allow_self_comparison: bool, genome: &Vec<Chromosome>, blocksize: u32) -> Vec<pileup::Comparison> {
 
     let mut inds = vec![];
     for (i, index) in individuals.iter().enumerate() {
@@ -91,42 +96,28 @@ fn default_genome() -> Vec<Chromosome> {
 
 
 fn main() {
+    let cli = Cli::parse();
     // ----------------------------- Initialize defaults
     let genome = default_genome();
 
-    // ----------------------------- Command line arguments
-    let requested_individuals = vec![0,1,2];
-    println!("requested_individuals: {:?}", requested_individuals);
+    // ----------------------------- Command line arguments   --> This is horrible. put a method in
+    //                                                            parser.rs
+    //println!("Filter sites: {}", cli.filter_sites);
+    println!("requested_individuals: {:?}", cli.samples);
+    println!("requested_min_depth: {:?}", cli.min_depth);
+    println!("Allow self comparison: {}", cli.self_comparison);
+    println!("Phred treshold: {}", cli.min_qual);
+    println!("ignore_dels: {:?}", cli.ignore_dels);
+    println!("Filter known_variants: {}", cli.known_variants);
+    println!("Print Jackknife blocks: {}", cli.print_blocks);
+    println!("Jackknife blocksize: {}", cli.blocksize);
+    println!("Input file: {:?}", cli.pileup.as_ref());
+    println!("Targets file: {:?}", cli.targets.as_ref());
 
-    let requested_min_depth = vec![2];
-    println!("requested_min_depth: {:?}", requested_min_depth);
-
-    let allow_self_comparison = true;
-    println!("Allow self comparison: {}", allow_self_comparison);
-
-    let phred_treshold: u8 = 30;
-    println!("Phred treshold: {}", phred_treshold);
-
-    let ignore_dels = true;
-    println!("ignore_dels: {:?}", ignore_dels);
-    
-    let filter_known_variants = true;
-    println!("Filter known_variants: {}", filter_known_variants);
-
-    let filter_sites: bool = false;
-    println!("Filter sites: {}", filter_sites);
-
-    let print_blocks: bool = false;
-    println!("Print Jackknife blocks: {}", print_blocks);
-
-    let blocksize: u32 = 20_000_000;
-
-    let input = env::args().nth(1);
-    let targets_file = env::args().nth(2);
     let sep = " ";
 
     // ----------------------------- Sanity checks!
-    if allow_self_comparison && requested_min_depth.iter().any(|&x| x < 2) {         // depth must be > 2 when performing self-comparison
+    if cli.self_comparison && cli.min_depth.iter().any(|&x| x < 2) {         // depth must be > 2 when performing self-comparison
         panic!("Min_depth must be greater than 1 when performing self-comparison");
     }
 
@@ -135,13 +126,13 @@ fn main() {
     //let jackknife_blocks = JackknifeBlocks::new(&genome, blocksize);
 
     // ----------------------------- Parse Comparisons
-    let requested_names = vec!["MT23", "MT26", "MT7"];
-    let mut comparisons = parse_comparisons(&requested_individuals, requested_min_depth, requested_names, allow_self_comparison, &genome, blocksize);
+    //let requested_names = vec!["MT23", "MT26", "MT7"];
+    let mut comparisons = parse_comparisons(&cli.samples, cli.min_depth, cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
 
 
     // ----------------------------- Parse target_positions
     println!("// ------------------- Parse target positions -------------------- //");   
-    let target_positions = match targets_file {
+    let target_positions = match cli.targets {
         None => HashSet::new(),
         Some(filename) => match hash_target_positions(&filename, &sep) {
             Ok(vector) => vector,
@@ -155,12 +146,15 @@ fn main() {
 
     // --------------------------- Parse chromosomes 
     println!("// ------------------- Parse Chromosomes      -------------------- //");   
-    let valid_chromosomes : Vec<u8> = genome.into_iter().map(|p| p.name).collect();
+    let valid_chromosomes : Vec<u8> = match cli.chr {
+        Some(vector) => vector,
+        None => genome.into_iter().map(|chr| chr.name).collect()
+    };
     println!("Valid chromosomes: {:?}", valid_chromosomes);
     
     // ---------------------------- Choose between file handle or standard input
     println!("// ------------------- Opening pileup...      -------------------- //");   
-    let pileup_reader: Box<dyn BufRead> = match input {
+    let pileup_reader: Box<dyn BufRead> = match cli.pileup {
         None => Box::new(BufReader::new(io::stdin())),
         Some(filename) => Box::new(BufReader::new(fs::File::open(filename).unwrap()))
     };
@@ -169,7 +163,7 @@ fn main() {
     println!("// ------------------- Parsing pileup...      -------------------- //");   
     for entry in pileup_reader.lines() {
         // ----------------------- Parse line.
-        let mut line: pileup::Line = pileup::Line::new(&entry.as_ref().unwrap(), '\t', ignore_dels);
+        let mut line: pileup::Line = pileup::Line::new(&entry.as_ref().unwrap(), '\t', cli.ignore_dels);
 
         // ----------------------- Check if line should be skipped.
         if ! valid_chromosomes.contains(&line.coordinate.chromosome) {
@@ -181,10 +175,10 @@ fn main() {
         }
 
         // ------------------------ Apply quality filtering on all individuals.
-        line.filter_base_quality(&phred_treshold);
+        line.filter_base_quality(&cli.min_qual);
 
         // ------------------------ Apply target filtration if requested.
-        if filter_known_variants {
+        if cli.known_variants {
             let current_coord = match target_positions.get(&line.coordinate) {
                 Some(coordinate) => coordinate,
                 None => panic!("Cannot filter known variants when REF/ALT allele are unknown! Please use a different file format."),
@@ -206,7 +200,7 @@ fn main() {
     println!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
     for comparison in &comparisons {
         comparison.print();
-        if print_blocks {
+        if cli.print_blocks {
             comparison.blocks.print();
         }
     }

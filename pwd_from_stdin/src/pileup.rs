@@ -11,7 +11,7 @@ pub struct Individual {
 }
 
 impl Individual {
-    pub fn new(name: Option<&&str>, index: &usize, min_depth: &u16) -> Individual {
+    pub fn new(name: Option<&String>, index: &usize, min_depth: &u16) -> Individual {
         let name = match name {                            // Parse name and give default if non-existent
             Some(name) => name.to_string(),
             None => format!("Ind{}", &index.to_string()),
