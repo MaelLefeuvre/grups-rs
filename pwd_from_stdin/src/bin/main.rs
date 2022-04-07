@@ -4,18 +4,22 @@ use crate::pwd_from_stdin::pileup;
 //use crate::pwd_from_stdin::jackknife::*;
 use crate::pwd_from_stdin::genome::*;
 use crate::pwd_from_stdin::parser::Cli;
-
+use crate::pwd_from_stdin::logger;
 
 use clap::Parser;
 
-
-use std::{env, fs};
+use std::fs;
 use std::error::Error;
 use itertools::Itertools;
 use std::collections::HashSet;
 use std::io::{self, BufReader, BufRead};
+use std::process;
 
 
+#[macro_use]
+extern crate log;
+
+use atty;
 /// Convert a space-separated path of SNP coordinates to a vector of object SNPCoord.
 /// TODO: At this state, does not support multiple spaces. Should implement ability to
 ///       Remove empty fields.
@@ -66,72 +70,40 @@ fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: Vec<u16>, names: 
 }
 
 
-fn default_genome() -> Vec<Chromosome> {
-    vec![
-        Chromosome{index:  0, name:  1, length: 249250621},
-        Chromosome{index:  1, name:  2, length: 243199373},
-        Chromosome{index:  2, name:  3, length: 198022430},
-        Chromosome{index:  3, name:  4, length: 191154276},
-        Chromosome{index:  4, name:  5, length: 180915260},
-        Chromosome{index:  5, name:  6, length: 171115067},
-        Chromosome{index:  6, name:  7, length: 159138663},
-        Chromosome{index:  7, name:  8, length: 146364022},
-        Chromosome{index:  8, name:  9, length: 141213431},
-        Chromosome{index:  9, name: 10, length: 135534747},
-        Chromosome{index: 10, name: 11, length: 135006516},
-        Chromosome{index: 11, name: 12, length: 133851895},
-        Chromosome{index: 12, name: 13, length: 115169878},
-        Chromosome{index: 13, name: 14, length: 107349540},
-        Chromosome{index: 14, name: 15, length: 102531392},
-        Chromosome{index: 15, name: 16, length:  90354753},
-        Chromosome{index: 16, name: 17, length:  81195210},
-        Chromosome{index: 17, name: 18, length:  78077248},
-        Chromosome{index: 18, name: 19, length:  59128983},
-        Chromosome{index: 19, name: 20, length:  63025520},
-        Chromosome{index: 20, name: 21, length:  48129895},
-        Chromosome{index: 21, name: 22, length:  51304566}
-    ]
-}
-
-
-
 fn main() {
+    // ----------------------------- Run CLI Parser 
     let cli = Cli::parse();
-    // ----------------------------- Initialize defaults
-    let genome = default_genome();
+    // ----------------------------- Init logger.
+    logger::init_logger(&(cli.verbose+(!cli.quiet as u8)));
 
-    // ----------------------------- Command line arguments   --> This is horrible. put a method in
-    //                                                            parser.rs
-    //println!("Filter sites: {}", cli.filter_sites);
-    println!("requested_individuals: {:?}", cli.samples);
-    println!("requested_min_depth: {:?}", cli.min_depth);
-    println!("Allow self comparison: {}", cli.self_comparison);
-    println!("Phred treshold: {}", cli.min_qual);
-    println!("ignore_dels: {:?}", cli.ignore_dels);
-    println!("Filter known_variants: {}", cli.known_variants);
-    println!("Print Jackknife blocks: {}", cli.print_blocks);
-    println!("Jackknife blocksize: {}", cli.blocksize);
-    println!("Input file: {:?}", cli.pileup.as_ref());
-    println!("Targets file: {:?}", cli.targets.as_ref());
-
-    let sep = " ";
+    // ----------------------------- Serialize command line arguments
+    cli.serialize();
 
     // ----------------------------- Sanity checks!
     if cli.self_comparison && cli.min_depth.iter().any(|&x| x < 2) {         // depth must be > 2 when performing self-comparison
-        panic!("Min_depth must be greater than 1 when performing self-comparison");
+        error!("Min_depth must be greater than 1 when performing self-comparison");
+        process::exit(1);
     }
 
-    // ----------------------------- Parse jackknife blocks
-    //let jackknife_blocks = compute_jackknife_blocksize(&genome, blocksize);
-    //let jackknife_blocks = JackknifeBlocks::new(&genome, blocksize);
+    if atty::is(atty::Stream::Stdin) && cli.pileup == None {
+        error!("Neither --pileup, nor the stdinput buffer are being sollicited. Exiting.");
+        process::exit(1);
+    }
+
+    // ----------------------------- Initialize genome.
+    info!("Indexing reference genome...");
+    let genome = match cli.genome.as_ref(){
+        Some(file) => fasta_index_reader(&(file.to_string()+&".fai".to_string())).unwrap(),
+        None => default_genome(),
+    };
 
     // ----------------------------- Parse Comparisons
-    //let requested_names = vec!["MT23", "MT26", "MT7"];
+    info!("Parsing Requested comparisons...");
     let mut comparisons = parse_comparisons(&cli.samples, cli.min_depth, cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
 
-
     // ----------------------------- Parse target_positions
-    println!("// ------------------- Parse target positions -------------------- //");   
+    info!("Parsing target_positions..."); 
+    let sep = " ";
     let target_positions = match cli.targets {
         None => HashSet::new(),
         Some(filename) => match hash_target_positions(&filename, &sep) {
@@ -140,30 +112,27 @@ fn main() {
         },
     };
     let target_required: bool = ! target_positions.is_empty();
-    println!("Target_required: {}", target_required);
-
-
 
     // --------------------------- Parse chromosomes 
-    println!("// ------------------- Parse Chromosomes      -------------------- //");   
     let valid_chromosomes : Vec<u8> = match cli.chr {
         Some(vector) => vector,
         None => genome.into_iter().map(|chr| chr.name).collect()
     };
-    println!("Valid chromosomes: {:?}", valid_chromosomes);
+    info!("Valid chromosomes: {:?}", valid_chromosomes);
     
     // ---------------------------- Choose between file handle or standard input
-    println!("// ------------------- Opening pileup...      -------------------- //");   
+    info!("Opening pileup...");   
     let pileup_reader: Box<dyn BufRead> = match cli.pileup {
         None => Box::new(BufReader::new(io::stdin())),
         Some(filename) => Box::new(BufReader::new(fs::File::open(filename).unwrap()))
     };
 
     // ---------------------------- Read Pileup
-    println!("// ------------------- Parsing pileup...      -------------------- //");   
+    info!(" Parsing pileup...");   
     for entry in pileup_reader.lines() {
         // ----------------------- Parse line.
         let mut line: pileup::Line = pileup::Line::new(&entry.as_ref().unwrap(), '\t', cli.ignore_dels);
+        trace!("{:?}", &line);
 
         // ----------------------- Check if line should be skipped.
         if ! valid_chromosomes.contains(&line.coordinate.chromosome) {
@@ -196,7 +165,8 @@ fn main() {
         }
     }
 
-    println!("// ------------------- Printing results       -------------------- //");   
+    info!("Printing results...");   
+    
     println!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
     for comparison in &comparisons {
         comparison.print();

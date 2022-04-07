@@ -15,6 +15,9 @@ members = ["pwd_from_stdin"]
 [dependencies]
 pwd_from_stdin = { path = "pwd_from_stdin" }
 
+log = "0.4.16"
+env_logger= "0.9.0"
 itertools = "0.10.3"
 rand = "0.8.5"
-clap = {version = "3.1.2", features = ["derive"]} 
+clap = {version = "3.1.2", features = ["derive"]}
+atty = "0.2" 
