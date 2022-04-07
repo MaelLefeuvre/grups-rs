@@ -1,7 +1,9 @@
 use crate::genome::{SNPCoord, Chromosome};
 use crate::jackknife::JackknifeBlocks;
 use std::iter::Peekable;
+use std::error::Error;
 use rand::seq::SliceRandom;
+use std::fmt;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Individual {
@@ -64,17 +66,31 @@ impl Comparison {
         nuc[0].base != nuc[1].base
     }
 
-    pub fn print(&self) {
-        println!("{: <20} - {: <7} - {: <7} - {: <8.5} - {: <8.5}",
-                 format!("{}-{}", self.pair.0.name, self.pair.1.name),
-                 self.overlap,
-                 self.pwd,
-                 (self.pwd as f64/self.overlap as f64),
-                 (self.sum_phred as f64/self.overlap as f64),
-                );
+    pub fn get_avg_pwd(&self) -> f64 {
+        self.pwd as f64 / self.overlap as f64
+    }
+
+    pub fn get_avg_phred(&self) -> f64 {
+        self.sum_phred as f64/self.overlap as f64
+    }
+
+    pub fn get_pair(&self,)-> String {
+        format!("{}-{}", self.pair.0.name, self.pair.1.name)
     }
 }
 
+impl fmt::Display for Comparison {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f,
+            "{: <20} - {: <7} - {: <7} - {: <8.5} - {: <8.5}",
+            self.get_pair(),
+            self.overlap,
+            self.pwd,
+            self.get_avg_pwd(),
+            self.get_avg_phred()
+        )
+    }
+}
 
 #[derive(Debug)]
 pub struct Nucleotide {
@@ -98,6 +114,18 @@ impl Nucleotide {
     }
 }
 
+
+#[derive(Debug)]
+struct PileupError(String);
+
+impl Error for PileupError {}
+
+impl fmt::Display for PileupError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "PileupError: {}", self.0)
+    }
+}
+
 #[derive(Debug)]
 pub struct Pileup {
     pub depth: u16,
@@ -105,7 +133,7 @@ pub struct Pileup {
 }
 
 impl Pileup {
-    pub fn new(depth: u16, bases: String, scores: String, ignore_dels: bool) -> Pileup {
+    pub fn new(depth: u16, bases: String, scores: String, ignore_dels: bool) -> Result<Pileup, Box<dyn Error>> {
 
         let bases = &bases.to_uppercase();    // Convert antisense to forward
         let bases = &bases.replace(",", "."); //
@@ -122,13 +150,15 @@ impl Pileup {
                 '^'     => {chars.nth(0); continue},                 //Skip starts
                 '$'     => {continue},                               //Skip end
                 '*'     => if ignore_dels {continue},                //Skip deletion if required
-                '>'|'<' => panic!("Cannot handle reference skips!"), //Exit if reference skips.
+                '>'|'<' => {return Err(Box::new(PileupError("Cannot handle reference skips!".into())))},
                 _       => ()
             }
-            let score = &scores_vec.next().unwrap();
-            nucleotides.push(Nucleotide::new(&n, &score));
+            match &scores_vec.next() {
+                Some(score) => nucleotides.push(Nucleotide::new(&n, &score)),
+                None => return Err(Box::new(PileupError("length of nucleotides and scores differ.".into())))
+            };
         }
-        Pileup { depth, nucleotides }
+        Ok(Pileup { depth, nucleotides })
     }
 
     pub fn filter_base_quality(&mut self, phred_treshold: &u8) {
@@ -175,8 +205,6 @@ impl Pileup {
         self.depth = self.nucleotides.len() as u16;
 
     }
-
-
 }
 
 #[derive(Debug)]
@@ -186,26 +214,26 @@ pub struct Line {
 }
 
 impl Line {
-    pub fn new(line: &str, sep: char, ignore_dels: bool) -> Line {
+    pub fn new(line: &str, sep: char, ignore_dels: bool) -> Result<Line, Box<dyn Error>> {
 
         let split_line: Vec<&str>    = line.split(sep).collect();
-        let chromosome: u8           = split_line[0].parse().unwrap();
-        let position  : u32          = split_line[1].parse().unwrap();
+        let chromosome: u8           = split_line[0].parse()?;
+        let position  : u32          = split_line[1].parse()?;
         let reference : Option<char> = split_line[2].parse().ok();
 
         //Loop along individuals
         let mut individuals: Vec<Pileup> = Vec::new();
         for i in (3..split_line.len()).step_by(3) {
-            let depth :    u16 = split_line[i].parse().unwrap();
-            let bases : String = split_line[i+1].parse().unwrap();
-            let scores: String = split_line[i+2].parse().unwrap();
-            //Add this individual to our list.
-            individuals.push(Pileup::new(depth, bases, scores, ignore_dels));
+            let depth :    u16 = split_line[i].parse()?;
+            let bases : String = split_line[i+1].parse()?;
+            let scores: String = split_line[i+2].parse()?;
+
+            individuals.push(Pileup::new(depth, bases, scores, ignore_dels)?);
         }
-        Line {
+        Ok(Line {
             coordinate: SNPCoord{chromosome, position, reference, alternate: None },
             individuals: individuals
-        }
+        })
     }
 
     pub fn filter_base_quality(&mut self, phred_treshold: &u8) {
@@ -229,7 +257,6 @@ impl Line {
         vec![
             self.individuals[pair.0.index].nucleotides.choose(&mut rng).unwrap(),
             self.individuals[pair.1.index].nucleotides.choose(&mut rng).unwrap(),
-
         ]
 
     }
@@ -246,14 +273,18 @@ mod tests {
     fn create_dummy_pileup(line_input: &str, score_input: &str, ignore_dels: bool) -> pileup::Pileup {
         let line_input : String = line_input.to_string();
         let scores_input : String = score_input.to_string();
-        return pileup::Pileup::new(line_input.len() as u16, line_input, scores_input, ignore_dels);
+        return pileup::Pileup::new(line_input.len() as u16, line_input, scores_input, ignore_dels).unwrap();
     }
 
     #[test]
     fn line_filter_base_qualities() {
         println!("Testing Line base_quality filtering.");
         let raw_line="22\t51057923\tC\t6\tTTTTtt\tJEJEEE\t0\t*\t*\t1\tT\tJ";
-        let mut line = pileup::Line::new(&raw_line, '\t', true);
+        let mut line = pileup::Line::new(&raw_line, '\t', true).unwrap();
+        // {
+        //    Ok(line) => line,
+        //    Err(e)   => {log::error!("Error: {e}", e)},
+        //};
 
         line.filter_base_quality(&30);
         assert_eq!(line.individuals[0].get_nucleotides(), "TTTTTT");
@@ -268,7 +299,7 @@ mod tests {
     fn line_filter_known_variant_1() {
         println!("Testing Line known_variant filtration.");
         let raw_line="2\t21303470\tN\t0\t*\t*\t8\tTTcTTtt^Ft\tEEJEEEEE\t0\t*\t*";
-        let mut line = pileup::Line::new(&raw_line, '\t', true);
+        let mut line = pileup::Line::new(&raw_line, '\t', true).unwrap();
 
         let known_variant = SNPCoord { chromosome: 2, position: 21303470, reference: Some('C'), alternate: Some('A') };
         line.filter_known_variants(&known_variant);
@@ -281,7 +312,7 @@ mod tests {
     fn line_filter_known_variant_2() {
         println!("Testing Line known_variant filtration.");
         let raw_line="2\t21303470\tT\t0\t*\t*\t8\t..c..,,^F,\tEEJEEEEE\t0\t*\t*";
-        let mut line = pileup::Line::new(&raw_line, '\t', true);
+        let mut line = pileup::Line::new(&raw_line, '\t', true).unwrap();
 
         let known_variant = SNPCoord { chromosome: 2, position: 21303470, reference: Some('T'), alternate: Some('A') };
         line.filter_known_variants(&known_variant);

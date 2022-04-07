@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use std::ops::Range;
 use itertools::Itertools;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct JackknifeBlocks {
@@ -40,19 +41,12 @@ impl JackknifeBlocks {
     pub fn print(&self) -> () {
         println!("{: <4} - {: <15} - {: <15} - {: <5} - {: <5}", "chr", "start", "end", "overlap", "pwd");
         for chr in self.blocks.keys().sorted() {
-            for block in self.blocks[chr].iter(){
-                println!("{: <4} - {: <15} - {: <15} - {: <5} - {: <5}",
-                         block.chromosome,
-                         block.range.start,
-                         block.range.end,
-                         block.site_counts,
-                         block.pwd_counts
-                );
-            }
+            self.blocks[chr].iter().for_each(|block| println!("{}", block));
         }
-        
     }
 }
+
+
 
 #[derive(Debug)]
 pub struct JackknifeBlock {
@@ -73,6 +67,19 @@ impl JackknifeBlock {
 
     pub fn add_count(&mut self) {
         self.site_counts += 1;
+    }
+}
+
+impl fmt::Display for JackknifeBlock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f,
+            "{: <4} - {: <15} - {: <15} - {: <5} - {: <5}",
+            self.chromosome,
+            self.range.start,
+            self.range.end,
+            self.site_counts,
+            self.pwd_counts
+        )
     }
 }
 

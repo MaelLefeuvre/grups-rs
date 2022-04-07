@@ -3,7 +3,7 @@ use crate::jackknife::*;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::error::Error;
-use std::io::{self, BufReader, BufRead};
+use std::io::{BufReader, BufRead};
 
 use log::{info, warn};
 

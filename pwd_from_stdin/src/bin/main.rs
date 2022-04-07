@@ -14,12 +14,12 @@ use itertools::Itertools;
 use std::collections::HashSet;
 use std::io::{self, BufReader, BufRead};
 use std::process;
-
+use atty;
 
 #[macro_use]
 extern crate log;
 
-use atty;
+
 /// Convert a space-separated path of SNP coordinates to a vector of object SNPCoord.
 /// TODO: At this state, does not support multiple spaces. Should implement ability to
 ///       Remove empty fields.
@@ -69,7 +69,6 @@ fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: Vec<u16>, names: 
     comparisons
 }
 
-
 fn main() {
     // ----------------------------- Run CLI Parser 
     let cli = Cli::parse();
@@ -90,6 +89,9 @@ fn main() {
         process::exit(1);
     }
 
+    if cli.min_depth.len() < cli.samples.len() {
+        warn!("--min-depth length is less than that of --samples. Values of min-depth will wrap around.")
+    }
     // ----------------------------- Initialize genome.
     info!("Indexing reference genome...");
     let genome = match cli.genome.as_ref(){
@@ -128,10 +130,13 @@ fn main() {
     };
 
     // ---------------------------- Read Pileup
-    info!(" Parsing pileup...");   
+    info!("Parsing pileup...");   
     for entry in pileup_reader.lines() {
         // ----------------------- Parse line.
-        let mut line: pileup::Line = pileup::Line::new(&entry.as_ref().unwrap(), '\t', cli.ignore_dels);
+        let mut line: pileup::Line = match pileup::Line::new(&entry.as_ref().unwrap(), '\t', cli.ignore_dels){
+            Ok(line) => line,
+            Err(e) => {error!("Error: {}", e); process::exit(1);},
+        };
         trace!("{:?}", &line);
 
         // ----------------------- Check if line should be skipped.
@@ -165,11 +170,11 @@ fn main() {
         }
     }
 
-    info!("Printing results...");   
+    info!("Printing results...");
     
     println!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
     for comparison in &comparisons {
-        comparison.print();
+        println!("{}", comparison);
         if cli.print_blocks {
             comparison.blocks.print();
         }
