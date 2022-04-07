@@ -160,9 +160,19 @@ fn main() {
             line.filter_known_variants(&current_coord);
         }
 
+        //let filter_sites = true;
+        let mut print_site: bool = false;
         for comparison in &mut comparisons {
             if comparison.satisfiable_depth(&line.individuals) {
-                comparison.compare(&line);
+                if ! cli.filter_sites {
+                    comparison.compare(&line);
+                } else {
+                    print_site = true;
+                }
+                if cli.filter_sites &&  print_site {
+                    println!("{}", entry.as_ref().unwrap());
+                }
+                //comparison.compare(&line);
                 //if filter_sites {
                 //    println!("{}", entry.unwrap());
                 //} 
@@ -170,13 +180,14 @@ fn main() {
         }
     }
 
-    info!("Printing results...");
-    
-    println!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
-    for comparison in &comparisons {
-        println!("{}", comparison);
-        if cli.print_blocks {
-            comparison.blocks.print();
+    if ! cli.filter_sites {
+        info!("Printing results...");
+        println!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
+        for comparison in &comparisons {
+            println!("{}", comparison);
+            if cli.print_blocks {
+                comparison.blocks.print();
+            }
         }
     }
 }

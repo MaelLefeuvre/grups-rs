@@ -17,8 +17,8 @@ pub struct Cli {
     pub self_comparison: bool,
     #[clap(short, long)]
     pub known_variants: bool,
-    //#[clap(short, long)]
-    //pub filter_sites: bool,
+    #[clap(short, long)]
+    pub filter_sites: bool,
     #[clap(short, long)]
     pub ignore_dels: bool,
     #[clap(short, long)]
