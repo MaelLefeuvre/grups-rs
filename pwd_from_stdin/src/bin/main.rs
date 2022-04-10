@@ -1,13 +1,15 @@
 extern crate pwd_from_stdin;
 
 use crate::pwd_from_stdin::pileup;
-//use crate::pwd_from_stdin::jackknife::*;
 use crate::pwd_from_stdin::genome::*;
 use crate::pwd_from_stdin::parser::Cli;
 use crate::pwd_from_stdin::logger;
 
 use clap::Parser;
+use num::One;
 
+use std::str::FromStr;
+use std::ops::{Range, Add};
 use std::fs;
 use std::error::Error;
 use itertools::Itertools;
@@ -55,7 +57,7 @@ fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: Vec<u16>, names: 
     for (i, index) in individuals.iter().enumerate() {
         let name = names.get(i);
         let min_depth = min_depths[(i % (min_depths.len())) as usize]; // wrap around min_depths if its length is lesser than the number of inds.
-        inds.push(pileup::Individual::new(name, index, &min_depth));
+        inds.push(pileup::Individual::new(name, &(index-1), &min_depth));
     }
 
     let mut comparisons: Vec<pileup::Comparison> = vec![];
@@ -69,6 +71,31 @@ fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: Vec<u16>, names: 
     comparisons
 }
 
+fn parse_user_ranges<T>(ranges: Vec<String>) -> Result<Vec<T>, <T as FromStr>::Err>
+where
+    T: FromStr + Add<Output = T> + Ord + One,
+    Range<T>: Iterator<Item = T>,
+{
+    let parsed_ranges: Result<Vec<Vec<T>>, _> = ranges.iter()
+        .map(|s| match s.split_once("-") {
+            Some(t) => Ok((t.0.parse::<T>()?..t.1.parse::<T>()?+One::one()).collect::<Vec<T>>()),
+            None    => Ok(vec![s.parse::<T>()?])
+        })
+        .collect();
+
+    match parsed_ranges {
+        Ok(vec) => {
+            
+            let mut out: Vec<T> = vec.into_iter().flatten().collect();
+            out.sort();
+            out.dedup();
+            Ok(out)
+        },
+        Err(e) => return Err(e)
+    }
+}
+
+
 fn main() {
     // ----------------------------- Run CLI Parser 
     let cli = Cli::parse();
@@ -77,6 +104,16 @@ fn main() {
 
     // ----------------------------- Serialize command line arguments
     cli.serialize();
+
+    // ----------------------------- Parse Requested_samples
+    let requested_samples: Vec<usize> = match parse_user_ranges(cli.samples) {
+        Ok(vec) => vec,
+        Err(e)  => {
+                error!("Invalid slice or integer format for --samples. [{}]", e);
+                process::exit(1);
+        }
+    };
+
 
     // ----------------------------- Sanity checks!
     if cli.self_comparison && cli.min_depth.iter().any(|&x| x < 2) {         // depth must be > 2 when performing self-comparison
@@ -89,7 +126,7 @@ fn main() {
         process::exit(1);
     }
 
-    if cli.min_depth.len() < cli.samples.len() {
+    if cli.min_depth.len() < requested_samples.len() {
         warn!("--min-depth length is less than that of --samples. Values of min-depth will wrap around.")
     }
     // ----------------------------- Initialize genome.
@@ -101,7 +138,7 @@ fn main() {
 
     // ----------------------------- Parse Comparisons
     info!("Parsing Requested comparisons...");
-    let mut comparisons = parse_comparisons(&cli.samples, cli.min_depth, cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
+    let mut comparisons = parse_comparisons(&requested_samples, cli.min_depth, cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
 
     // ----------------------------- Parse target_positions
     info!("Parsing target_positions..."); 
@@ -115,13 +152,21 @@ fn main() {
     };
     let target_required: bool = ! target_positions.is_empty();
 
-    // --------------------------- Parse chromosomes 
+    // ----------------------------- Parse Requested Chromosomes
     let valid_chromosomes : Vec<u8> = match cli.chr {
-        Some(vector) => vector,
-        None => genome.into_iter().map(|chr| chr.name).collect()
+        Some(vector) => match parse_user_ranges(vector) {
+            Ok(vector) => vector,
+            Err(e)     => {
+                error!("Invalid slice or integer format for --chr. [{}]", e);
+                process::exit(1);
+            }
+        },
+        None         => genome.into_iter().map(|chr| chr.name).collect()
     };
     info!("Valid chromosomes: {:?}", valid_chromosomes);
     
+
+
     // ---------------------------- Choose between file handle or standard input
     info!("Opening pileup...");   
     let pileup_reader: Box<dyn BufRead> = match cli.pileup {

@@ -5,8 +5,6 @@ use serde::{Serialize};
 
 use log::{info};
 
-
-
 #[derive(Parser, Debug, Serialize)]
 pub struct Cli {
     #[clap(short, long, parse(from_occurrences))]
@@ -30,7 +28,7 @@ pub struct Cli {
     #[clap(short('M'), long, default_value("30"))]
     pub min_qual: u8,
     #[clap(short, long, multiple_values(true), default_values(&["0", "1"]))]
-    pub samples: Vec <usize>,
+    pub samples: Vec <String>,
     //#[clap(short, long, required(false), default_value("1000000"))]
     //pub lines: u32,
     #[clap(short, long, required(false))]
@@ -40,7 +38,7 @@ pub struct Cli {
     #[clap(short, long, required(false))]
     pub pileup: Option<String>,
     #[clap(short, long, multiple_values(true))]
-    pub chr: Option<Vec<u8>>,
+    pub chr: Option<Vec<String>>,
     #[clap(short, long, multiple_values(true))]
     pub sample_names: Vec<String>,
 }
