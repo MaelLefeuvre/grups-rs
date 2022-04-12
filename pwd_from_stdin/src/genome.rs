@@ -72,11 +72,39 @@ pub fn default_genome() -> Vec<Chromosome> {
     ]
 }
 
-pub fn fasta_index_reader(path: &String) -> Result<Vec<Chromosome>,Box<dyn Error>>  {
+
+
+
+#[derive(Debug)]
+pub enum FastaIndexReaderError {
+    FileNotFoundError(String, String),
+    ParseIntError(String, u8, String),
+}
+impl Error for FastaIndexReaderError {}
+
+impl std::fmt::Display for FastaIndexReaderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::FileNotFoundError(path, err) => write!(f, "{}: {}",path, err),
+            Self::ParseIntError(path, line, err) => write!(f, "{}: Line {} - Invalid line format [{}]", path, line, err),
+        }
+    }
+}
+
+/// Read a `.fasta.fai` file and parse it into a vector of Chromosome structs.
+/// 
+/// TODO: - convert 'path' variable to &str
+///       - Check for .fai.fai extension doubles.
+pub fn fasta_index_reader(path: &String) -> Result<Vec<Chromosome>,FastaIndexReaderError>  {
     info!("Parsing reference genome: {}", path);
 
+    let fai = format!("{}{}", path, ".fai");
+
     let mut genome: Vec<Chromosome> = Vec::new();
-    let file = BufReader::new(fs::File::open(path).unwrap());
+    let file = BufReader::new(match fs::File::open(fai.clone()) {
+        Ok(file) => file,
+        Err(err) => return Err(FastaIndexReaderError::FileNotFoundError(fai, err.to_string())),
+    });
 
     let mut skipped_chrs = Vec::new();
     for (index,line) in file.lines().enumerate() {
@@ -85,7 +113,10 @@ pub fn fasta_index_reader(path: &String) -> Result<Vec<Chromosome>,Box<dyn Error
         match split_line[0].replace("chr", "").parse::<u8>() {
             Ok(result) =>{ 
                 let name      : u8        = result;
-                let length    : u32       = split_line[1].parse().unwrap();
+                let length    : u32       = match split_line[1].parse() {
+                    Ok(len) => len,
+                    Err(e)  => return Err(FastaIndexReaderError::ParseIntError(fai, name, e.to_string()))
+                };
                 genome.push(Chromosome{index, name, length});
             }
             Err(_) => skipped_chrs.push(split_line[0].to_string())
@@ -93,7 +124,7 @@ pub fn fasta_index_reader(path: &String) -> Result<Vec<Chromosome>,Box<dyn Error
     }
 
     if !skipped_chrs.is_empty(){
-        warn!("\nSome chromosomes were skipped while parsing {}: {:#?}", path, skipped_chrs);
+        warn!("\nSome chromosomes were skipped while parsing {}: {:#?}", fai, skipped_chrs);
     }
     Ok(genome)
 }

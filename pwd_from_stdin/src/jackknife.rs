@@ -46,6 +46,17 @@ impl JackknifeBlocks {
     }
 }
 
+// Good Stuff: https://github.com/apolitical/impl-display-for-vec
+impl fmt::Display for JackknifeBlocks {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        //println!("{: <4} - {: <15} - {: <15} - {: <5} - {: <5}", "chr", "start", "end", "overlap", "pwd");
+        self.blocks.keys().sorted().fold(Ok(()), |_result, chr  | {
+            self.blocks[chr].iter().fold(Ok(()), |result, block| {
+                result.and_then(|_| writeln!(f, "{}", block))
+            })
+        })
+    }
+}
 
 
 #[derive(Debug)]

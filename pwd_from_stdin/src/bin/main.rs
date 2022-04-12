@@ -2,62 +2,30 @@ extern crate pwd_from_stdin;
 
 use crate::pwd_from_stdin::pileup;
 use crate::pwd_from_stdin::genome::*;
-use crate::pwd_from_stdin::parser::Cli;
+use crate::pwd_from_stdin::parser;
 use crate::pwd_from_stdin::logger;
 
-use clap::Parser;
-use num::One;
+use crate::pwd_from_stdin::io::*;
 
-use std::str::FromStr;
-use std::ops::{Range, Add};
+use clap::Parser;
+
 use std::fs;
 use std::error::Error;
 use itertools::Itertools;
 use std::collections::HashSet;
 use std::io::{self, BufReader, BufRead};
 use std::process;
-use atty;
 
 #[macro_use]
 extern crate log;
 
-
-/// Convert a space-separated path of SNP coordinates to a vector of object SNPCoord.
-/// TODO: At this state, does not support multiple spaces. Should implement ability to
-///       Remove empty fields.
-///
-/// Input: - path (string): path and filename to a snp coordinates file.
-///          Columns are: CHR (Required)
-///                       POS (Required)
-///                       REF (Optional)
-///                       ALT (Optional)
-///
-/// Return: Vector of structs 'SNPCoord'
-fn hash_target_positions(path: &String, sep: &str) -> Result<HashSet<SNPCoord>, Box<dyn Error>> {
-    let mut target_positions : HashSet<SNPCoord> = HashSet::new(); // Output
-    let file = BufReader::new(fs::File::open(path).unwrap());
-    for line in file.lines() {
-        let line = line.unwrap();
-        let split_line: Vec<&str>    = line.split(sep).collect();
-        let chromosome: u8           = split_line[0].parse().unwrap();
-        let position  : u32          = split_line[1].parse().unwrap();
-        let reference : Option<char> = split_line[2].parse().ok();
-        let alternate : Option<char> = split_line[3].parse().ok();
-        
-        let coordinate: SNPCoord     = SNPCoord {chromosome, position, reference, alternate};
-        target_positions.insert(coordinate);
-
-    }
-    Ok(target_positions)
-}
-
-fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: Vec<u16>, names: Vec<String>, allow_self_comparison: bool, genome: &Vec<Chromosome>, blocksize: u32) -> Vec<pileup::Comparison> {
+fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: &'a Vec<u16>, names: &'a Vec<String>, allow_self_comparison: bool, genome: &Vec<Chromosome>, blocksize: u32) -> Vec<pileup::Comparison> {
 
     let mut inds = vec![];
     for (i, index) in individuals.iter().enumerate() {
         let name = names.get(i);
         let min_depth = min_depths[(i % (min_depths.len())) as usize]; // wrap around min_depths if its length is lesser than the number of inds.
-        inds.push(pileup::Individual::new(name, &(index-1), &min_depth));
+        inds.push(pileup::Individual::new(name, index, &min_depth));
     }
 
     let mut comparisons: Vec<pileup::Comparison> = vec![];
@@ -71,105 +39,54 @@ fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: Vec<u16>, names: 
     comparisons
 }
 
-fn parse_user_ranges<T>(ranges: Vec<String>) -> Result<Vec<T>, <T as FromStr>::Err>
-where
-    T: FromStr + Add<Output = T> + Ord + One,
-    Range<T>: Iterator<Item = T>,
-{
-    let parsed_ranges: Result<Vec<Vec<T>>, _> = ranges.iter()
-        .map(|s| match s.split_once("-") {
-            Some(t) => Ok((t.0.parse::<T>()?..t.1.parse::<T>()?+One::one()).collect::<Vec<T>>()),
-            None    => Ok(vec![s.parse::<T>()?])
-        })
-        .collect();
 
-    match parsed_ranges {
-        Ok(vec) => {
-            
-            let mut out: Vec<T> = vec.into_iter().flatten().collect();
-            out.sort();
-            out.dedup();
-            Ok(out)
-        },
-        Err(e) => return Err(e)
-    }
-}
+fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
 
-
-fn main() {
-    // ----------------------------- Run CLI Parser 
-    let cli = Cli::parse();
-    // ----------------------------- Init logger.
-    logger::init_logger(&(cli.verbose+(!cli.quiet as u8)));
-
-    // ----------------------------- Serialize command line arguments
-    cli.serialize();
+    // Create output workspace and obtain predefined files.
+    let pwd_prefix = cli.get_results_file_prefix()?;
 
     // ----------------------------- Parse Requested_samples
-    let requested_samples: Vec<usize> = match parse_user_ranges(cli.samples) {
-        Ok(vec) => vec,
-        Err(e)  => {
-                error!("Invalid slice or integer format for --samples. [{}]", e);
-                process::exit(1);
-        }
-    };
+    let requested_samples: Vec<usize> = parser::parse_user_ranges(&cli.samples, "samples")?;
 
-
-    // ----------------------------- Sanity checks!
-    if cli.self_comparison && cli.min_depth.iter().any(|&x| x < 2) {         // depth must be > 2 when performing self-comparison
-        error!("Min_depth must be greater than 1 when performing self-comparison");
-        process::exit(1);
-    }
-
-    if atty::is(atty::Stream::Stdin) && cli.pileup == None {
-        error!("Neither --pileup, nor the stdinput buffer are being sollicited. Exiting.");
-        process::exit(1);
-    }
+    // ----------------------------- Sanity checks.
+    cli.check_depth()?; // Ensure min_depths are > 2 when allowing self-comparisons
+    cli.check_input()?; // Ensure the user has either requested stdin or --pileup
 
     if cli.min_depth.len() < requested_samples.len() {
         warn!("--min-depth length is less than that of --samples. Values of min-depth will wrap around.")
     }
+
     // ----------------------------- Initialize genome.
     info!("Indexing reference genome...");
-    let genome = match cli.genome.as_ref(){
-        Some(file) => fasta_index_reader(&(file.to_string()+&".fai".to_string())).unwrap(),
+    let genome = match &cli.genome {
+        Some(file) => fasta_index_reader(file)?,
         None => default_genome(),
     };
 
     // ----------------------------- Parse Comparisons
     info!("Parsing Requested comparisons...");
-    let mut comparisons = parse_comparisons(&requested_samples, cli.min_depth, cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
+    let mut comparisons = parse_comparisons(&requested_samples, &cli.min_depth, &cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
+    let block_prefixes = cli.get_blocks_output_files(&comparisons)?;
 
     // ----------------------------- Parse target_positions
-    info!("Parsing target_positions..."); 
-    let sep = " ";
+    info!("Parsing target_positions...");
     let target_positions = match cli.targets {
         None => HashSet::new(),
-        Some(filename) => match hash_target_positions(&filename, &sep) {
-            Ok(vector) => vector,
-            Err(error) => panic!("Problem parsing the file. {:?}", error),
-        },
+        Some(filename) => SNPReader::new(&filename)?.hash_target_positions()?
     };
+
     let target_required: bool = ! target_positions.is_empty();
 
-    // ----------------------------- Parse Requested Chromosomes
-    let valid_chromosomes : Vec<u8> = match cli.chr {
-        Some(vector) => match parse_user_ranges(vector) {
-            Ok(vector) => vector,
-            Err(e)     => {
-                error!("Invalid slice or integer format for --chr. [{}]", e);
-                process::exit(1);
-            }
-        },
-        None         => genome.into_iter().map(|chr| chr.name).collect()
+    // ----------------------------- Parse requested Chromosomes
+    let valid_chromosomes : Vec<u8> = match &cli.chr {
+        None         => genome.into_iter().map(|chr| chr.name).collect(),
+        Some(vector) => parser::parse_user_ranges(vector, "chr")?
     };
     info!("Valid chromosomes: {:?}", valid_chromosomes);
-    
-
 
     // ---------------------------- Choose between file handle or standard input
     info!("Opening pileup...");   
-    let pileup_reader: Box<dyn BufRead> = match cli.pileup {
+    let pileup_reader: Box<dyn BufRead> = match &cli.pileup {
         None => Box::new(BufReader::new(io::stdin())),
         Some(filename) => Box::new(BufReader::new(fs::File::open(filename).unwrap()))
     };
@@ -178,7 +95,7 @@ fn main() {
     info!("Parsing pileup...");   
     for entry in pileup_reader.lines() {
         // ----------------------- Parse line.
-        let mut line: pileup::Line = match pileup::Line::new(&entry.as_ref().unwrap(), '\t', cli.ignore_dels){
+        let mut line: pileup::Line = match pileup::Line::new(&entry.as_ref().unwrap(), cli.ignore_dels){
             Ok(line) => line,
             Err(e) => {error!("Error: {}", e); process::exit(1);},
         };
@@ -205,7 +122,7 @@ fn main() {
             line.filter_known_variants(&current_coord);
         }
 
-        //let filter_sites = true;
+        // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        
         let mut print_site: bool = false;
         for comparison in &mut comparisons {
             if comparison.satisfiable_depth(&line.individuals) {
@@ -217,24 +134,61 @@ fn main() {
                 if cli.filter_sites &&  print_site {
                     println!("{}", entry.as_ref().unwrap());
                 }
-                //comparison.compare(&line);
-                //if filter_sites {
-                //    println!("{}", entry.unwrap());
-                //} 
             }
         }
     }
+    
 
+    // ----------------------------- Print results
+    let mut pwd_writer = Writer::new(Some(pwd_prefix["pwd"].clone()))?;
     if ! cli.filter_sites {
         info!("Printing results...");
-        println!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
+        let header = format!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
+        println!("{}", header);
+        pwd_writer.write_iter(&vec![header])?;  // Print to file.
+        pwd_writer.write_iter(&comparisons)?;   // 
         for comparison in &comparisons {
             println!("{}", comparison);
-            if cli.print_blocks {
-                comparison.blocks.print();
+        }
+
+        if cli.print_blocks {
+            for comparison in &comparisons {
+                let pair = comparison.get_pair();
+                let mut block_writer = Writer::new(Some(block_prefixes[&pair].clone()))?;
+                block_writer.write_iter(vec![&comparison.blocks])?;
+                //println!("{}", comparison.blocks);
             }
         }
+
+
     }
+    Ok(())
+}
+
+
+/// Pwd_from_stdin
+/// 
+/// Example: 
+/// ```
+/// println!("{}", Hello!)
+/// ```
+fn main() {
+    // ----------------------------- Run CLI Parser 
+    let cli = parser::Cli::parse();
+    // ----------------------------- Init logger.
+    logger::init_logger(&(cli.verbose+(!cli.quiet as u8)));
+
+    // ----------------------------- Serialize command line arguments
+    cli.serialize();
+
+    // ----------------------------- Run PWD_from_stdin.
+    match run(cli) {
+        Ok(()) => (),
+        Err(e) => {
+            error!("{}", e);
+            process::exit(1);
+        }
+    };
 }
 
 #[cfg(test)]
@@ -260,7 +214,7 @@ mod tests {
         for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
             let min_depths = vec![2];
             let names = vec![];
-            let comparisons = parse_comparisons(&ind_set, min_depths, names, true, &default_genome(), 50_000_000);
+            let comparisons = parse_comparisons(&ind_set, &min_depths, &names, true, &default_genome(), 50_000_000);
             let len = ind_set.len() as i32;
             println!("{:?}", comparisons);
             assert_eq!(comparisons.len() as i32, permutations_sample_2(len)+len); 
@@ -272,7 +226,7 @@ mod tests {
         for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
             let min_depths = vec![2];
             let names = vec![];
-            let comparisons = parse_comparisons(&ind_set, min_depths, names, false, &default_genome(), 50_000_000);
+            let comparisons = parse_comparisons(&ind_set, &min_depths, &names, false, &default_genome(), 50_000_000);
             let len = ind_set.len() as i32;
             assert_eq!(comparisons.len() as i32, permutations_sample_2(len)); 
         }
