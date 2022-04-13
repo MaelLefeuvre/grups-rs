@@ -1,3 +1,4 @@
+
 use crate::jackknife::*;
 
 use std::fs;
@@ -8,6 +9,14 @@ use std::io::{BufReader, BufRead};
 use log::{info, warn};
 
 #[derive(Debug)]
+/// A simple struct representing an SNPCoordinate position.
+/// Note that :
+///   - REF/ALT positions are optional, but are required if the user
+///     requires known-sites filtration.
+///   - SNPCoordinates implement Equality with JackknifeBlock structs.
+///     See: `pwd_from_stdin::jackknife::JackknifeBlock`
+///   - Hashable, but only in regards to chr and pos.
+///     -> don't insert alternate variations.
 pub struct SNPCoord {
     pub chromosome : u8,
     pub position   : u32,
@@ -37,13 +46,16 @@ impl Hash for SNPCoord {
     }
 }
 
+
 #[derive(Debug)]
+/// A simple struct representing a chromosome index. This is mainly used to compute Jackknife Blocks
 pub struct Chromosome {
     pub index  : usize,
     pub name   : u8,
     pub length : u32
 }
 
+/// Simply returns a default genome index in case the user did not provide a specific .fasta.fai file. 
 pub fn default_genome() -> Vec<Chromosome> {
     warn!("No reference genome provided. Using default.");
     vec![
@@ -95,7 +107,7 @@ impl std::fmt::Display for FastaIndexReaderError {
 /// 
 /// TODO: - convert 'path' variable to &str
 ///       - Check for .fai.fai extension doubles.
-pub fn fasta_index_reader(path: &String) -> Result<Vec<Chromosome>,FastaIndexReaderError>  {
+pub fn fasta_index_reader(path: &str) -> Result<Vec<Chromosome>,FastaIndexReaderError>  {
     info!("Parsing reference genome: {}", path);
 
     let fai = format!("{}{}", path, ".fai");

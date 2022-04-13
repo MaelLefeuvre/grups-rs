@@ -165,20 +165,29 @@ pub struct Cli {
     pub overwrite: bool,
 }
 
+/// Command line interface argument parser.
+/// 
+/// TODO : - `get_results_file_prefix()` and `get_blocks_output_files()` should not be the responsability
+///          of this struct. --> migrate to `pwd_from_stdin::io.rs`
+///        - add deserialization method. Users could thus fully reproduce a previous run with ease. keep it FAIR. 
 impl Cli {
     pub fn serialize(&self){
         let serialized = self::serde_yaml::to_string(&self).unwrap();
         info!("\n---- Command line args ----\n{}\n---", serialized);
     }
 
+    /// Sanity check : depth must indeed be > 2 when performing self-comparison.
+    /// TODO: - put this in Comparison::new() ?? -> This would allow mix-matching batch mode and self-comparison,
+    ///         but could be a bit confusing for users..
     pub fn check_depth<'a>(&self) -> Result<(),ParserError<'a>> {
-        // depth must be > 2 when performing self-comparison
         if self.self_comparison && self.min_depth.iter().any(|&x| x < 2) {        
             return Err(ParserError::InsufficientDepthError)
         }
         Ok(())
     }
 
+    /// Sanity Check: The program should leave if the user did not provide any pileup input, either through
+    /// `--pileup` or through stdinput. Without this, our program would wait indefinitely for the stdin buffer.
     pub fn check_input<'a>(&self) -> Result<(), ParserError<'a>> {
         if atty::is(atty::Stream::Stdin) && self.pileup == None {
             return Err(ParserError::MissingPileupInput)
@@ -186,9 +195,12 @@ impl Cli {
         Ok(())
     }
 
-    /// Obtain predefined filenames from the given output directory and pileup file
+    /// Obtain predefined filenames from the given output directory and pileup file. Return a HashMap with 
+    /// K: file-ext, V: Filepath. Right now this only outputs a single file, but is easily scalable.
+    ///  - {out_dir}/{file_prefix}.pwd -> where summary statistics are printed for pairwise differences. 
     /// 
-    /// Return a HashMap with K: file-ext, V: Filepath 
+    /// TODO: - This should not be the responsibility of `Cli` -> Put this in `io.rs`
+    ///       - File prefixes should be an argument.
     pub fn get_results_file_prefix<'a>(&self) -> std::io::Result<HashMap<&'a str, String>> {
 
         // Create output directory. Early return if we can't create it
@@ -201,7 +213,7 @@ impl Cli {
         // Generate a HashMap of filepaths from the file_prefix
         let mut file_prefix = PathBuf::from(file_prefix);
         let mut outfiles_hash = HashMap::new();
-        for ext in ["pwd", "block"] {
+        for ext in ["pwd"] {
             file_prefix.set_extension(ext);
             self.can_write_file(&file_prefix)?;
             outfiles_hash.insert(ext, String::from(file_prefix.to_str().unwrap()));
@@ -209,8 +221,15 @@ impl Cli {
         Ok(outfiles_hash)
     }
 
-
-    pub fn get_blocks_output_files<'a>(&self, comparisons: &'a Vec<Comparison>) -> std::io::Result<HashMap<String, String>> {
+    /// Obtain predefined filenames for jackknife blocks from the given output directory and pileup file. 
+    /// Return a HashMap with (K (pair): "{ind1}-{ind2}", V (File): "{out_dir}/blocks/{file_prefix}.block"
+    /// ==> A new file is generated for each pair of individuals. 
+    /// 
+    /// TODO: - This should not be the responsibility of `Cli` -> Put this in `io.rs`
+    ///       - File prefixes and subdirectories should be an argument. 
+    ///       - get_blocks_output_files and get_results_file_prefix could pretty much get fused together into a single
+    ///         generic function, => loop along provided subdirectories + loop along hashmap keys. (pair||file_ext) 
+    pub fn get_blocks_output_files(&self, comparisons: &[Comparison]) -> std::io::Result<HashMap<String, String>> {
 
         // Create output directory. Early return if we can't create it
         let blockdir = self.output_dir.clone()+"/blocks";
@@ -233,8 +252,11 @@ impl Cli {
         Ok(outfiles_hash)
     }
 
-    
-    fn get_file_prefix(path: &String, filename: &str) -> Option<String> {
+    /// Get a generic filename for our output files. If the user used `--pileup`, this will become its file stem.
+    /// If the user used stdin, this will become a generic name -> "pwd_from_stdin-output" 
+    ///
+    /// # TODO: This function should be the one responsible of defining the default filename. Stay dry.
+    fn get_file_prefix(path: &str, filename: &str) -> Option<String> {
         // Get the path/filename-prefix of all of our outputs.
         let file_prefix = format!("{}/{}",
             path,
@@ -244,7 +266,9 @@ impl Cli {
         Some(file_prefix)
     }
 
-    fn can_write_file(&self, pathbuf: &PathBuf) -> std::io::Result<bool> {
+    /// Check if a given file already exists ; raise an error if such is the case, and the user did not explicitly 
+    /// allow file overwriting.
+    fn can_write_file(&self, pathbuf: &Path) -> std::io::Result<bool> {
         if ! self.overwrite && pathbuf.exists() {   // Check if this file already exists and/or if overwrite is allowed.
             return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists,
                 format!("{:?} exists. use --overwrite to force.",
@@ -255,13 +279,15 @@ impl Cli {
     }
 }
 
-
+/// Convert a user-defined string "range" into a vector of integers.
+/// "9-14" thus becomes [9, 10, 11, 12, 13, 14]
+/// Note that the range is fully inclusive. 
 fn parse_user_range<T>(s: &str) -> Result<Vec<T>, <T as FromStr>::Err> 
 where
     T: FromStr + Add<Output = T> + Ord + One,
     Range<T>: Iterator<Item = T>,
 {
-    match s.split_once("-") {
+    match s.split_once('-') {
             Some(t) => Ok((t.0.parse::<T>()?..t.1.parse::<T>()?+One::one()).collect::<Vec<T>>()),
             None    => Ok(vec![s.parse::<T>()?])
     }
@@ -289,7 +315,7 @@ where
 /////assert_eq!(parsed_input, vec![1, 2, 3, 5, 7])
 ///```
 /// 
-pub fn parse_user_ranges<'a, T>(ranges: &Vec<String>, arg_name: &'a str) -> Result<Vec<T>, ParserError<'a>>
+pub fn parse_user_ranges<'a, T>(ranges: &[String], arg_name: &'a str) -> Result<Vec<T>, ParserError<'a>>
 where
     T: FromStr + Add<Output = T> + Ord + One,
     <T as FromStr>::Err: ToString,

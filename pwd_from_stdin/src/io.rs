@@ -5,6 +5,8 @@ use crate::genome::SNPCoord;
 
 use std::collections::HashSet;
 use std::error::Error;
+use std::io::Write;
+use std::io::BufWriter;
 
 #[derive(Debug)]
 pub enum SNPReaderError {
@@ -22,8 +24,23 @@ impl std::fmt::Display for SNPReaderError {
     }
 }
 
+
 // https://medium.com/bgpkit/write-generic-file-reader-in-rust-ad6408cb086a
 // --> http::request::Request
+/// Generic file reader for snp coordinates files. 
+/// - source  : BufReader. Currently Boxed, because it might be interesting to incorporate HTTP requests.
+/// - columns : a vector of size 4. indidicating the column indices that we're targeting (chr, pos, ref, alt)
+/// - sep     : the expected field separator for the corresponding file format.
+/// 
+/// ## Accepted file formats: 
+///    EXT  NAME                 CHR  POS  REF  ALT  SEP
+/// - .snp  eigenstrat format    1    3    4    5    " "
+/// - .vcf  variant call format  0    1    3    4    "\t"
+/// - .csv  comma separated      0    1    2    3    "," 
+/// - .tsv  tab separated        0    1    2    3    "\t"
+/// - .txt  space separated      0    1    2    3    " "
+/// 
+/// # Traits : `Read` and `BufRead`.
 pub struct SNPReader<'a> {
     source: Box<dyn BufRead + 'a>,
     columns: Vec<usize>,
@@ -50,7 +67,7 @@ impl<'a> SNPReader<'a> {
     /// 
     /// TODO: convert separators from String -> &str
     fn get_file_format(path: &str) -> Result<(Vec<usize>,String), SNPReaderError> {
-        let file_type = path.split(".").collect::<Vec<&str>>().last().unwrap().clone();
+        let file_type: &str = path.split('.').collect::<Vec<&str>>().last().unwrap();
         let output = match file_type {
             // ([CHR, POS, REF, ALT], SEP)
             "snp" => {(vec![1,3,4,5]," ".to_string())}
@@ -73,10 +90,7 @@ impl<'a> SNPReader<'a> {
         let mut target_positions : HashSet<SNPCoord> = HashSet::new(); // Output
         for line in self.source.lines() {
             let line = line?;
-            match &line[..1] {     // Skip comments.
-                "#" => {continue}
-                _   => {}
-            }
+            if &line[..1] == "#" {continue} // Skip comment
             let split_line: Vec<&str>    = line.split(&self.sep).filter(|x| x!=&"").collect();
             let chromosome: u8           = split_line[self.columns[0]].parse()?;
             let position  : u32          = split_line[self.columns[1]].parse()?;
@@ -107,12 +121,11 @@ impl<'a> BufRead for SNPReader<'a> {
     }
 }
 
+/// A generic file writer.
+/// - source: Boxed BufWriter (can either handle file-writing, or stdout).
 pub struct Writer<'a> {
     source: BufWriter<Box<dyn Write + 'a>>
 }
-
-use std::io::Write;
-use std::io::BufWriter;
 
 impl<'a> Writer<'a>{
     pub fn new(path: Option<String>) -> Result<Writer<'a>, Box<dyn Error>>{
@@ -127,6 +140,8 @@ impl<'a> Writer<'a>{
         }})
     }
 
+    /// Write the contents of a generic iterator within a file/stdout.
+    /// one Iteration step = one line.
     pub fn write_iter<T, I>(&mut self, iter: T) -> Result<(), std::io::Error>
     where
         T: IntoIterator<Item = I>,

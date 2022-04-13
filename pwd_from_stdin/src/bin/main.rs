@@ -19,7 +19,12 @@ use std::process;
 #[macro_use]
 extern crate log;
 
-fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: &'a Vec<u16>, names: &'a Vec<String>, allow_self_comparison: bool, genome: &Vec<Chromosome>, blocksize: u32) -> Vec<pileup::Comparison> {
+
+/// Generate a vector of structs `Comparison`. This is the main function enabling batch mode.
+/// 
+/// TODO: - Convert this into a struct and implement `Display`.
+///       - Put this into pileup.rs, or create a separate comparison.rs library.
+fn parse_comparisons<'a>(individuals: &[usize], min_depths: &'a [u16], names: &'a [String], allow_self_comparison: bool, genome: &[Chromosome], blocksize: u32) -> Vec<pileup::Comparison> {
 
     let mut inds = vec![];
     for (i, index) in individuals.iter().enumerate() {
@@ -30,7 +35,7 @@ fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: &'a Vec<u16>, nam
 
     let mut comparisons: Vec<pileup::Comparison> = vec![];
     for pair in inds.iter().combinations_with_replacement(2) {
-        let self_comparison = &pair[0] == &pair[1]; 
+        let self_comparison = pair[0] == pair[1]; 
         if self_comparison && !allow_self_comparison {
             continue
         }
@@ -39,7 +44,7 @@ fn parse_comparisons<'a>(individuals: &Vec<usize>, min_depths: &'a Vec<u16>, nam
     comparisons
 }
 
-
+// Main function. 
 fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
 
     // Create output workspace and obtain predefined files.
@@ -95,7 +100,7 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
     info!("Parsing pileup...");   
     for entry in pileup_reader.lines() {
         // ----------------------- Parse line.
-        let mut line: pileup::Line = match pileup::Line::new(&entry.as_ref().unwrap(), cli.ignore_dels){
+        let mut line: pileup::Line = match pileup::Line::new(entry.as_ref().unwrap(), cli.ignore_dels){
             Ok(line) => line,
             Err(e) => {error!("Error: {}", e); process::exit(1);},
         };
@@ -119,7 +124,7 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
                 Some(coordinate) => coordinate,
                 None => panic!("Cannot filter known variants when REF/ALT allele are unknown! Please use a different file format."),
             };
-            line.filter_known_variants(&current_coord);
+            line.filter_known_variants(current_coord);
         }
 
         // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        
@@ -166,12 +171,7 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
 }
 
 
-/// Pwd_from_stdin
-/// 
-/// Example: 
-/// ```
-/// println!("{}", Hello!)
-/// ```
+/// Parse command line arguments and run `pwd_from_stdin::run()`
 fn main() {
     // ----------------------------- Run CLI Parser 
     let cli = parser::Cli::parse();

@@ -6,12 +6,21 @@ use itertools::Itertools;
 use std::fmt;
 
 #[derive(Debug)]
+/// A simple struct representing a HashMap of Jackknife Blocks for a given
+/// genome. Implemented within struct Comparison. See: `pwd_from_stdin::pileup::Comparison`
+///   - HashMap is indexed according to the chromosome name.
+/// 
+/// # Traits:
+///   - `Display` : Pretty print. for file writing and debug. Recursively calls `Display` for each
+///                 `JackknifeBlock` found within the `blocks` field.
+/// # TODO:
+///   - add a header for the `Display trait`
 pub struct JackknifeBlocks {
     blocks : HashMap<u8, Vec<JackknifeBlock>>
 }
 
 impl JackknifeBlocks {
-    pub fn new(genome: &Vec<Chromosome>, blocksize: u32) -> JackknifeBlocks {
+    pub fn new(genome: &[Chromosome], blocksize: u32) -> JackknifeBlocks {
         let mut jackknives = HashMap::new();
         for chr in genome {
             let mut blocks = Vec::new();
@@ -30,15 +39,18 @@ impl JackknifeBlocks {
         JackknifeBlocks{blocks: jackknives}
     }
 
+    /// Search for a given block, using an SNPCoord struct.
+    /// Return the block which contains the SNPCoord position. 
     pub fn find_block(&mut self, coordinate: &SNPCoord) -> &mut JackknifeBlock {
-        self.blocks
-            .get_mut(&coordinate.chromosome)
+        self.blocks.get_mut(&coordinate.chromosome)
             .unwrap()
             .iter_mut()
             .find(|block| block.range.contains(&coordinate.position)).unwrap()
     }
 
-    pub fn print(&self) -> () {
+    /// Deprecated (JackknifeBlocks now implements the Display trait) 
+    /// print each block + a header. Mainly for debug. 
+    pub fn _print(&self) {
         println!("{: <4} - {: <15} - {: <15} - {: <5} - {: <5}", "chr", "start", "end", "overlap", "pwd");
         for chr in self.blocks.keys().sorted() {
             self.blocks[chr].iter().for_each(|block| println!("{}", block));
@@ -59,6 +71,20 @@ impl fmt::Display for JackknifeBlocks {
 }
 
 
+///Chromosome Block for Jackknife resampling. Implemented within struct `JackknifeBlocks`, which is itself implemented
+///within structs `pwd_from_stdin::pileup::Comparison`
+/// - chromosome  : chromosome name (warn: not by index -> cannot handle specific names, such as "X", "MT", "chr7", etc.)
+/// - range       : [start, end[ coordinates of the block.
+/// - site_counts : counts the number of overlapping SNPs for a given pair of individuals.
+/// - pwd_counts  : counts the number of pairwise differences for a given pair of individuals.
+/// 
+/// # Traits :
+///  - `Eq` and `PartialEq` : with `Self`.
+///  - `Eq` and `PartialEq` : with struct `pwd_from_stdin::genome::SNPCoord`
+///     - mainly implemented in order to retrieve the block corresponding with a given SNP position.
+///       See: `Self::find_block()` or `JackknifeBlocks::find_blocks()`
+///  - `Hash`               : along `chromosome` and `range` fields.
+///  - `Display`            : Pretty print for file and/or console output Recursively called by `JackknifeBlocks` when it itself is displayed.
 #[derive(Debug)]
 pub struct JackknifeBlock {
     pub chromosome : u8,
@@ -72,10 +98,13 @@ impl JackknifeBlock {
         JackknifeBlock{chromosome, range: Range{start, end}, site_counts: 0, pwd_counts:0}
     }
 
+    /// Incrementer for the `pwd_counts` field. Called by `pwd_from_stdin::Comparison::compare()`
+    /// when a pairwise difference has been declared.
     pub fn add_pwd(&mut self) {
         self.pwd_counts += 1;
     }
 
+    /// Incremented for the `site_counts` field. Infaillibly called by `pwd_from_stdin::Comparison::compare()`
     pub fn add_count(&mut self) {
         self.site_counts += 1;
     }

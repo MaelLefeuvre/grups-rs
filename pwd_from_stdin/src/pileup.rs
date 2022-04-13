@@ -5,6 +5,12 @@ use std::error::Error;
 use rand::seq::SliceRandom;
 use std::fmt;
 
+/// Represents a requested individual Within the pileup.
+///  - name      : Name of the individual. Either given through user-input, or constructed as `Ind{index}` by default
+///                when no name has been provided.
+///  - index     : 0 based index of the individual within the pileup. Note that this index is technically offset by 3,
+///                since the first three columns of a pileup respectively define 'chr', 'pos', 'ref'.
+///  - min_depth : minimum sequencing depth that is allowed before making a comparison. User-defined, or defaults to 1.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Individual {
     pub name     : String,
@@ -22,6 +28,16 @@ impl Individual {
     }
 }
 
+/// A struct representing a given pairwise estimation of relatedness between two individuals.
+/// - pair            : contains a representation of the individuals being compared.
+/// - self_comparison : whether or not this comparison is a self_comparison. (i.e. pair.0 == pair.1)
+/// - overlap         : counter for the number of overlapping SNP positions between our pair.
+/// - pwd             : counter for the number of pairwise differences found between our pair.
+/// - sum_phred       : sum of the avg. phred-scores of each overlapping SNP. mainly used to compute the average
+///                     Phred-score (i.e. overlap/sum_phred)
+/// - blocks          : genome blocks used for jackknife resampling.
+/// 
+/// # Traits : `Debug`
 #[derive(Debug)]
 pub struct Comparison {
     pub pair           : (Individual, Individual),
@@ -33,14 +49,18 @@ pub struct Comparison {
 }
 
 impl Comparison {
-    pub fn new(pair: (Individual, Individual), self_comparison: bool, genome: &Vec<Chromosome>, blocksize: u32) -> Comparison {
-        Comparison {pair, self_comparison, overlap: 0, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(&genome, blocksize)}
+    pub fn new(pair: (Individual, Individual), self_comparison: bool, genome: &[Chromosome], blocksize: u32) -> Comparison {
+        Comparison {pair, self_comparison, overlap: 0, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize)}
     }
-    pub fn satisfiable_depth(&self, pileups: &Vec<Pileup>) -> bool {
+
+    // Check if the sequencing of a given overlap is over the minimum required sequencing depth for each individual.
+    pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
         pileups[self.pair.0.index].depth >= self.pair.0.min_depth && pileups[self.pair.1.index].depth >= self.pair.1.min_depth
     }
 
-    pub fn compare(&mut self, line: &Line) -> () {
+    // Compare our two individuals at the given SNPposition ; increment the appropriate counters after the comparison 
+    // has been made.
+    pub fn compare(&mut self, line: &Line) {
         self.overlap +=1;
         let random_nucl: Vec<&Nucleotide> = if self.self_comparison {                  // Self comparison => Combination without replacement. 
             line.random_sample_self(&self.pair.0.index)                                //   - possible combinations: n!/(n-2)!
@@ -55,27 +75,31 @@ impl Comparison {
             self.pwd +=1;
             current_block.add_pwd();
         }
-        ()
     }
 
-    fn add_phred(&mut self, nuc: &Vec<&Nucleotide>) -> () {
+    // Increment our `sum_phred` counter. The incremented value is computed as the average of the two sampled nucleotides.
+    fn add_phred(&mut self, nuc: &[&Nucleotide]) {
         self.sum_phred += ( (nuc[0].phred+nuc[1].phred)/2 ) as u32;
     }
 
-    fn check_pwd(nuc: &Vec<&Nucleotide>) -> bool {
+    // Check if there is a pairwise difference.
+    fn check_pwd(nuc: &[&Nucleotide]) -> bool {
         nuc[0].base != nuc[1].base
     }
 
+    // Getter for the average pairwise difference across our overlapping snps.
     pub fn get_avg_pwd(&self) -> f64 {
         self.pwd as f64 / self.overlap as f64
     }
 
+    // Getter for the average pairwise phred score across our overlapping snps.
     pub fn get_avg_phred(&self) -> f64 {
         self.sum_phred as f64/self.overlap as f64
     }
 
+    // Return a formated string representing our pair of individuals. 
     pub fn get_pair (&self,)-> String {
-        format!("{}-{}", self.pair.0.name, self.pair.1.name).to_owned()
+        format!("{}-{}", self.pair.0.name, self.pair.1.name)
     }
 }
 
@@ -93,7 +117,10 @@ impl fmt::Display for Comparison {
 }
 
 /// Simple struct representing a given nucleotides.
-/// BQ scores are housed in phred-33 scale format.
+/// - base  : the nucleotide character -> generally preformatted by Pileup
+/// - phred : Base-quality. Expressed in phred-33 scale.
+/// 
+/// # TODO: migrate nucleotide formating from `Pileup::new()` to `Nucleotide::new()`
 #[derive(Debug)]
 pub struct Nucleotide {
     pub base: char,
@@ -103,7 +130,7 @@ pub struct Nucleotide {
 impl Nucleotide {
     fn new(base: &char, score: &char) -> Nucleotide {
         let phred = Nucleotide::to_phred(score);            
-        Nucleotide {base: *base, phred: phred}
+        Nucleotide {base: *base, phred}
     }
 
     /// Convert the BQ score back to the ASCII format
@@ -121,6 +148,14 @@ impl Nucleotide {
 
 
 #[derive(Debug)]
+/// PileupError struct for error propagation and chaining.
+///  - RefSkipError   -> when char ['>', '<'] are found within a pileup string.
+///                      used in `Pileup::new()`
+///  - LengthError    -> Nucleotide and Quality string, should have an equal length
+///                      after filtration -> LengthError is raised if this is not the
+///                      case.
+///  - ParseLIneError -> Not yet Implemented. General error which is raised if a 
+///                      character failed to parse.
 pub enum PileupError {
     RefSkipError,
     LengthError,
@@ -144,6 +179,9 @@ impl fmt::Display for PileupError {
 /// Nested structure: Pileup +-> depth
 ///                          L-> Vec<Nucleotides> +-> base
 ///                                               L-> score
+/// 
+/// # TODO: migrate nucleotide formating from `Pileup::new()` to Nucleotide::new()
+/// this will greatly increase readability and dilute responsibility.
 #[derive(Debug)]
 pub struct Pileup {
     pub depth: u16,
@@ -154,7 +192,7 @@ impl Pileup {
     pub fn new(depth: u16, bases: String, scores: String, ignore_dels: bool) -> Result<Pileup, Box<dyn Error>> {
 
         let bases = &bases.to_uppercase();    // Convert antisense to forward
-        let bases = &bases.replace(",", "."); //
+        let bases = &bases.replace(',', "."); //
 
         // Loop along nucleotides.
         let mut nucleotides: Vec<Nucleotide> = Vec::new();
@@ -165,14 +203,14 @@ impl Pileup {
         while let Some(n) = chars.by_ref().next() {
             match n {
                 '+'|'-' => {Self::skip_indel(&mut chars); continue},        //Skip indels
-                '^'     => {chars.nth(0); continue},                        //Skip starts
+                '^'     => {chars.next(); continue},                        //Skip starts
                 '$'     => {continue},                                      //Skip end
                 '*'     => if ignore_dels {continue},                       //Skip deletion if required
                 '>'|'<' => return Err(Box::new(PileupError::RefSkipError)), //Bail if we found a refskip
                 _       => ()
             }
             match &scores_vec.next() {
-                Some(score) => nucleotides.push(Nucleotide::new(&n, &score)),
+                Some(score) => nucleotides.push(Nucleotide::new(&n, score)),
                 None => return Err(Box::new(PileupError::LengthError))
             };
         }
@@ -226,7 +264,7 @@ impl Pileup {
     ///               |   + Length of Sequence
     ///               + Identifier ('-' = deletion , '+' = insertion=
     /// 
-    /// TODO : Better error handling for numeric checking
+    /// TODO : Better error handling for numeric checking. Remove those nasty `.unwrap()`
     fn skip_indel<I: Iterator<Item = char>>(chars: &mut Peekable<I>){
         let mut digit: String = "".to_string();
         while chars.peek().unwrap().is_numeric() {
@@ -260,7 +298,7 @@ impl Pileup {
 ///                                            L-> score
 /// 
 /// TODO : Error handling should be better taken of. 
-///        use .nth(0) instead on chrom, pos, ref, 
+///        use .nth(0) or .next() instead on chrom, pos, ref, 
 ///        instead of collecting everything and parsing individually
 ///        => Except for 'reference' we should return a ParseError i
 ///           f we encounter None at any point
@@ -289,7 +327,7 @@ impl Line {
         }
         Ok(Line {
             coordinate: SNPCoord{chromosome, position, reference, alternate: None },
-            individuals: individuals
+            individuals
         })
     }
 
