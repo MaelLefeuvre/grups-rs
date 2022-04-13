@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 use std::error::Error;
 use std::io::{BufReader, BufRead};
 
-use log::{info, warn};
+use log::{info, warn, debug};
 
 #[derive(Debug)]
 /// A simple struct representing an SNPCoordinate position.
@@ -91,18 +91,21 @@ pub fn default_genome() -> Vec<Chromosome> {
 pub enum FastaIndexReaderError {
     FileNotFoundError(String, String),
     ParseIntError(String, u8, String),
+    InvalidFileFormatError(String)
 }
 impl Error for FastaIndexReaderError {}
 
 impl std::fmt::Display for FastaIndexReaderError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::FileNotFoundError(path, err) => write!(f, "{}: {}",path, err),
+            Self::FileNotFoundError(path, err)   => write!(f, "{}: {}",path, err),
             Self::ParseIntError(path, line, err) => write!(f, "{}: Line {} - Invalid line format [{}]", path, line, err),
+            Self::InvalidFileFormatError(ext)  => write!(f, "Invalid fasta format: expected [.fasta|.fa], got {}", ext),
         }
     }
 }
 
+use std::path::Path;
 /// Read a `.fasta.fai` file and parse it into a vector of Chromosome structs.
 /// 
 /// TODO: - convert 'path' variable to &str
@@ -110,7 +113,15 @@ impl std::fmt::Display for FastaIndexReaderError {
 pub fn fasta_index_reader(path: &str) -> Result<Vec<Chromosome>,FastaIndexReaderError>  {
     info!("Parsing reference genome: {}", path);
 
-    let fai = format!("{}{}", path, ".fai");
+    let fai = match Path::new(path).extension().unwrap().to_str() { // Append '.fai' if it is not there 
+        Some("fai")          => path.clone().to_string(),                          
+        Some("fasta" | "fa") => format!("{}{}", path.clone(), ".fai"),
+        Some(other)          => return Err(FastaIndexReaderError::InvalidFileFormatError(other.to_string())),
+        None                 => return Err(FastaIndexReaderError::InvalidFileFormatError("None".to_string())),
+        
+    };
+    debug!("fasta.fai file : {}", fai);
+
 
     let mut genome: Vec<Chromosome> = Vec::new();
     let file = BufReader::new(match fs::File::open(fai.clone()) {
@@ -129,6 +140,7 @@ pub fn fasta_index_reader(path: &str) -> Result<Vec<Chromosome>,FastaIndexReader
                     Ok(len) => len,
                     Err(e)  => return Err(FastaIndexReaderError::ParseIntError(fai, name, e.to_string()))
                 };
+                debug!("Chromosome: {: <3} {: <10} {: <12}", index, name, length);
                 genome.push(Chromosome{index, name, length});
             }
             Err(_) => skipped_chrs.push(split_line[0].to_string())
