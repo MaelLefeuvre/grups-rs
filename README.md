@@ -39,32 +39,53 @@ See `Cargo.toml` for a complete list of crate dependencies (these are automatica
 4. Executables should be located within ./target/release/
     ```Bash
     user@desktop:~$ ./target/release/pwd_from_stdin --help
-    pwd_from_stdin
+   pwd_from_stdin 
+   Compute average PairWise Differences (PWD) within a pileup file
+   
+   USAGE:
+      pwd_from_stdin [OPTIONS]
 
-    USAGE:
-        pwd_from_stdin [OPTIONS]
-
-    OPTIONS:
-        -b, --blocksize <BLOCKSIZE>             [default: 1000000]
-        -c, --chr <CHR>...
-        -f, --filter-sites
-        -g, --genome <GENOME>
-        -h, --help                              Print help information
-        -i, --ignore-dels
-        -k, --known-variants
-        -m, --min-depth <MIN_DEPTH>...          [default: 1 1]
-        -M, --min-qual <MIN_QUAL>               [default: 30]
-        -p, --print-blocks
-        -p, --pileup <PILEUP>
-        -q, --quiet
-        -s, --samples <SAMPLES>...              [default: 0 1]
-        -s, --sample-names <SAMPLE_NAMES>...
-        -S, --self-comparison
-        -t, --targets <TARGETS>
-        -v, --verbose
-    ```
-    
-
+   OPTIONS:
+    -b, --blocksize <BLOCKSIZE>
+            Change the size of our jackknife blocks [default: 1000000]
+    -c, --chr <CHR>...
+            Restrict comparison to a given set of chromosomes
+    -f, --filter-sites
+            Do not perform comparison, but rather print out the pileup lines where a comparison
+            could be made
+    -g, --genome <GENOME>
+            Fasta indexed reference genome
+    -h, --help
+            Print help information
+    -i, --ignore-dels
+            Ignore deletions when performing comparison
+    -k, --known-variants
+            Filter out tri-allelic sites when given a list of SNP-coordinates
+    -m, --min-depth <MIN_DEPTH>...
+            Provide with the minimal sequencing depth required to perform comparison [default: 1 1]
+    -M, --min-qual <MIN_QUAL>
+            Minimal required Base Quality (BQ) to perform comparison [default: 30]
+    -o, --output-dir <OUTPUT_DIR>
+            [default: grups-output]
+    -o, --overwrite
+            Enable output-file overwriting.
+    -p, --print-blocks
+            Print jackknife blocks for each individual
+    -p, --pileup <PILEUP>
+            Input pileup file
+    -q, --quiet
+            Disable warnings
+    -s, --samples <SAMPLES>...
+            0-based column index of the individuals that should be compared [default: 0 1]
+    -s, --sample-names <SAMPLE_NAMES>...
+            Provide with a list of sample names for printing
+    -S, --self-comparison
+            Enable self-comparison mode on individuals
+    -t, --targets <TARGETS>
+            Provide with a list of SNP coordinates to target within the pileup
+    -v, --verbose
+            Set the verbosity level (-v -vv -vvv -vvvv)
+   ```
 ## Usage
 
 - Basic example
