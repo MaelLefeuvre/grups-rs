@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use crate::pileup::Comparison;
+use crate::comparison::Comparisons;
 
 extern crate serde_yaml;
 use serde::{Serialize};
@@ -229,7 +229,7 @@ impl Cli {
     ///       - File prefixes and subdirectories should be an argument. 
     ///       - get_blocks_output_files and get_results_file_prefix could pretty much get fused together into a single
     ///         generic function, => loop along provided subdirectories + loop along hashmap keys. (pair||file_ext) 
-    pub fn get_blocks_output_files(&self, comparisons: &[Comparison]) -> std::io::Result<HashMap<String, String>> {
+    pub fn get_blocks_output_files(&self, comparisons: &mut Comparisons) -> std::io::Result<HashMap<String, String>> {
 
         // Create output directory. Early return if we can't create it
         let blockdir = self.output_dir.clone()+"/blocks";
@@ -241,7 +241,7 @@ impl Cli {
 
         // Generate a HashMap of filepaths from the file_prefix
         let mut outfiles_hash = HashMap::new();
-        for comparison in comparisons {
+        for comparison in comparisons.get() {
             let pair = comparison.get_pair();
             let mut file = PathBuf::from(format!("{}-{}", file_prefix, pair));
             file.set_extension("blk");

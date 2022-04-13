@@ -1,4 +1,5 @@
 extern crate pwd_from_stdin;
+use crate::pwd_from_stdin::comparison::*;
 
 use crate::pwd_from_stdin::pileup;
 use crate::pwd_from_stdin::genome::*;
@@ -11,7 +12,6 @@ use clap::Parser;
 
 use std::fs;
 use std::error::Error;
-use itertools::Itertools;
 use std::collections::HashSet;
 use std::io::{self, BufReader, BufRead};
 use std::process;
@@ -20,29 +20,29 @@ use std::process;
 extern crate log;
 
 
-/// Generate a vector of structs `Comparison`. This is the main function enabling batch mode.
-/// 
-/// TODO: - Convert this into a struct and implement `Display`.
-///       - Put this into pileup.rs, or create a separate comparison.rs library.
-fn parse_comparisons<'a>(individuals: &[usize], min_depths: &'a [u16], names: &'a [String], allow_self_comparison: bool, genome: &[Chromosome], blocksize: u32) -> Vec<pileup::Comparison> {
-
-    let mut inds = vec![];
-    for (i, index) in individuals.iter().enumerate() {
-        let name = names.get(i);
-        let min_depth = min_depths[(i % (min_depths.len())) as usize]; // wrap around min_depths if its length is lesser than the number of inds.
-        inds.push(pileup::Individual::new(name, index, &min_depth));
-    }
-
-    let mut comparisons: Vec<pileup::Comparison> = vec![];
-    for pair in inds.iter().combinations_with_replacement(2) {
-        let self_comparison = pair[0] == pair[1]; 
-        if self_comparison && !allow_self_comparison {
-            continue
-        }
-    comparisons.push(pileup::Comparison::new((pair[0].clone(), pair[1].clone()), self_comparison, genome, blocksize));
-    }
-    comparisons
-}
+///// Generate a vector of structs `Comparison`. This is the main function enabling batch mode.
+///// 
+///// TODO: - Convert this into a struct and implement `Display`.
+/////       - Put this into pileup.rs, or create a separate comparison.rs library.
+//fn parse_comparisons<'a>(individuals: &[usize], min_depths: &'a [u16], names: &'a [String], allow_self_comparison: bool, genome: &[Chromosome], blocksize: u32) -> Vec<pileup::Comparison> {
+//
+//    let mut inds = vec![];
+//    for (i, index) in individuals.iter().enumerate() {
+//        let name = names.get(i);
+//        let min_depth = min_depths[(i % (min_depths.len())) as usize]; // wrap around min_depths if its length is lesser than the number of inds.
+//        inds.push(pileup::Individual::new(name, index, &min_depth));
+//    }
+//
+//    let mut comparisons: Vec<pileup::Comparison> = vec![];
+//    for pair in inds.iter().combinations_with_replacement(2) {
+//        let self_comparison = pair[0] == pair[1]; 
+//        if self_comparison && !allow_self_comparison {
+//            continue
+//        }
+//    comparisons.push(pileup::Comparison::new((pair[0].clone(), pair[1].clone()), self_comparison, genome, blocksize));
+//    }
+//    comparisons
+//}
 
 // Main function. 
 fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
@@ -70,8 +70,8 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
 
     // ----------------------------- Parse Comparisons
     info!("Parsing Requested comparisons...");
-    let mut comparisons = parse_comparisons(&requested_samples, &cli.min_depth, &cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
-    let block_prefixes = cli.get_blocks_output_files(&comparisons)?;
+    let mut comparisons = Comparisons::parse(&requested_samples, &cli.min_depth, &cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
+    let block_prefixes = cli.get_blocks_output_files(&mut comparisons)?;
 
     // ----------------------------- Parse target_positions
     info!("Parsing target_positions...");
@@ -129,7 +129,7 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
 
         // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        
         let mut print_site: bool = false;
-        for comparison in &mut comparisons {
+        for comparison in comparisons.get() {
             if comparison.satisfiable_depth(&line.individuals) {
                 if ! cli.filter_sites {
                     comparison.compare(&line);
@@ -150,22 +150,19 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
         info!("Printing results...");
         let header = format!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
         println!("{}", header);
-        pwd_writer.write_iter(&vec![header])?;  // Print to file.
-        pwd_writer.write_iter(&comparisons)?;   // 
-        for comparison in &comparisons {
-            println!("{}", comparison);
-        }
+        pwd_writer.write_iter(&vec![header])?;       // Print PWD results to file.
+        pwd_writer.write_iter(comparisons.get())?;   // 
+
+        println!("{}", comparisons);                 // Print PWD results to console
 
         if cli.print_blocks {
-            for comparison in &comparisons {
+            for comparison in comparisons.get() {
                 let pair = comparison.get_pair();
                 let mut block_writer = Writer::new(Some(block_prefixes[&pair].clone()))?;
                 block_writer.write_iter(vec![&comparison.blocks])?;
                 //println!("{}", comparison.blocks);
             }
         }
-
-
     }
     Ok(())
 }
@@ -189,46 +186,4 @@ fn main() {
             process::exit(1);
         }
     };
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn factorial(n: i32 ) -> i32 {
-        match n {
-            0 => 1,
-            1.. => (1..n+1).product(),
-            _ => panic!("Not an unsigned number")
-        }
-    }
-    fn permutations_sample_2(n: i32) -> i32 {
-        match n {
-            0.. => (factorial(n)/(factorial((n-2).abs())*2)),
-            _ => panic!()
-        }
-    }
-
-    #[test]
-    fn comparison_length_self_allowed() {
-        for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
-            let min_depths = vec![2];
-            let names = vec![];
-            let comparisons = parse_comparisons(&ind_set, &min_depths, &names, true, &default_genome(), 50_000_000);
-            let len = ind_set.len() as i32;
-            println!("{:?}", comparisons);
-            assert_eq!(comparisons.len() as i32, permutations_sample_2(len)+len); 
-        }
-    }
-
-    #[test]
-    fn comparison_length_no_self_allowed() {
-        for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
-            let min_depths = vec![2];
-            let names = vec![];
-            let comparisons = parse_comparisons(&ind_set, &min_depths, &names, false, &default_genome(), 50_000_000);
-            let len = ind_set.len() as i32;
-            assert_eq!(comparisons.len() as i32, permutations_sample_2(len)); 
-        }
-    }
 }
