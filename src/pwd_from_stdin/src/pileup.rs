@@ -383,10 +383,6 @@ mod tests {
         println!("Testing Line base_quality filtering.");
         let raw_line="22\t51057923\tC\t6\tTTTTtt\tJEJEEE\t0\t*\t*\t1\tT\tJ";
         let mut line = pileup::Line::new(&raw_line, true).unwrap();
-        // {
-        //    Ok(line) => line,
-        //    Err(e)   => {log::error!("Error: {e}", e)},
-        //};
 
         line.filter_base_quality(&30);
         assert_eq!(line.individuals[0].get_nucleotides(), "TTTTTT");

@@ -5,10 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
-name = "pwd_from_stdin"
-path = "src/bin/main.rs"
-
 [dependencies]
 num = "0.4.0"
 itertools = "0.10.3"
@@ -16,6 +12,6 @@ rand = "0.8.5"
 clap = {version = "3.1.2", features = ["derive"]}
 log = "0.4.16"
 env_logger= "0.9.0"
+atty = "0.2" 
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
-atty = "0.2" 

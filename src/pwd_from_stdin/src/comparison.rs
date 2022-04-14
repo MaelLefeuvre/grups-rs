@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn comparison_length_self_allowed() {
+    fn comparisons_length_self_allowed() {
         for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
             let min_depths = vec![2];
             let names = vec![];
@@ -201,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn comparison_length_no_self_allowed() {
+    fn comparisons_length_no_self_allowed() {
         for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
             let min_depths = vec![2];
             let names = vec![];

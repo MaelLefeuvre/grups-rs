@@ -100,7 +100,7 @@ impl std::fmt::Display for FastaIndexReaderError {
         match self {
             Self::FileNotFoundError(path, err)   => write!(f, "{}: {}",path, err),
             Self::ParseIntError(path, line, err) => write!(f, "{}: Line {} - Invalid line format [{}]", path, line, err),
-            Self::InvalidFileFormatError(ext)  => write!(f, "Invalid fasta format: expected [.fasta|.fa], got {}", ext),
+            Self::InvalidFileFormatError(ext)  => write!(f, "Invalid fasta file format: expected [.fasta|.fa], got '{}'", ext),
         }
     }
 }
@@ -113,12 +113,14 @@ use std::path::Path;
 pub fn fasta_index_reader(path: &str) -> Result<Vec<Chromosome>,FastaIndexReaderError>  {
     info!("Parsing reference genome: {}", path);
 
-    let fai = match Path::new(path).extension().unwrap().to_str() { // Append '.fai' if it is not there 
-        Some("fai")          => path.clone().to_string(),                          
-        Some("fasta" | "fa") => format!("{}{}", path.clone(), ".fai"),
-        Some(other)          => return Err(FastaIndexReaderError::InvalidFileFormatError(other.to_string())),
+    let fai = match Path::new(path).extension() { // Check file extension
         None                 => return Err(FastaIndexReaderError::InvalidFileFormatError("None".to_string())),
-        
+        Some(osstr)          => match osstr.to_str(){ 
+            Some("fai")          => path.to_string(),                          
+            Some("fasta" | "fa") => format!("{}{}", path, ".fai"), // Append '.fai' if it is not there
+            Some(other)          => return Err(FastaIndexReaderError::InvalidFileFormatError(".".to_string()+other)),
+            None                 => return Err(FastaIndexReaderError::InvalidFileFormatError("None".to_string())),
+        }        
     };
     debug!("fasta.fai file : {}", fai);
 

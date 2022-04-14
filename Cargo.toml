@@ -5,15 +5,21 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
-name = "pwd_from_stdin"
-path ="pwd_from_stdin/src/bin/main.rs"
 
 [workspace]
-members = ["pwd_from_stdin"]
+members = ["src/pwd_from_stdin"]
+
+
+[[bin]]
+name = "grups"
+path = "src/bin/main.rs"
+
+[[bin]]
+name = "pwd_from_stdin"
+path = "src/bin/pwd_from_stdin.rs"
 
 [dependencies]
-pwd_from_stdin = { path = "pwd_from_stdin" }
+pwd_from_stdin = { path = "src/pwd_from_stdin" }
 
 num = "0.4.0"
 log = "0.4.16"

@@ -2,7 +2,7 @@ use clap::Parser;
 
 use crate::comparison::Comparisons;
 
-extern crate serde_yaml;
+use serde_yaml;
 use serde::{Serialize};
 
 use log::{info};
@@ -324,8 +324,8 @@ where
     let parsed_ranges = ranges.iter().map(|s| parse_user_range(s))
         .collect::<Result<Vec<Vec<T>>, _>>();
 
-    // FIXME - This is inefficient: We're  performing a two-pass iteration while we could flatten the structure immediately.
-    //         use .flat_map() 
+    // FIXME - This is inefficient: We're  performing a two-pass iteration while we could 
+    //         flatten the structure immediately. use .flat_map() 
     let mut parsed_ranges: Vec<T> = match parsed_ranges {
         Ok(vec) => vec.into_iter().flatten().collect(),
         Err(err) => return Err(ParserError::ParseIntError(arg_name, err.to_string())),

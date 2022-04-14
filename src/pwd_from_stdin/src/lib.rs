@@ -1,51 +1,26 @@
-extern crate pwd_from_stdin;
-use crate::pwd_from_stdin::comparison::*;
+pub mod genome;
+pub mod pileup;
+pub mod jackknife;
+pub mod parser;
+pub mod logger;
+pub mod comparison;
+pub mod io;
 
-use crate::pwd_from_stdin::pileup;
-use crate::pwd_from_stdin::genome::*;
-use crate::pwd_from_stdin::parser;
-use crate::pwd_from_stdin::logger;
-
-use crate::pwd_from_stdin::io::*;
-
-use clap::Parser;
+use comparison::*;
+use genome::*;
+use io::*;
 
 use std::fs;
 use std::error::Error;
 use std::collections::HashSet;
-use std::io::{self, BufReader, BufRead};
+use std::io::{BufReader, BufRead};
+
+use log::{error, warn, info, trace};
 use std::process;
 
-#[macro_use]
-extern crate log;
-
-
-///// Generate a vector of structs `Comparison`. This is the main function enabling batch mode.
-///// 
-///// TODO: - Convert this into a struct and implement `Display`.
-/////       - Put this into pileup.rs, or create a separate comparison.rs library.
-//fn parse_comparisons<'a>(individuals: &[usize], min_depths: &'a [u16], names: &'a [String], allow_self_comparison: bool, genome: &[Chromosome], blocksize: u32) -> Vec<pileup::Comparison> {
-//
-//    let mut inds = vec![];
-//    for (i, index) in individuals.iter().enumerate() {
-//        let name = names.get(i);
-//        let min_depth = min_depths[(i % (min_depths.len())) as usize]; // wrap around min_depths if its length is lesser than the number of inds.
-//        inds.push(pileup::Individual::new(name, index, &min_depth));
-//    }
-//
-//    let mut comparisons: Vec<pileup::Comparison> = vec![];
-//    for pair in inds.iter().combinations_with_replacement(2) {
-//        let self_comparison = pair[0] == pair[1]; 
-//        if self_comparison && !allow_self_comparison {
-//            continue
-//        }
-//    comparisons.push(pileup::Comparison::new((pair[0].clone(), pair[1].clone()), self_comparison, genome, blocksize));
-//    }
-//    comparisons
-//}
 
 // Main function. 
-fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
+pub fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
 
     // Create output workspace and obtain predefined files.
     let pwd_prefix = cli.get_results_file_prefix()?;
@@ -84,7 +59,7 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
 
     // ----------------------------- Parse requested Chromosomes
     let valid_chromosomes : Vec<u8> = match &cli.chr {
-        None         => genome.into_iter().map(|chr| chr.name).collect(),
+        None         => genome.iter().map(|chr| chr.name).collect(),
         Some(vector) => parser::parse_user_ranges(vector, "chr")?
     };
     info!("Valid chromosomes: {:?}", valid_chromosomes);
@@ -92,7 +67,7 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
     // ---------------------------- Choose between file handle or standard input
     info!("Opening pileup...");   
     let pileup_reader: Box<dyn BufRead> = match &cli.pileup {
-        None => Box::new(BufReader::new(io::stdin())),
+        None => Box::new(BufReader::new(std::io::stdin())),
         Some(filename) => Box::new(BufReader::new(fs::File::open(filename).unwrap()))
     };
 
@@ -128,15 +103,11 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
         }
 
         // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        
-        let mut print_site: bool = false;
         for comparison in comparisons.get() {
             if comparison.satisfiable_depth(&line.individuals) {
                 if ! cli.filter_sites {
                     comparison.compare(&line);
                 } else {
-                    print_site = true;
-                }
-                if cli.filter_sites &&  print_site {
                     println!("{}", entry.as_ref().unwrap());
                 }
             }
@@ -165,25 +136,4 @@ fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
         }
     }
     Ok(())
-}
-
-
-/// Parse command line arguments and run `pwd_from_stdin::run()`
-fn main() {
-    // ----------------------------- Run CLI Parser 
-    let cli = parser::Cli::parse();
-    // ----------------------------- Init logger.
-    logger::init_logger(&(cli.verbose+(!cli.quiet as u8)));
-
-    // ----------------------------- Serialize command line arguments
-    cli.serialize();
-
-    // ----------------------------- Run PWD_from_stdin.
-    match run(cli) {
-        Ok(()) => (),
-        Err(e) => {
-            error!("{}", e);
-            process::exit(1);
-        }
-    };
 }
