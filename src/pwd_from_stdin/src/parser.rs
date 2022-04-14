@@ -1,6 +1,6 @@
+use std::path::PathBuf;
 use clap::Parser;
 
-use crate::comparison::Comparisons;
 
 use serde_yaml;
 use serde::{Serialize};
@@ -8,8 +8,7 @@ use serde::{Serialize};
 use log::{info};
 
 use std::str::FromStr;
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
+use std::path::{Path};
 use core::ops::{Add, Range};
 use num::One;
 
@@ -195,80 +194,26 @@ impl Cli {
         Ok(())
     }
 
-    /// Obtain predefined filenames from the given output directory and pileup file. Return a HashMap with 
-    /// K: file-ext, V: Filepath. Right now this only outputs a single file, but is easily scalable.
-    ///  - {out_dir}/{file_prefix}.pwd -> where summary statistics are printed for pairwise differences. 
-    /// 
-    /// TODO: - This should not be the responsibility of `Cli` -> Put this in `io.rs`
-    ///       - File prefixes should be an argument.
-    pub fn get_results_file_prefix<'a>(&self) -> std::io::Result<HashMap<&'a str, String>> {
-
-        // Create output directory. Early return if we can't create it
-        std::fs::create_dir_all(self.output_dir.clone())?; 
-    
-        // Get the path/filename-prefix of all of our outputs.
-        let default_prefix = String::from("pwd_from_stdin-output");
-        let file_prefix = Self::get_file_prefix(&self.output_dir,self.pileup.as_ref().unwrap_or(&default_prefix)).unwrap();
-
-        // Generate a HashMap of filepaths from the file_prefix
-        let mut file_prefix = PathBuf::from(file_prefix);
-        let mut outfiles_hash = HashMap::new();
-        for ext in ["pwd"] {
-            file_prefix.set_extension(ext);
-            self.can_write_file(&file_prefix)?;
-            outfiles_hash.insert(ext, String::from(file_prefix.to_str().unwrap()));
-        }
-        Ok(outfiles_hash)
-    }
-
-    /// Obtain predefined filenames for jackknife blocks from the given output directory and pileup file. 
-    /// Return a HashMap with (K (pair): "{ind1}-{ind2}", V (File): "{out_dir}/blocks/{file_prefix}.block"
-    /// ==> A new file is generated for each pair of individuals. 
-    /// 
-    /// TODO: - This should not be the responsibility of `Cli` -> Put this in `io.rs`
-    ///       - File prefixes and subdirectories should be an argument. 
-    ///       - get_blocks_output_files and get_results_file_prefix could pretty much get fused together into a single
-    ///         generic function, => loop along provided subdirectories + loop along hashmap keys. (pair||file_ext) 
-    pub fn get_blocks_output_files(&self, comparisons: &mut Comparisons) -> std::io::Result<HashMap<String, String>> {
-
-        // Create output directory. Early return if we can't create it
-        let blockdir = self.output_dir.clone()+"/blocks";
-        std::fs::create_dir_all(blockdir.clone())?; 
-    
-        // Get the path/filename-prefix of all of our outputs.
-        let default_prefix = String::from("pwd_from_stdin-output");
-        let file_prefix = Self::get_file_prefix(&blockdir,self.pileup.as_ref().unwrap_or(&default_prefix)).unwrap();
-
-        // Generate a HashMap of filepaths from the file_prefix
-        let mut outfiles_hash = HashMap::new();
-        for comparison in comparisons.get() {
-            let pair = comparison.get_pair();
-            let mut file = PathBuf::from(format!("{}-{}", file_prefix, pair));
-            file.set_extension("blk");
-            self.can_write_file(&file)?;
-            outfiles_hash.insert(pair, String::from(file.to_str().unwrap()));
-            file.clear();
-        }
-        Ok(outfiles_hash)
-    }
-
     /// Get a generic filename for our output files. If the user used `--pileup`, this will become its file stem.
     /// If the user used stdin, this will become a generic name -> "pwd_from_stdin-output" 
     ///
     /// # TODO: This function should be the one responsible of defining the default filename. Stay dry.
-    fn get_file_prefix(path: &str, filename: &str) -> Option<String> {
+    pub fn get_file_prefix(&self, subdir: Option<&str>) -> Option<PathBuf> {
+        let default_prefix = String::from("pwd_from_stdin-output");
+        let file_prefix = Path::new(self.pileup.as_ref().unwrap_or(&default_prefix)).file_stem()?;
+
         // Get the path/filename-prefix of all of our outputs.
-        let file_prefix = format!("{}/{}",
-            path,
-            Path::new(filename).file_stem()?
-                .to_str()?
-        );
-        Some(file_prefix)
+        let mut parsed_file = PathBuf::new();
+        parsed_file.push(&self.output_dir);
+        parsed_file.push(subdir.unwrap_or(""));
+        parsed_file.push(file_prefix);
+
+        Some(parsed_file)
     }
 
     /// Check if a given file already exists ; raise an error if such is the case, and the user did not explicitly 
     /// allow file overwriting.
-    fn can_write_file(&self, pathbuf: &Path) -> std::io::Result<bool> {
+    pub fn can_write_file(&self, pathbuf: &Path) -> std::io::Result<bool> {
         if ! self.overwrite && pathbuf.exists() {   // Check if this file already exists and/or if overwrite is allowed.
             return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists,
                 format!("{:?} exists. use --overwrite to force.",

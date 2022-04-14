@@ -23,7 +23,10 @@ use std::process;
 pub fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
 
     // Create output workspace and obtain predefined files.
-    let pwd_prefix = cli.get_results_file_prefix()?;
+    //let pwd_prefix = cli.get_results_file_prefix()?;
+    let mut pwd_prefix = cli.get_file_prefix(None).unwrap();
+    let pwd_prefix = io::get_results_file_prefix(&mut pwd_prefix, vec!["pwd"])?;
+    
 
     // ----------------------------- Parse Requested_samples
     let requested_samples: Vec<usize> = parser::parse_user_ranges(&cli.samples, "samples")?;
@@ -46,7 +49,8 @@ pub fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
     // ----------------------------- Parse Comparisons
     info!("Parsing Requested comparisons...");
     let mut comparisons = Comparisons::parse(&requested_samples, &cli.min_depth, &cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
-    let block_prefixes = cli.get_blocks_output_files(&mut comparisons)?;
+    let mut block_prefixes = cli.get_file_prefix(Some("blocks/")).unwrap();
+    let block_prefixes = io::get_blocks_output_files(&mut block_prefixes, &comparisons.get_pairs(), &vec!["blk"])?;
 
     // ----------------------------- Parse target_positions
     info!("Parsing target_positions...");

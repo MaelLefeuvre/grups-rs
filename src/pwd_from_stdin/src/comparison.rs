@@ -99,7 +99,7 @@ impl Comparison {
 
     // Return a formated string representing our pair of individuals. 
     pub fn get_pair (&self,)-> String {
-        format!("{}-{}", self.pair.0.name, self.pair.1.name)
+        self.pair.0.name.clone()+"-"+&self.pair.1.name
     }
 }
 
@@ -158,6 +158,10 @@ impl Comparisons {
     ///Return mutable slice of our Vector of comparisons.
     pub fn get(&mut self) -> &mut [Comparison] {
         &mut self.0
+    }
+
+    pub fn get_pairs(&self) -> Vec<String> {
+        self.0.iter().map(|c| c.get_pair()).collect()
     }
 }
 

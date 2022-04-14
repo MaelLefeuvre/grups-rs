@@ -3,10 +3,11 @@ use std::io::{self, BufRead, Read};
 
 use crate::genome::SNPCoord;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::io::Write;
 use std::io::BufWriter;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum SNPReaderError {
@@ -152,6 +153,46 @@ impl<'a> Writer<'a>{
             .collect::<Result<Vec<usize>, std::io::Error>>()?;
         self.source.flush()
     }
+}
+
+
+/// Obtain predefined filenames from the given output directory and pileup file. Return a HashMap with 
+/// K: file-ext, V: Filepath. Right now this only outputs a single file, but is easily scalable.
+///  - {out_dir}/{file_prefix}.pwd -> where summary statistics are printed for pairwise differences. 
+pub fn get_results_file_prefix<'a>(file_prefix: &'a mut PathBuf, file_ext: Vec<&'a str>) -> std::io::Result<HashMap<&'a str, String>> {
+    // Create output directory. Early return if we can't create it
+    std::fs::create_dir_all(file_prefix.parent().unwrap_or(file_prefix))?; 
+
+    // Generate a HashMap of filepaths from the file_prefix
+    let mut outfiles_hash = HashMap::new();
+    for ext in file_ext {
+        file_prefix.set_extension(ext);
+        outfiles_hash.insert(ext, String::from(file_prefix.to_str().unwrap()));
+    }
+    Ok(outfiles_hash)
+}
+
+/// Obtain predefined filenames for jackknife blocks from the given output directory and pileup file. 
+/// Return a HashMap with (K (pair): "{ind1}-{ind2}", V (File): "{out_dir}/blocks/{file_prefix}.block"
+/// ==> A new file is generated for each pair of individuals. 
+/// 
+/// TODO: - get_blocks_output_files and get_results_file_prefix could pretty much get fused together into a single
+///         generic function, => loop along provided subdirectories + loop along hashmap keys. (pair||file_ext) 
+pub fn get_blocks_output_files<'a>(file_prefix: &'a mut PathBuf, suffixes: &Vec<String>, file_ext: &Vec<&'a str>) -> std::io::Result<HashMap<String, String>> {
+    // Create output directory. Early return if we can't create it
+    std::fs::create_dir_all(file_prefix.parent().unwrap_or(file_prefix))?; 
+
+    // Generate a HashMap of filepaths from the file_prefix
+    let mut outfiles_hash = HashMap::new();
+    for suffix in suffixes {
+        for ext in file_ext {
+            let mut file = PathBuf::from(format!("{}-{}.{}", file_prefix.to_str().unwrap(), suffix, ext));
+            //file.set_extension("blk");
+            outfiles_hash.insert(suffix.clone(), String::from(file.to_str().unwrap()));
+            file.clear();
+        }
+    }
+    Ok(outfiles_hash)
 }
 
 #[cfg(test)]
