@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use clap::Parser;
+use clap::{Parser, Subcommand, Args};
 
 
 use serde_yaml;
@@ -30,9 +30,21 @@ impl<'a> std::fmt::Display for ParserError<'a> {
     }
 }
 
-/// Compute the average PairWise Difference (PWD) within a pileup file.
 #[derive(Parser, Debug, Serialize)]
 pub struct Cli {
+    #[clap(subcommand)]
+    pub commands: Commands,
+}
+
+impl Cli {
+    pub fn serialize(&self){
+        let serialized = self::serde_yaml::to_string(&self).unwrap();
+        info!("\n---- Command line args ----\n{}\n---", serialized);
+    }
+}
+
+#[derive(Parser, Debug, Serialize)]
+pub struct Common {
     ///Set the verbosity level (-v -vv -vvv -vvvv)
     /// 
     /// Set the verbosity level of this program. With multiple levels
@@ -46,74 +58,17 @@ pub struct Cli {
     /// Use this argument to disable this. Only errors will be displayed.
     #[clap(short, long)]
     pub quiet: bool,
-
-    /// Enable self-comparison mode on individuals.
-    /// 
-    /// Note that --min-depth>=2 is required when comparing individuals to themselves, since at least two
-    /// alleles are required to effectively compute pairwise differences at a given site.
-    #[clap(short('S'), long)]
-    pub self_comparison: bool,
-
-    /// Filter out tri-allelic sites when given a list of SNP-coordinates.
-    /// 
-    /// Note that this arguement requires the use of --targets to provide the program with a list of coordinates.
-    /// The given coordinate file must furthermore explicitely provide with the REF/ALT alleles.
-    #[clap(short, long)]
-    pub known_variants: bool,
-
-    /// Do not perform comparison, but rather print out the pileup lines where a comparison could be made.
-    ///
-    /// Note that lines are printed as soon as there is a valid comparison between ANY pair of individuals.
-    /// Thus, may not prove very effective when using --self-comparison.
-    #[clap(short, long)]
-    pub filter_sites: bool,
-
-    /// Ignore deletions when performing comparison.
-    /// 
-    /// By default, deletions ('*' character) will count as a selectible nucleotide for comparison.
-    #[clap(short, long)]
-    pub ignore_dels: bool,
-
-    /// Print jackknife blocks for each individual
-    #[clap(short, long)]
-    pub print_blocks: bool,
-
-    /// Change the size of our jackknife blocks.
-    #[clap(short, long, required(false), default_value("1000000"))]
-    pub blocksize: u32,
-
-    /// Provide with the minimal sequencing depth required to perform comparison.
-    /// 
-    /// Note that the length of the provided vector does not need to be the same as the one
-    /// provided for individuals. When such is the case, values of --min-depth will "wrap" 
-    /// around, and start again from the beginning for the next individuals.
-    /// Example:  '--samples 0-4 --min-depth 2 3 5 ' will result in:
-    ///   - Ind  : 0 1 2 3 4
-    ///   - Depth: 2 3 5 2 3 
-    #[clap(short, long, multiple_values(true), required(false), default_values(&["1","1"]))]
-    pub min_depth: Vec <u16>,
-
     /// Minimal required Base Quality (BQ) to perform comparison.
     /// 
     /// Nucleotides whose BQ is lower than the provided treshold are filtered-out. 
     /// Value should be expressed in scale PHRED-33.
     #[clap(short('M'), long, default_value("30"))]
     pub min_qual: u8,
-
-    /// 0-based column index of the individuals that should be compared
-    /// 
-    /// Argument may accept slices and/or discrete integers i.e.
-    /// '--samples 1-4 7 8' will be parsed as: [1, 2, 3, 4, 7, 8]
-    /// Note that slices are inclusive.
-    #[clap(short, long, multiple_values(true), default_values(&["0", "1"]))]
-    pub samples: Vec<String>,
-
     /// Fasta indexed reference genome.
     /// 
     /// Note that a '.fasta.fai' genome index file must be present at the same directory.
     #[clap(short, long, required(false))]
     pub genome: Option<String>,
-
     /// Provide with a list of SNP coordinates to target within the pileup.
     /// 
     /// Pileup positions which are not found within the provided --targets file will be exluded from comparison.
@@ -125,22 +80,18 @@ pub struct Cli {
     ///   '.txt' : space-separated file with columns 'CHR POS REF ALT'   
     #[clap(short, long, required(false))]
     pub targets: Option<String>,
-
     /// Input pileup file.
     /// 
     /// Note that in the absence of a '--pileup' argument, the program will except a data stream from the standard input. i.e
     /// 'samtools mpileup -B -q30 -Q30 ./samples/* | pwd_from_stdin [...]
     #[clap(short, long, required(false))]
     pub pileup: Option<String>,
-
     /// Restrict comparison to a given set of chromosomes.
     /// 
     /// Argument may accept slices (inclusive) and/or discrete integers i.e.
     /// '--chr 9-11 13 19-22 ' will be parsed as: [9,10,11,13,19,20,21,22]
     #[clap(short, long, multiple_values(true))]
     pub chr: Option<Vec<String>>,
-
-
     /// Provide with a list of sample names for printing.
     /// 
     /// By default, individuals will be referred to using their pileup index. e.g. "Ind0, Ind1, Ind2, etc."
@@ -152,29 +103,99 @@ pub struct Cli {
     /// Example: '--sample 0-2 5 6 --sample-names ART04 ART16 ART20'
     ///   - index: 0      1      2      5     6
     ///   - name : ART04  ART16  ART20  Ind5  Ind6
-    #[clap(short, long, multiple_values(true))]
+    #[clap(short='n', long, multiple_values(true))]
     pub sample_names: Vec<String>,
-
     // Output directory where results will be written.
     #[clap(short, long, default_value("grups-output"))]
     pub output_dir: String,
-
     //Overwrite existing output files.
-    #[clap(short, long)]
+    #[clap(short='x', long)]
     pub overwrite: bool,
 }
 
-/// Command line interface argument parser.
-/// 
-/// TODO : - `get_results_file_prefix()` and `get_blocks_output_files()` should not be the responsability
-///          of this struct. --> migrate to `pwd_from_stdin::io.rs`
-///        - add deserialization method. Users could thus fully reproduce a previous run with ease. keep it FAIR. 
-impl Cli {
-    pub fn serialize(&self){
-        let serialized = self::serde_yaml::to_string(&self).unwrap();
-        info!("\n---- Command line args ----\n{}\n---", serialized);
-    }
+#[derive(Parser, Debug, Serialize)]
+pub struct PwdFromStdin {
+    /// Enable self-comparison mode on individuals.
+    /// 
+    /// Note that --min-depth>=2 is required when comparing individuals to themselves, since at least two
+    /// alleles are required to effectively compute pairwise differences at a given site.
+    #[clap(short('S'), long)]
+    pub self_comparison: bool,
+    /// Filter out tri-allelic sites when given a list of SNP-coordinates.
+    /// 
+    /// Note that this arguement requires the use of --targets to provide the program with a list of coordinates.
+    /// The given coordinate file must furthermore explicitely provide with the REF/ALT alleles.
+    #[clap(short, long)]
+    pub known_variants: bool,
+    /// Do not perform comparison, but rather print out the pileup lines where a comparison could be made.
+    ///
+    /// Note that lines are printed as soon as there is a valid comparison between ANY pair of individuals.
+    /// Thus, may not prove very effective when using --self-comparison.
+    #[clap(short, long)]
+    pub filter_sites: bool,
+    /// Ignore deletions when performing comparison.
+    /// 
+    /// By default, deletions ('*' character) will count as a selectible nucleotide for comparison.
+    #[clap(short, long)]
+    pub ignore_dels: bool,
+    /// Print jackknife blocks for each individual
+    #[clap(short='B', long)]
+    pub print_blocks: bool,
+    /// Change the size of our jackknife blocks.
+    #[clap(short, long, required(false), default_value("1000000"))]
+    pub blocksize: u32,
+    
+    /// Provide with the minimal sequencing depth required to perform comparison.
+    /// 
+    /// Note that the length of the provided vector does not need to be the same as the one
+    /// provided for individuals. When such is the case, values of --min-depth will "wrap" 
+    /// around, and start again from the beginning for the next individuals.
+    /// Example:  '--samples 0-4 --min-depth 2 3 5 ' will result in:
+    ///   - Ind  : 0 1 2 3 4
+    ///   - Depth: 2 3 5 2 3 
+    #[clap(short, long, multiple_values(true), required(false), default_values(&["1","1"]))]
+    pub min_depth: Vec <u16>,
+    /// 0-based column index of the individuals that should be compared
+    /// 
+    /// Argument may accept slices and/or discrete integers i.e.
+    /// '--samples 1-4 7 8' will be parsed as: [1, 2, 3, 4, 7, 8]
+    /// Note that slices are inclusive.
+    #[clap(short, long, multiple_values(true), default_values(&["0", "1"]))]
+    pub samples: Vec<String>,
+}
 
+#[derive(Args, Debug, Serialize)]
+pub struct PedigreeSims {
+    #[clap(short, long, required(false))]
+    reps: Option<u32>
+}
+
+#[derive(Subcommand, Debug, Serialize)]
+pub enum Commands {
+    Run {
+        #[clap(flatten)]
+        common: Common,
+        #[clap(flatten)]
+        pwd: PwdFromStdin,
+        #[clap(flatten)]
+        ped: PedigreeSims
+
+    },
+    PwdFromStdin {
+        #[clap(flatten)]
+        common: Common,
+        #[clap(flatten)]
+        pwd: PwdFromStdin
+    },
+    PedigreeSims {
+        #[clap(flatten)]
+        common: Common,
+        #[clap(flatten)]
+        ped: PedigreeSims
+    }
+}
+
+impl PwdFromStdin {
     /// Sanity check : depth must indeed be > 2 when performing self-comparison.
     /// TODO: - put this in Comparison::new() ?? -> This would allow mix-matching batch mode and self-comparison,
     ///         but could be a bit confusing for users..
@@ -184,7 +205,17 @@ impl Cli {
         }
         Ok(())
     }
+}
 
+/// Compute the average PairWise Difference (PWD) within a pileup file.
+
+
+/// Command line interface argument parser.
+/// 
+/// TODO : - `get_results_file_prefix()` and `get_blocks_output_files()` should not be the responsability
+///          of this struct. --> migrate to `pwd_from_stdin::io.rs`
+///        - add deserialization method. Users could thus fully reproduce a previous run with ease. keep it FAIR. 
+impl Common {
     /// Sanity Check: The program should leave if the user did not provide any pileup input, either through
     /// `--pileup` or through stdinput. Without this, our program would wait indefinitely for the stdin buffer.
     pub fn check_input<'a>(&self) -> Result<(), ParserError<'a>> {

@@ -5,6 +5,10 @@
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+  name = "test"
+  path = "src/test.rs"
+
 [lib]
   name = "parser"
   path = "src/parser.rs"

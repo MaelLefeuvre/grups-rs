@@ -13,9 +13,9 @@
   name = "grups"
   path = "src/bin/main.rs"
 
-[[bin]]
-  name = "pwd_from_stdin"
-  path = "src/pwd_from_stdin/bin/main.rs"
+#[[bin]]
+#  name = "pwd_from_stdin"
+#  path = "src/pwd_from_stdin/bin/main.rs"
 
 [dependencies]
   pwd_from_stdin = {path = "src/pwd_from_stdin" }
