@@ -1,11 +1,8 @@
-//extern crate pwd_from_stdin;
-
-use pwd_from_stdin::parser;
-use pwd_from_stdin::logger;
-
-use clap::Parser;
+use logger;
+use parser;
 
 use std::process;
+use clap::Parser;
 
 #[macro_use]
 extern crate log;

@@ -12,21 +12,23 @@ use itertools::Itertools;
 ///                since the first three columns of a pileup respectively define 'chr', 'pos', 'ref'.
 ///  - min_depth : minimum sequencing depth that is allowed before making a comparison. User-defined, or defaults to 1.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Individual {
+pub struct Individual<'a> {
     pub name     : String,
-    pub index    : usize,
-    pub min_depth: u16,
+    pub index    : &'a usize,
+    pub min_depth: &'a u16,
 }
 
-impl Individual {
-    pub fn new(name: Option<&String>, index: &usize, min_depth: &u16) -> Individual {
+impl<'a> Individual<'a> {
+    pub fn new(name: Option<&'a String>, index: &'a usize, min_depth: &'a u16) -> Individual<'a> {
         let name = match name {                            // Parse name and give default if non-existent
             Some(name) => name.to_string(),
-            None => format!("Ind{}", &index.to_string()),
+            None => format!("Ind{}", index),
         };
-        Individual {name, index: *index, min_depth: *min_depth }
+        Individual{name, index, min_depth }
     }
 }
+
+
 
 /// A struct representing a given pairwise estimation of relatedness between two individuals.
 /// - pair            : contains a representation of the individuals being compared.
@@ -39,8 +41,8 @@ impl Individual {
 /// 
 /// # Traits : `Debug`
 #[derive(Debug)]
-pub struct Comparison {
-    pub pair           : (Individual, Individual),
+pub struct Comparison<'a> {
+    pub pair           : (Individual<'a>, Individual<'a>),
     pub self_comparison: bool,
     pub overlap        : u32,
     pub pwd            : u32,
@@ -48,14 +50,14 @@ pub struct Comparison {
     pub blocks         : JackknifeBlocks
 }
 
-impl Comparison {
-    pub fn new(pair: (Individual, Individual), self_comparison: bool, genome: &[Chromosome], blocksize: u32) -> Comparison {
+impl<'a> Comparison<'a> {
+    pub fn new(pair: (Individual<'a>, Individual<'a>), self_comparison: bool, genome: &[Chromosome], blocksize: u32) -> Comparison<'a> {
         Comparison {pair, self_comparison, overlap: 0, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize)}
     }
 
     // Check if the sequencing of a given overlap is over the minimum required sequencing depth for each individual.
     pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
-        pileups[self.pair.0.index].depth >= self.pair.0.min_depth && pileups[self.pair.1.index].depth >= self.pair.1.min_depth
+        pileups[*self.pair.0.index].depth >= *self.pair.0.min_depth && pileups[*self.pair.1.index].depth >= *self.pair.1.min_depth
     }
 
     // Compare our two individuals at the given SNPposition ; increment the appropriate counters after the comparison 
@@ -63,7 +65,7 @@ impl Comparison {
     pub fn compare(&mut self, line: &Line) {
         self.overlap +=1;
         let random_nucl: Vec<&Nucleotide> = if self.self_comparison {                  // Self comparison => Combination without replacement. 
-            line.random_sample_self(&self.pair.0.index)                                //   - possible combinations: n!/(n-2)!
+            line.random_sample_self(self.pair.0.index)                                //   - possible combinations: n!/(n-2)!
         } else {                                                                       // Std comparison  => Permutation.
             line.random_sample_pair(&self.pair)                                        //  - possible combinations: n_1 * n_2
         };
@@ -99,11 +101,11 @@ impl Comparison {
 
     // Return a formated string representing our pair of individuals. 
     pub fn get_pair (&self,)-> String {
-        self.pair.0.name.clone()+"-"+&self.pair.1.name
+        format!("{}-{}", &self.pair.0.name, &self.pair.1.name)
     }
 }
 
-impl fmt::Display for Comparison {
+impl<'a> fmt::Display for Comparison<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f,
             "{: <20} - {: <7} - {: <7} - {: <8.5} - {: <8.5}",
@@ -118,22 +120,22 @@ impl fmt::Display for Comparison {
 
 /// Vector of all the user-requested comparisons
 #[derive(Debug)]
-pub struct Comparisons (Vec<Comparison>);
+pub struct Comparisons<'a> (Vec<Comparison<'a>>);
 
-impl Comparisons {
-    pub fn parse<'a>(
+impl<'a> Comparisons<'a> {
+    pub fn parse(
         individuals           : &'a [usize],
         min_depths            : &'a [u16],
         names                 : &'a [String],
         allow_self_comparison : bool,
         genome                : &'a [Chromosome],
         blocksize             : u32
-    ) -> Comparisons {
+    ) -> Comparisons<'a> {
         let mut inds = vec![];
         for (i, index) in individuals.iter().enumerate() {
             let name = names.get(i);
-            let min_depth = min_depths[(i % (min_depths.len())) as usize]; // wrap around min_depths if its length is lesser than the number of inds.
-            inds.push(Individual::new(name, index, &min_depth));
+            let min_depth = &min_depths[(i % (min_depths.len())) as usize]; // wrap around min_depths if its length is lesser than the number of inds.
+            inds.push(Individual::new(name, index, min_depth));
         }
         let mut comparisons: Vec<Comparison> = vec![];
         for pair in inds.iter().combinations_with_replacement(2) {
@@ -156,7 +158,7 @@ impl Comparisons {
         self.0.is_empty()
     }
     ///Return mutable slice of our Vector of comparisons.
-    pub fn get(&mut self) -> &mut [Comparison] {
+    pub fn get(&mut self) -> &mut [Comparison<'a>] {
         &mut self.0
     }
 
@@ -165,7 +167,7 @@ impl Comparisons {
     }
 }
 
-impl fmt::Display for Comparisons {
+impl<'a> fmt::Display for Comparisons<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         self.0.iter().fold(Ok(()), |result, comparison| {
             result.and_then(|_| writeln!(f, "{}", comparison))
@@ -197,7 +199,8 @@ mod tests {
         for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
             let min_depths = vec![2];
             let names = vec![];
-            let comparisons = Comparisons::parse(&ind_set, &min_depths, &names, true, &default_genome(), 50_000_000);
+            let genome = default_genome();
+            let comparisons = Comparisons::parse(&ind_set, &min_depths, &names, true, &genome, 50_000_000);
             let len = ind_set.len() as i32;
             println!("{:?}", comparisons);
             assert_eq!(comparisons.len() as i32, permutations_sample_2(len)+len); 
@@ -209,7 +212,8 @@ mod tests {
         for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
             let min_depths = vec![2];
             let names = vec![];
-            let comparisons = Comparisons::parse(&ind_set, &min_depths, &names, false, &default_genome(), 50_000_000);
+            let genome = default_genome();
+            let comparisons = Comparisons::parse(&ind_set, &min_depths, &names, false, &genome, 50_000_000);
             let len = ind_set.len() as i32;
             assert_eq!(comparisons.len() as i32, permutations_sample_2(len)); 
         }

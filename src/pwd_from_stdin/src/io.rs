@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::fs::File;
 use std::io::{self, BufRead, Read};
 
@@ -172,28 +173,58 @@ pub fn get_results_file_prefix<'a>(file_prefix: &'a mut PathBuf, file_ext: Vec<&
     Ok(outfiles_hash)
 }
 
+/// Simple enum for `get_output_files()`
+///  Suffix => HashMap will use provided file suffixes as keys
+///  Key    => HashMap will use provided file extensions as keys 
+pub enum FileKey{Suffix, Ext}
+
 /// Obtain predefined filenames for jackknife blocks from the given output directory and pileup file. 
 /// Return a HashMap with (K (pair): "{ind1}-{ind2}", V (File): "{out_dir}/blocks/{file_prefix}.block"
 /// ==> A new file is generated for each pair of individuals. 
-/// 
-/// TODO: - get_blocks_output_files and get_results_file_prefix could pretty much get fused together into a single
-///         generic function, => loop along provided subdirectories + loop along hashmap keys. (pair||file_ext) 
-pub fn get_blocks_output_files<'a>(file_prefix: &'a mut PathBuf, suffixes: &Vec<String>, file_ext: &Vec<&'a str>) -> std::io::Result<HashMap<String, String>> {
+pub fn get_output_files<'a>(file_prefix: &'a mut PathBuf, allow_overwrite: bool, sort: FileKey, suffixes: &[String], file_ext: &[&'a str]) -> std::io::Result<HashMap<String, String>> {
     // Create output directory. Early return if we can't create it
-    std::fs::create_dir_all(file_prefix.parent().unwrap_or(file_prefix))?; 
-
+    let root_dir= file_prefix.parent().unwrap_or(file_prefix);
+    match std::fs::create_dir_all(root_dir){
+        Ok(()) => (),
+        Err(err) => return Err(
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied,
+            format!("Failed to create parent directory: {}. Got: {}", root_dir.to_str().unwrap_or_default(), err)
+            )
+        )
+    }; 
     // Generate a HashMap of filepaths from the file_prefix
     let mut outfiles_hash = HashMap::new();
     for suffix in suffixes {
+        let mut file = PathBuf::from(format!("{}{}{}",
+        file_prefix.to_str().unwrap(),
+        if suffix.is_empty() {""} else {"-"},
+        suffix
+    ));
         for ext in file_ext {
-            let mut file = PathBuf::from(format!("{}-{}.{}", file_prefix.to_str().unwrap(), suffix, ext));
-            //file.set_extension("blk");
-            outfiles_hash.insert(suffix.clone(), String::from(file.to_str().unwrap()));
-            file.clear();
+            file.set_extension(ext);
+            can_write_file(allow_overwrite, &file)?;
+            let key = match &sort {
+                FileKey::Suffix => suffix.clone(),
+                FileKey::Ext    => ext.to_string()
+            };
+            outfiles_hash.insert(key, String::from(file.to_str().unwrap()));
         }
     }
     Ok(outfiles_hash)
 }
+
+/// Check if a given file already exists ; raise an error if such is the case, and the user did not explicitly 
+/// allow file overwriting.
+pub fn can_write_file(overwrite: bool, pathbuf: &Path) -> std::io::Result<bool> {
+    if ! overwrite && pathbuf.exists() {   // Check if this file already exists and/or if overwrite is allowed.
+        return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists,
+            format!("{:?} exists. use --overwrite to force.",
+            pathbuf.to_str().unwrap()))
+        )
+    }
+    Ok(true)
+}
+
 
 #[cfg(test)]
 mod tests {

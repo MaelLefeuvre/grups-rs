@@ -1,10 +1,11 @@
 pub mod genome;
 pub mod pileup;
 pub mod jackknife;
-pub mod parser;
-pub mod logger;
 pub mod comparison;
 pub mod io;
+
+//extern crate logger;
+use parser;
 
 use comparison::*;
 use genome::*;
@@ -15,18 +16,12 @@ use std::error::Error;
 use std::collections::HashSet;
 use std::io::{BufReader, BufRead};
 
-use log::{error, warn, info, trace};
+use log::{error, warn, info, debug, trace};
 use std::process;
 
 
 // Main function. 
 pub fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
-
-    // Create output workspace and obtain predefined files.
-    //let pwd_prefix = cli.get_results_file_prefix()?;
-    let mut pwd_prefix = cli.get_file_prefix(None).unwrap();
-    let pwd_prefix = io::get_results_file_prefix(&mut pwd_prefix, vec!["pwd"])?;
-    
 
     // ----------------------------- Parse Requested_samples
     let requested_samples: Vec<usize> = parser::parse_user_ranges(&cli.samples, "samples")?;
@@ -49,8 +44,29 @@ pub fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
     // ----------------------------- Parse Comparisons
     info!("Parsing Requested comparisons...");
     let mut comparisons = Comparisons::parse(&requested_samples, &cli.min_depth, &cli.sample_names, cli.self_comparison, &genome, cli.blocksize);
-    let mut block_prefixes = cli.get_file_prefix(Some("blocks/")).unwrap();
-    let block_prefixes = io::get_blocks_output_files(&mut block_prefixes, &comparisons.get_pairs(), &vec!["blk"])?;
+
+    // ----------------------------- Prepare output files
+    // ---- Add pwd files.
+    let mut output_files = io::get_output_files(
+        &mut cli.get_file_prefix(None).unwrap(), // extract the user requested file prefix
+        cli.overwrite,                           // Should we allow file overwriting ?
+        FileKey::Ext,                            // What key are we using to hash these files ?
+        &["".to_string()],                   // Vector of filename suffixes.
+        &["pwd"]                             // Vector of file extensions.
+    )?;
+
+    // ---- Add blocks files.
+    output_files.extend(
+        io::get_output_files(
+            &mut cli.get_file_prefix(Some("blocks/")).unwrap(),
+            cli.overwrite,
+            FileKey::Suffix,
+            &comparisons.get_pairs(),
+            &["blk"]
+        )?.into_iter());
+
+    debug!("Output files: {:#?}", output_files);
+
 
     // ----------------------------- Parse target_positions
     info!("Parsing target_positions...");
@@ -120,7 +136,7 @@ pub fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
     
 
     // ----------------------------- Print results
-    let mut pwd_writer = Writer::new(Some(pwd_prefix["pwd"].clone()))?;
+    let mut pwd_writer = Writer::new(Some(output_files["pwd"].clone()))?;
     if ! cli.filter_sites {
         info!("Printing results...");
         let header = format!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
@@ -133,7 +149,7 @@ pub fn run(cli: parser::Cli) -> Result<(), Box<dyn Error>>{
         if cli.print_blocks {
             for comparison in comparisons.get() {
                 let pair = comparison.get_pair();
-                let mut block_writer = Writer::new(Some(block_prefixes[&pair].clone()))?;
+                let mut block_writer = Writer::new(Some(output_files[&pair].clone()))?;
                 block_writer.write_iter(vec![&comparison.blocks])?;
                 //println!("{}", comparison.blocks);
             }

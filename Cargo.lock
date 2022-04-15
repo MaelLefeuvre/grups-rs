@@ -104,14 +104,11 @@ dependencies = [
 name = "grups"
 version = "0.1.0"
 dependencies = [
- "atty",
  "clap",
- "env_logger",
- "itertools",
  "log",
- "num",
+ "logger",
+ "parser",
  "pwd_from_stdin",
- "rand",
 ]
 
 [[package]]
@@ -185,6 +182,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6389c490849ff5bc16be905ae24bc913a9c8892e19b2341dbc175e14c341c2b8"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "logger"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "log",
 ]
 
 [[package]]
@@ -279,6 +284,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "parser"
+version = "0.1.0"
+dependencies = [
+ "atty",
+ "clap",
+ "log",
+ "num",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -321,15 +338,10 @@ dependencies = [
 name = "pwd_from_stdin"
 version = "0.1.0"
 dependencies = [
- "atty",
- "clap",
- "env_logger",
  "itertools",
  "log",
- "num",
+ "parser",
  "rand",
- "serde",
- "serde_yaml",
 ]
 
 [[package]]
