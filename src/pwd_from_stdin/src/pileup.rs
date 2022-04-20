@@ -5,117 +5,6 @@ use std::error::Error;
 use rand::seq::SliceRandom;
 use std::fmt;
 
-///// Represents a requested individual Within the pileup.
-/////  - name      : Name of the individual. Either given through user-input, or constructed as `Ind{index}` by default
-/////                when no name has been provided.
-/////  - index     : 0 based index of the individual within the pileup. Note that this index is technically offset by 3,
-/////                since the first three columns of a pileup respectively define 'chr', 'pos', 'ref'.
-/////  - min_depth : minimum sequencing depth that is allowed before making a comparison. User-defined, or defaults to 1.
-//#[derive(Debug, PartialEq, Eq, Clone)]
-//pub struct Individual {
-//    pub name     : String,
-//    pub index    : usize,
-//    pub min_depth: u16,
-//}
-//
-//impl Individual {
-//    pub fn new(name: Option<&String>, index: &usize, min_depth: &u16) -> Individual {
-//        let name = match name {                            // Parse name and give default if non-existent
-//            Some(name) => name.to_string(),
-//            None => format!("Ind{}", &index.to_string()),
-//        };
-//        Individual {name, index: *index, min_depth: *min_depth }
-//    }
-//}
-
-///// A struct representing a given pairwise estimation of relatedness between two individuals.
-///// - pair            : contains a representation of the individuals being compared.
-///// - self_comparison : whether or not this comparison is a self_comparison. (i.e. pair.0 == pair.1)
-///// - overlap         : counter for the number of overlapping SNP positions between our pair.
-///// - pwd             : counter for the number of pairwise differences found between our pair.
-///// - sum_phred       : sum of the avg. phred-scores of each overlapping SNP. mainly used to compute the average
-/////                     Phred-score (i.e. overlap/sum_phred)
-///// - blocks          : genome blocks used for jackknife resampling.
-///// 
-///// # Traits : `Debug`
-//#[derive(Debug)]
-//pub struct Comparison {
-//    pub pair           : (Individual, Individual),
-//    pub self_comparison: bool,
-//    pub overlap        : u32,
-//    pub pwd            : u32,
-//    pub sum_phred      : u32,
-//    pub blocks         : JackknifeBlocks
-//}
-//
-//impl Comparison {
-//    pub fn new(pair: (Individual, Individual), self_comparison: bool, genome: &[Chromosome], blocksize: u32) -> Comparison {
-//        Comparison {pair, self_comparison, overlap: 0, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize)}
-//    }
-//
-//    // Check if the sequencing of a given overlap is over the minimum required sequencing depth for each individual.
-//    pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
-//        pileups[self.pair.0.index].depth >= self.pair.0.min_depth && pileups[self.pair.1.index].depth >= self.pair.1.min_depth
-//    }
-//
-//    // Compare our two individuals at the given SNPposition ; increment the appropriate counters after the comparison 
-//    // has been made.
-//    pub fn compare(&mut self, line: &Line) {
-//        self.overlap +=1;
-//        let random_nucl: Vec<&Nucleotide> = if self.self_comparison {                  // Self comparison => Combination without replacement. 
-//            line.random_sample_self(&self.pair.0.index)                                //   - possible combinations: n!/(n-2)!
-//        } else {                                                                       // Std comparison  => Permutation.
-//            line.random_sample_pair(&self.pair)                                        //  - possible combinations: n_1 * n_2
-//        };
-//        self.add_phred(&random_nucl);
-//
-//        let current_block = self.blocks.find_block(&line.coordinate);
-//        current_block.add_count();
-//        if Self::check_pwd(&random_nucl) {
-//            self.pwd +=1;
-//            current_block.add_pwd();
-//        }
-//    }
-//
-//    // Increment our `sum_phred` counter. The incremented value is computed as the average of the two sampled nucleotides.
-//    fn add_phred(&mut self, nuc: &[&Nucleotide]) {
-//        self.sum_phred += ( (nuc[0].phred+nuc[1].phred)/2 ) as u32;
-//    }
-//
-//    // Check if there is a pairwise difference.
-//    fn check_pwd(nuc: &[&Nucleotide]) -> bool {
-//        nuc[0].base != nuc[1].base
-//    }
-//
-//    // Getter for the average pairwise difference across our overlapping snps.
-//    pub fn get_avg_pwd(&self) -> f64 {
-//        self.pwd as f64 / self.overlap as f64
-//    }
-//
-//    // Getter for the average pairwise phred score across our overlapping snps.
-//    pub fn get_avg_phred(&self) -> f64 {
-//        self.sum_phred as f64/self.overlap as f64
-//    }
-//
-//    // Return a formated string representing our pair of individuals. 
-//    pub fn get_pair (&self,)-> String {
-//        format!("{}-{}", self.pair.0.name, self.pair.1.name)
-//    }
-//}
-//
-//impl fmt::Display for Comparison {
-//    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//        write!(f,
-//            "{: <20} - {: <7} - {: <7} - {: <8.5} - {: <8.5}",
-//            self.get_pair(),
-//            self.overlap,
-//            self.pwd,
-//            self.get_avg_pwd(),
-//            self.get_avg_phred()
-//        )
-//    }
-//}
-
 /// Simple struct representing a given nucleotides.
 /// - base  : the nucleotide character -> generally preformatted by Pileup
 /// - phred : Base-quality. Expressed in phred-33 scale.
@@ -147,7 +36,7 @@ impl Nucleotide {
 }
 
 
-#[derive(Debug)]
+
 /// PileupError struct for error propagation and chaining.
 ///  - RefSkipError   -> when char ['>', '<'] are found within a pileup string.
 ///                      used in `Pileup::new()`
@@ -156,6 +45,7 @@ impl Nucleotide {
 ///                      case.
 ///  - ParseLIneError -> Not yet Implemented. General error which is raised if a 
 ///                      character failed to parse.
+#[derive(Debug)]
 pub enum PileupError {
     RefSkipError,
     LengthError,

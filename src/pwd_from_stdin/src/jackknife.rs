@@ -24,7 +24,7 @@ impl JackknifeBlocks {
         let mut jackknives = HashMap::new();
         for chr in genome {
             let mut blocks = Vec::new();
-            let mut add_block = |chr: u8, start: u32, end: u32| {
+            let mut add_block = |chr, start, end| {
                 blocks.push(JackknifeBlock::new(chr, start, end))
             };
             let chr_blocks: Vec<u32> = (1..chr.length+1).step_by(blocksize as usize).collect();

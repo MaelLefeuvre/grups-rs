@@ -1,8 +1,11 @@
 use crate::jackknife::JackknifeBlocks;
-use crate::genome::{Chromosome};
+use crate::genome::{Chromosome, SNPCoord};
 use crate::pileup::{Pileup, Line, Nucleotide};
 
-use std::fmt;
+use std::{
+    fmt,
+    collections::HashSet
+};
 use itertools::Itertools;
 
 /// Represents a requested individual Within the pileup.
@@ -42,17 +45,17 @@ impl<'a> Individual<'a> {
 /// # Traits : `Debug`
 #[derive(Debug)]
 pub struct Comparison<'a> {
-    pub pair           : (Individual<'a>, Individual<'a>),
-    pub self_comparison: bool,
-    pub overlap        : u32,
-    pub pwd            : u32,
-    pub sum_phred      : u32,
-    pub blocks         : JackknifeBlocks
+    pair            : (Individual<'a>, Individual<'a>),
+    self_comparison : bool,
+    pwd             : u32,
+    sum_phred       : u32,
+    pub blocks      : JackknifeBlocks,
+    pub positions   : HashSet<SNPCoord>
 }
 
 impl<'a> Comparison<'a> {
-    pub fn new(pair: (Individual<'a>, Individual<'a>), self_comparison: bool, genome: &[Chromosome], blocksize: u32) -> Comparison<'a> {
-        Comparison {pair, self_comparison, overlap: 0, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize)}
+    pub fn new(pair: (Individual<'a>, Individual<'a>), self_comparison: bool, genome: &'a[Chromosome], blocksize: u32) -> Comparison<'a> {
+        Comparison {pair, self_comparison, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize), positions: HashSet::new()}
     }
 
     // Check if the sequencing of a given overlap is over the minimum required sequencing depth for each individual.
@@ -63,7 +66,7 @@ impl<'a> Comparison<'a> {
     // Compare our two individuals at the given SNPposition ; increment the appropriate counters after the comparison 
     // has been made.
     pub fn compare(&mut self, line: &Line) {
-        self.overlap +=1;
+        self.positions.insert(line.coordinate.clone());
         let random_nucl: Vec<&Nucleotide> = if self.self_comparison {                  // Self comparison => Combination without replacement. 
             line.random_sample_self(self.pair.0.index)                                //   - possible combinations: n!/(n-2)!
         } else {                                                                       // Std comparison  => Permutation.
@@ -91,12 +94,12 @@ impl<'a> Comparison<'a> {
 
     // Getter for the average pairwise difference across our overlapping snps.
     pub fn get_avg_pwd(&self) -> f64 {
-        self.pwd as f64 / self.overlap as f64
+        self.pwd as f64 / self.positions.len() as f64
     }
 
     // Getter for the average pairwise phred score across our overlapping snps.
     pub fn get_avg_phred(&self) -> f64 {
-        self.sum_phred as f64/self.overlap as f64
+        self.sum_phred as f64/self.positions.len() as f64
     }
 
     // Return a formated string representing our pair of individuals. 
@@ -110,7 +113,7 @@ impl<'a> fmt::Display for Comparison<'a> {
         write!(f,
             "{: <20} - {: <7} - {: <7} - {: <8.5} - {: <8.5}",
             self.get_pair(),
-            self.overlap,
+            self.positions.len(),
             self.pwd,
             self.get_avg_pwd(),
             self.get_avg_phred()

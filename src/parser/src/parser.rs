@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand, Args};
 
 
-use serde_yaml;
+//use serde_yaml;
 use serde::{Serialize};
 
 use log::{info};
@@ -32,32 +32,57 @@ impl<'a> std::fmt::Display for ParserError<'a> {
 
 #[derive(Parser, Debug, Serialize)]
 pub struct Cli {
+    ///Set the verbosity level (-v -vv -vvv -vvvv)
+    /// 
+    /// Set the verbosity level of this program. With multiple levels
+    ///    -v : Info  |  -vv : Debug  | -vvv : Trace
+    /// By default, the program will still output Warnings. Use --quiet/-q to disable them
+    #[clap(short='v', long, parse(from_occurrences), global=true)]
+    pub verbose: u8,
+    /// Disable warnings.
+    /// 
+    /// By default, warnings are emmited and redirected to the console, even without verbose mode on.
+    /// Use this argument to disable this. Only errors will be displayed.
+    #[clap(short='q', long, global=true)]
+    pub quiet: bool,
     #[clap(subcommand)]
     pub commands: Commands,
 }
 
 impl Cli {
     pub fn serialize(&self){
-        let serialized = self::serde_yaml::to_string(&self).unwrap();
+        let serialized = serde_yaml::to_string(&self).unwrap();
         info!("\n---- Command line args ----\n{}\n---", serialized);
+    }
+}
+
+#[derive(Subcommand, Debug, Serialize)]
+pub enum Commands {
+    Run {
+        #[clap(flatten)]
+        common: Common,
+        #[clap(flatten)]
+        pwd: PwdFromStdin,
+        #[clap(flatten)]
+        ped: PedigreeSims
+
+    },
+    PwdFromStdin {
+        #[clap(flatten)]
+        common: Common,
+        #[clap(flatten)]
+        pwd: PwdFromStdin
+    },
+    PedigreeSims {
+        #[clap(flatten)]
+        common: Common,
+        #[clap(flatten)]
+        ped: PedigreeSims
     }
 }
 
 #[derive(Parser, Debug, Serialize)]
 pub struct Common {
-    ///Set the verbosity level (-v -vv -vvv -vvvv)
-    /// 
-    /// Set the verbosity level of this program. With multiple levels
-    ///    -v : Info  |  -vv : Debug  | -vvv : Trace
-    /// By default, the program will still output Warnings. Use --quiet/-q to disable them
-    #[clap(short, long, parse(from_occurrences))]
-    pub verbose: u8,
-    /// Disable warnings.
-    /// 
-    /// By default, warnings are emmited and redirected to the console, even without verbose mode on.
-    /// Use this argument to disable this. Only errors will be displayed.
-    #[clap(short, long)]
-    pub quiet: bool,
     /// Minimal required Base Quality (BQ) to perform comparison.
     /// 
     /// Nucleotides whose BQ is lower than the provided treshold are filtered-out. 
@@ -109,7 +134,7 @@ pub struct Common {
     #[clap(short, long, default_value("grups-output"))]
     pub output_dir: String,
     //Overwrite existing output files.
-    #[clap(short='x', long)]
+    #[clap(short='w', long)]
     pub overwrite: bool,
 }
 
@@ -139,7 +164,7 @@ pub struct PwdFromStdin {
     #[clap(short, long)]
     pub ignore_dels: bool,
     /// Print jackknife blocks for each individual
-    #[clap(short='B', long)]
+    #[clap(short='J', long)]
     pub print_blocks: bool,
     /// Change the size of our jackknife blocks.
     #[clap(short, long, required(false), default_value("1000000"))]
@@ -153,7 +178,7 @@ pub struct PwdFromStdin {
     /// Example:  '--samples 0-4 --min-depth 2 3 5 ' will result in:
     ///   - Ind  : 0 1 2 3 4
     ///   - Depth: 2 3 5 2 3 
-    #[clap(short, long, multiple_values(true), required(false), default_values(&["1","1"]))]
+    #[clap(short='x', long, multiple_values(true), required(false), default_values(&["1","1"]))]
     pub min_depth: Vec <u16>,
     /// 0-based column index of the individuals that should be compared
     /// 
@@ -166,33 +191,85 @@ pub struct PwdFromStdin {
 
 #[derive(Args, Debug, Serialize)]
 pub struct PedigreeSims {
-    #[clap(short, long, required(false))]
-    reps: Option<u32>
-}
+    /// Proportion of SNPs to keep at true frequency
+    #[clap(short='d', long, required(false), default_value("1.0"))]
+    pub downsample_rate: f64,
 
-#[derive(Subcommand, Debug, Serialize)]
-pub enum Commands {
-    Run {
-        #[clap(flatten)]
-        common: Common,
-        #[clap(flatten)]
-        pwd: PwdFromStdin,
-        #[clap(flatten)]
-        ped: PedigreeSims
+    /// Proportion of filtered SNP positions to include in the analysis
+    #[clap(short='D', long, required(false), default_value("1.0"))]
+    pub ds_rate_num_snps: f64,
 
-    },
-    PwdFromStdin {
-        #[clap(flatten)]
-        common: Common,
-        #[clap(flatten)]
-        pwd: PwdFromStdin
-    },
-    PedigreeSims {
-        #[clap(flatten)]
-        common: Common,
-        #[clap(flatten)]
-        ped: PedigreeSims
-    }
+    /// Contamination rates (or rate ranges) for each desired scenario. 
+    /// 
+    /// Format: FLOAT,FLOAT or FLOAT,FLOAT/FLOAT,FLOAT ... or FLOAT-FLOAT,FLOAT-FLOAT/FLOAT-FLOAT,FLOAT-FLOAT ...
+    #[clap(short='Q', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_user_range))]
+    pub contamination_rate: Vec<Vec<u8>>,
+
+    /// Sequencing error rates  (or rate ranges) for each desired scenario.
+    /// 
+    /// Format: FLOAT,FLOAT or FLOAT,FLOAT/FLOAT,FLOAT ... or FLOAT-FLOAT,FLOAT-FLOAT/FLOAT-FLOAT,FLOAT-FLOAT ...
+    /// Default_values: ['FromPileup', 'FromPileup']
+    #[clap(short='U', long, required(false), multiple_values(true), parse(try_from_str=parse_user_range))]
+    pub pmd_rate : Vec<Vec<u8>>,
+
+    /// Mean sequencing depths (or depth ranges) for each desired scenario. 
+    /// 
+    /// Format         : FLOAT,FLOAT or FLOAT,FLOAT/FLOAT,FLOAT ... or FLOAT-FLOAT,FLOAT-FLOAT/FLOAT-FLOAT,FLOAT-FLOAT ..."
+    /// Default values : 'FromPileup'
+    #[clap(short='X', long, multiple_values(true), parse(try_from_str=parse_user_range))]
+    pub depth_rate: Option<Vec<Vec<u8>>>,
+
+    /// Number of replicates to perform when randomly drawing values from specified ranges for parameters c_rate, mean_cov, q_rate.
+    /// 
+    /// Format: INT or INT INT INT ... 
+    #[clap(short='r', long, required(false), multiple_values(true), default_values(&["1"]))]
+    pub param_num_rep: Vec<u32>,
+    /// Data output labels.
+    /// 
+    /// Format: String String String
+    #[clap(short, long, required(false), multiple_values(true))]
+    pub labels: Vec<String>,
+
+    /// Path to input VCF genomes for founder individuals (1000G)
+    #[clap(short='F', long, default_value(r#"./data/founders/1000G-phase3-v5a"#), parse(from_os_str))]
+    pub data_dir: std::path::PathBuf,
+
+    /// Path to recombination genetic map data.
+    #[clap(short='G', long, required(false), default_value("./data/recombination/GRCh37"), parse(from_os_str))]
+    pub recomb_dir: std::path::PathBuf,
+
+    /// Number of pedigree replicates to perform
+    #[clap(short='R', long, default_value("1"))]
+    pub reps: u32,
+
+    /// Minimum allele frequency within the pedigree superpopulation that is required to include a given SNP within the simulations.
+    #[clap(short, long, default_value("0.00"))]
+    pub maf: f64,
+
+    /// Superpopulation with which to perform pedigree simulations
+    #[clap(short='P', long, default_value("EUR"))]
+    pub pedigree_pop: String,
+
+    /// Superpopulation with which to contaminate pedigree simulations.
+    /// 
+    /// Format: STR, STR
+    #[clap(short='C', long, multiple_values(true), max_values(2), default_values(&["EUR","EUR"]))]
+    pub contam_pop: Vec<String>,
+
+    ///Number of random individual genomes with which to contaminate pedigree simulations.
+    /// 
+    /// Format: INT, INT 
+    /// Default: Contaminate with population allele frequencies.
+    #[clap(short='N', long, multiple_values(true), max_values(2), default_values(&["1","1"]))]
+    pub contam_num_ind: Vec<u32>,
+
+    /// Path to input pedigree definition file.
+    #[clap(short='T', long, required(false), default_value("./data/pedigrees/default.ped"), parse(from_os_str))]
+    pub pedigree: std::path::PathBuf,
+    
+    #[clap(long, parse(from_os_str))]
+    pub panel: Option<std::path::PathBuf>,
+
 }
 
 impl PwdFromStdin {

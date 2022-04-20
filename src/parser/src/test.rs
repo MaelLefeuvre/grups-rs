@@ -3,35 +3,29 @@ use clap::{Parser, Subcommand, Args};
 
 #[derive(Parser, Debug)]
 struct Cli {
-    #[clap(subcommand)]
-    commands: Commands,
-}
-
-#[derive(Args, Debug)]
-struct Common {
     ///Set the verbosity level (-v -vv -vvv -vvvv)
     /// 
     /// Set the verbosity level of this program. With multiple levels
     ///    -v : Info  |  -vv : Debug  | -vvv : Trace
     /// By default, the program will still output Warnings. Use --quiet/-q to disable them
-    #[clap(short, long, parse(from_occurrences))]
+    #[clap(short, long, parse(from_occurrences), global(true))]
     pub verbose: u8,
     /// Disable warnings.
     /// 
     /// By default, warnings are emmited and redirected to the console, even without verbose mode on.
     /// Use this argument to disable this. Only errors will be displayed.
-    #[clap(short, long)]
+    #[clap(short, long, global(true))]
     pub quiet: bool,
     /// Minimal required Base Quality (BQ) to perform comparison.
     /// 
     /// Nucleotides whose BQ is lower than the provided treshold are filtered-out. 
     /// Value should be expressed in scale PHRED-33.
-    #[clap(short('M'), long, default_value("30"))]
+    #[clap(short('M'), long, default_value("30"), global(true))]
     pub min_qual: u8,
     /// Fasta indexed reference genome.
     /// 
     /// Note that a '.fasta.fai' genome index file must be present at the same directory.
-    #[clap(short, long, required(false))]
+    #[clap(short, long, required(false), global(true))]
     pub genome: Option<String>,
     /// Provide with a list of SNP coordinates to target within the pileup.
     /// 
@@ -42,19 +36,19 @@ struct Common {
     ///   '.tsv' :   tab-separated file with columns 'CHR POS REF ALT'  
     ///   '.csv' : comma-separated file with columns 'CHR POS REF ALT'  
     ///   '.txt' : space-separated file with columns 'CHR POS REF ALT'   
-    #[clap(short, long, required(false))]
+    #[clap(short, long, required(false), global(true))]
     pub targets: Option<String>,
     /// Input pileup file.
     /// 
     /// Note that in the absence of a '--pileup' argument, the program will except a data stream from the standard input. i.e
     /// 'samtools mpileup -B -q30 -Q30 ./samples/* | pwd_from_stdin [...]
-    #[clap(short, long, required(false))]
+    #[clap(short, long, required(false), global(true))]
     pub pileup: Option<String>,
     /// Restrict comparison to a given set of chromosomes.
     /// 
     /// Argument may accept slices (inclusive) and/or discrete integers i.e.
     /// '--chr 9-11 13 19-22 ' will be parsed as: [9,10,11,13,19,20,21,22]
-    #[clap(short, long, multiple_values(true))]
+    #[clap(short, long, multiple_values(true), global(true))]
     pub chr: Option<Vec<String>>,
     /// Provide with a list of sample names for printing.
     /// 
@@ -67,14 +61,21 @@ struct Common {
     /// Example: '--sample 0-2 5 6 --sample-names ART04 ART16 ART20'
     ///   - index: 0      1      2      5     6
     ///   - name : ART04  ART16  ART20  Ind5  Ind6
-    #[clap(short, long, multiple_values(true))]
+    #[clap(short, long, multiple_values(true), global(true))]
     pub sample_names: Vec<String>,
     // Output directory where results will be written.
-    #[clap(short, long, default_value("grups-output"))]
+    #[clap(short, long, default_value("grups-output"), global(true))]
     pub output_dir: String,
     //Overwrite existing output files.
-    #[clap(short='x', long)]
+    #[clap(short='x', long, global(true))]
     pub overwrite: bool,
+    #[clap(subcommand)]
+    commands: Commands,
+}
+
+#[derive(Args, Debug)]
+struct Common {
+
 }
 
 #[derive(Args, Debug)]
@@ -131,8 +132,6 @@ struct PedigreeSims {
 enum Commands {
     Run {
         #[clap(flatten)]
-        common: Common,
-        #[clap(flatten)]
         pwd: PwdFromStdin,
         #[clap(flatten)]
         ped: PedigreeSims
@@ -140,13 +139,9 @@ enum Commands {
     },
     PwdFromStdin {
         #[clap(flatten)]
-        common: Common,
-        #[clap(flatten)]
         pwd: PwdFromStdin
     },
     PedigreeSims {
-        #[clap(flatten)]
-        common: Common,
         #[clap(flatten)]
         ped: PedigreeSims
     }
@@ -160,16 +155,19 @@ fn main() {
 
 
     match &cli.commands {
-        Commands::Run {common:_, pwd:_, ped} => {
-            println!("Command Run : {:#?}", cli.commands);
+        Commands::Run {pwd:_, ped} => {
+            println!("Command Run : {:#?}", cli);
             println!("Hi!  : {:#?}", ped.reps);
 
         },
-        Commands::PwdFromStdin {common:_, pwd} => {
-            println!("Command pwd_from_stdin: {:#?}", pwd.min_depth);
+        Commands::PwdFromStdin {pwd} => {
+            println!("Command pwd_from_stdin: {:#?}", cli);
+            println!("Command pwd_from_stdin: {:#?}", pwd);
         },
-        Commands::PedigreeSims {..} => {
+        Commands::PedigreeSims {ped} => {
             println!("Command pedigree-sims: {:#?}", cli.commands);
+            println!("Command pedigree-sims: {:#?}", ped);
+
         }
     };
 }

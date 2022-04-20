@@ -5,7 +5,7 @@ pub mod comparison;
 pub mod io;
 
 //extern crate logger;
-use parser;
+//use parser;
 
 use comparison::*;
 use genome::*;
@@ -21,9 +21,12 @@ use std::process;
 
 
 // Main function. 
-pub fn run(com_cli: &parser::Common, pwd_cli: &parser::PwdFromStdin) -> Result<(), Box<dyn Error>>{
-    // ----------------------------- Parse Requested_samples
-    let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd_cli.samples, "samples")?;
+pub fn run<'a>(
+    com_cli: &'a parser::Common,
+    pwd_cli: &'a parser::PwdFromStdin,
+    requested_samples: &'a [usize],
+    genome: &'a [Chromosome],
+) -> Result<(Comparisons<'a>, HashSet<SNPCoord>), Box<dyn Error>>{
 
     // ----------------------------- Sanity checks.
     pwd_cli.check_depth()?; // Ensure min_depths are > 2 when allowing self-comparisons
@@ -33,25 +36,18 @@ pub fn run(com_cli: &parser::Common, pwd_cli: &parser::PwdFromStdin) -> Result<(
         warn!("--min-depth length is less than that of --samples. Values of min-depth will wrap around.")
     }
 
-    // ----------------------------- Initialize genome.
-    info!("Indexing reference genome...");
-    let genome = match &com_cli.genome {
-        Some(file) => fasta_index_reader(file)?,
-        None => default_genome(),
-    };
-
     // ----------------------------- Parse Comparisons
     info!("Parsing Requested comparisons...");
-    let mut comparisons = Comparisons::parse(&requested_samples, &pwd_cli.min_depth, &com_cli.sample_names, pwd_cli.self_comparison, &genome, pwd_cli.blocksize);
+    let mut comparisons = Comparisons::parse(requested_samples, &pwd_cli.min_depth, &com_cli.sample_names, pwd_cli.self_comparison, genome, pwd_cli.blocksize);
 
     // ----------------------------- Prepare output files
     // ---- Add pwd files.
     let mut output_files = io::get_output_files(
-        &mut com_cli.get_file_prefix(None).unwrap(), // extract the user requested file prefix
-        com_cli.overwrite,                           // Should we allow file overwriting ?
-        FileKey::Ext,                            // What key are we using to hash these files ?
-        &["".to_string()],                   // Vector of filename suffixes.
-        &["pwd"]                             // Vector of file extensions.
+        &mut com_cli.get_file_prefix(None).unwrap(),    // extract the user requested file prefix
+        com_cli.overwrite,                                  // Should we allow file overwriting ?
+        FileKey::Ext,         // What key are we using to hash these files ?
+        &["".to_string()],// Vector of filename suffixes.
+        &["pwd"]          // Vector of file extensions.
     )?;
 
     // ---- Add blocks files.
@@ -71,7 +67,7 @@ pub fn run(com_cli: &parser::Common, pwd_cli: &parser::PwdFromStdin) -> Result<(
     info!("Parsing target_positions...");
     let target_positions = match &com_cli.targets {
         None => HashSet::new(),
-        Some(filename) => SNPReader::new(&filename)?.hash_target_positions()?
+        Some(filename) => SNPReader::new(filename)?.hash_target_positions()?
     };
 
     let target_required: bool = ! target_positions.is_empty();
@@ -150,9 +146,8 @@ pub fn run(com_cli: &parser::Common, pwd_cli: &parser::PwdFromStdin) -> Result<(
                 let pair = comparison.get_pair();
                 let mut block_writer = Writer::new(Some(output_files[&pair].clone()))?;
                 block_writer.write_iter(vec![&comparison.blocks])?;
-                //println!("{}", comparison.blocks);
             }
         }
     }
-    Ok(())
+    Ok((comparisons, target_positions))
 }

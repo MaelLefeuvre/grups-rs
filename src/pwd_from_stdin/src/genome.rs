@@ -8,7 +8,6 @@ use std::io::{BufReader, BufRead};
 
 use log::{info, warn, debug};
 
-#[derive(Debug)]
 /// A simple struct representing an SNPCoordinate position.
 /// Note that :
 ///   - REF/ALT positions are optional, but are required if the user
@@ -17,6 +16,7 @@ use log::{info, warn, debug};
 ///     See: `pwd_from_stdin::jackknife::JackknifeBlock`
 ///   - Hashable, but only in regards to chr and pos.
 ///     -> don't insert alternate variations.
+#[derive(Debug, Clone)]
 pub struct SNPCoord {
     pub chromosome : u8,
     pub position   : u32,

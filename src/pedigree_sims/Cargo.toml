@@ -1,0 +1,14 @@
+[package]
+name = "pedigree_sims"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+  parser         = {path ="../parser"}
+  pwd_from_stdin = {path = "../pwd_from_stdin" }
+  flate2         = "1.0"
+  log            = "0.4.16"
+  rand           = "0.7.2"
+  rust-htslib    = "0.38.0"
