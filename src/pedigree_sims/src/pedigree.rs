@@ -1,5 +1,7 @@
 use std::{collections::BTreeMap, path::PathBuf, error::Error};
 use crate::io::{Sample, VCFReader};
+use log::{info};
+
 
 use std::{
     hash::{Hash, Hasher},
@@ -36,6 +38,7 @@ impl Individual {
 
         println!("Sample: {}, Id: {}", sample.id(), sample.idx());
         for vcf in vcfs {
+            info!("Parsing vcf file: {}", vcf.to_str().unwrap_or("None"));
             let mut vcf_reader = VCFReader::new(vcf.as_path(), &tpool)?;
             let genome = vcf_reader.parse_sample(sample.idx())?;
             println!("{:?}", genome);

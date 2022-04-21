@@ -9,7 +9,7 @@ use pwd_from_stdin::comparison::Comparisons;
 pub mod io;
 pub mod pedigree;
 
-use rust_htslib::tpool::ThreadPool;
+//use rust_htslib::tpool::ThreadPool;
 
 
 pub fn run<'a>(

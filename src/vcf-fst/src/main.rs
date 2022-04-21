@@ -1,5 +1,5 @@
 use pedigree_sims::io;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::error::Error;
 
 use std::fs::File;
@@ -13,7 +13,7 @@ use rust_htslib::tpool::ThreadPool;
 
 fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Error>> {
 
-    let mut wtr = std::io::BufWriter::new(File::create("tests/fst/g1k-map.fst")?);
+    let wtr = std::io::BufWriter::new(File::create("tests/fst/g1k-map.fst")?);
     let mut build= MapBuilder::new(wtr)?;
 
 
@@ -47,7 +47,7 @@ fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn
             buf.pop(); buf.push(b' ');
             let pos_bytes = reader.source.read_until(b'\t', &mut buf)?; // 2
             buf.pop(); buf.push(b' ');
-            for i in 0..(10-pos_bytes) {                 // Add 9 leading zeroes.
+            for _ in 0..(10-pos_bytes) {                 // Add 9 leading zeroes.
                 buf.insert(chr_bytes, b'0')   
             }
 
@@ -55,7 +55,7 @@ fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn
                 reader.source.read_until(b'\t', &mut Vec::new())?;
             }
             
-            reader.source.read_until(b'\n', &mut genotypes);
+            reader.source.read_until(b'\n', &mut genotypes)?;
             //let line = line?;
             //let line = line.split('\t');
 
@@ -96,39 +96,39 @@ fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn
 
 fn main() {
 
-    let tpool = rust_htslib::tpool::ThreadPool::new(4).unwrap();
+    let tpool = rust_htslib::tpool::ThreadPool::new(16).unwrap();
 
 
 
-    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-snps-m2-rmdup/");
+    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-5000-filtered/");
     println!("Fetching input VCF files in {}", &data_dir.to_str().unwrap());
-    let input_vcf_paths = io::get_input_vcfs(&data_dir).unwrap();
+    let mut input_vcf_paths = io::get_input_vcfs(&data_dir).unwrap();
+    input_vcf_paths.sort();
+
 
     let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
-    let panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path(), &tpool).unwrap();
+    let _panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path(), &tpool).unwrap();
 
     //for pop in panel.samples.into_keys(){
     //    println!("{}", pop); 
     //}
 
     println!("Generating FST index...");
-    //sort_vcf_map(&input_vcf_paths, &tpool).unwrap();
+    sort_vcf_map(&input_vcf_paths, &tpool).unwrap();
     println!("Done!");
 
 
-    //// Memory Map strategy.
-    //println!("Opening memory map");
-    //let mmap = unsafe { Mmap::map(&File::open("tests/fst/g1k-map.fst").unwrap()).unwrap() };
-    //let map = Map::new(mmap).unwrap();
-    //let mut stream = map.range().ge("clarence").into_stream();
+    // Memory Map strategy.
+    println!("Opening memory map");
+    let mmap = unsafe { Mmap::map(&File::open("tests/fst/g1k-map.fst").unwrap()).unwrap() };
+    let map = Map::new(mmap).unwrap();
 
-    // In RAM Strategy
-    println!("Reading in memory.");
-    let mut file_handle = File::open("tests/fst/g1k-map.fst").unwrap();
-    let mut bytes = vec![];
-    std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
-    let map = Map::new(bytes).unwrap();
-    //let mut stream = map.range().ge("clarence").into_stream();
+    //// In RAM Strategy
+    //println!("Reading in memory.");
+    //let mut file_handle = File::open("tests/fst/g1k-map.fst").unwrap();
+    //let mut bytes = vec![];
+    //std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
+    //let map = Map::new(bytes).unwrap();
 
 
     println!("Searching HG02067");

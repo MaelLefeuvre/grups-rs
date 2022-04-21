@@ -11,14 +11,16 @@ function usage(){
 
 SNP=$1;
 
+THREADS=`nproc`
+
 OUT_DIR="./g1k-phase3-v5b-first-${SNP}"
 mkdir -p ${OUT_DIR}
 
 for i in ./g1k-phase3-v5b/*.vcf.gz; do 
     base="$(basename $i)";
     output="${OUT_DIR}/${base%.vcf.gz}.first-${SNP}.vcf";
-    bcftools view -h $i > $output ;
-    bcftools view -H $i | head -n ${SNP}>> $output;
+    bcftools view --threads ${THREADS} -h $i > $output ;
+    bcftools view --threads ${THREADS} -H $i | head -n ${SNP}>> $output;
     bgzip $output;
     tabix ${output}.gz;
 done

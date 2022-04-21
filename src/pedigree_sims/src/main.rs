@@ -6,7 +6,7 @@ use pedigree_sims::io;
 
 fn main() {
     println!("Hello, world!");
-    let file = Path::new("tests/test-data/vcf/g1k-phase3-v5a/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz");
+    //let file = Path::new("tests/test-data/vcf/g1k-phase3-v5a/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz");
     //let _vcf = io::VCFReader::new(file).unwrap();
     //println!("{:?}", vcf.samples());
     //for line in vcf.lines() {

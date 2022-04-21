@@ -179,7 +179,9 @@ impl VCFPanelReader {
 
 pub struct VCFReader<'a> {
     pub source: Box<dyn BufRead + 'a>,
-    samples: Vec<String>
+    samples   : Vec<String>,
+    buf       : Vec<u8>,
+    idx       : usize,
 }
 
 impl<'a> VCFReader<'a> {
@@ -187,24 +189,71 @@ impl<'a> VCFReader<'a> {
         let mut reader = Self::get_reader(path, tpool)?;
         let samples = Self::parse_samples(&mut reader)?;
 
-        Ok(VCFReader{source: reader, samples})
+        Ok(VCFReader{source: reader, samples, buf: Vec::new(), idx:0})
+    }
+
+    fn next_field(&mut self) -> Result<&str, Box<dyn Error>> {
+        self.source.read_until(b'\t', &mut self.buf)?;
+        self.buf.pop();
+        self.idx += 1;
+        Ok(std::str::from_utf8(&self.buf)?)
+    }
+
+    fn next_eol(&mut self) -> std::io::Result<()> {
+        let _ = self.source.read_until(b'\n', &mut self.buf)?;
+        self.idx=0;
+        Ok(())
+    }
+
+    fn skip(&mut self, n: usize) -> std::io::Result<()> {
+        for _ in 0..n {
+            self.source.read_until(b'\t', &mut Vec::new())?;
+        }
+        self.idx+=n;
+        Ok(())
+    }
+    fn fill_genotypes(&mut self) -> std::io::Result<()> {
+        let genotypes_start_idx = 9;
+        self.clear_buffer();
+        self.skip(genotypes_start_idx-self.idx)?;
+        self.next_eol()?;
+        Ok(())
+    }
+
+    fn get_alleles(&mut self, idx: &usize) -> Result<(String, String), Box<dyn Error>> {
+        let geno_idx=idx*4;
+        let haplo1 = std::str::from_utf8(&[self.buf[geno_idx]])?.to_owned();
+        let haplo2 = std::str::from_utf8(&[self.buf[geno_idx+2]])?.to_owned();
+        Ok((haplo1, haplo2))
+    }
+    fn clear_buffer(&mut self) {
+        self.buf.clear();
+    }
+
+    fn has_data_left(&mut self) -> std::io::Result<bool> {
+        self.source.fill_buf().map(|b| !b.is_empty())
     }
 
     pub fn parse_sample(&mut self, idx: &usize) -> Result<(), Box<dyn Error>> {
-        for line in self.source.by_ref().lines(){
-            let line = line?;
-            let mut line = line.split('\t');
+        let mut i = 0;
+        let mut genotypes: Vec<u8> = Vec::new();
+        while self.has_data_left()? {
+            let chr: u8  = self.next_field()?.parse()?;
+            self.clear_buffer();
+            let pos: u32 = self.next_field()?.parse()?;
+            self.clear_buffer();
+            self.fill_genotypes()?;
+            let (haplo1, haplo2) = self.get_alleles(idx)?;
+            if i % 500000 == 0 {
+                println!("{} {: >2} {: >9} {} {}",
+                    idx, chr, pos, haplo1, haplo2
+                );
 
-            let _chr = line.next().unwrap().parse::<u8>()?;
-            let _pos = line.next().unwrap().parse::<u32>()?;
-            let _reference = line.nth(1).unwrap();
-            let _alternate = line.next().unwrap();
+            }
+            self.clear_buffer();
+            genotypes.clear();
 
-            let _genotype = line.nth(idx-5).unwrap();
-
-            //println!("{}{: <3} {: <12} {} {} {}",
-            //    idx, chr, pos, reference, alternate, genotype
-            //);
+            i+=1;
         }
         Ok(())
     }
@@ -223,7 +272,7 @@ impl<'a> VCFReader<'a> {
         let source = Box::new(source);
         
         //let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
-            //Some("vcf") => Box::new(File::open(path)?),
+            //Some("f") => Box::new(File::open(path)?),
             //Some("gz")  => Box::new(GzDecoder::new(File::open(path)?)),
             //Some("gz")  => Box::new(bgzf::Reader::from_path(path).unwrap()),
            // _           => panic!()
@@ -312,7 +361,7 @@ fn parse_pedline (line: Vec<& str>, regex: &str) -> std::io::Result<(String, Str
 pub fn get_input_vcfs(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
     let paths = std::fs::read_dir(input_dir)?;
 
-    let vcfs = paths.filter_map(Result::ok)
+    let mut vcfs = paths.filter_map(Result::ok)
         .filter_map(|d| d.path()
             .to_str()
             .and_then(|f|
@@ -328,6 +377,7 @@ pub fn get_input_vcfs(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
             .map(|f| f.path())
         )
     .collect::<Vec<PathBuf>>();
+    vcfs.sort();
     info!("Found input vcf file candidates: {:#?}", vcfs);
     Ok(vcfs)
 }
