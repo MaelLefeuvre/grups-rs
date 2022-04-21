@@ -192,7 +192,7 @@ impl<'a> VCFReader<'a> {
         Ok(VCFReader{source: reader, samples, buf: Vec::new(), idx:0})
     }
 
-    fn next_field(&mut self) -> Result<&str, Box<dyn Error>> {
+    pub fn next_field(&mut self) -> Result<&str, Box<dyn Error>> {
         self.source.read_until(b'\t', &mut self.buf)?;
         self.buf.pop();
         self.idx += 1;
@@ -212,7 +212,7 @@ impl<'a> VCFReader<'a> {
         self.idx+=n;
         Ok(())
     }
-    fn fill_genotypes(&mut self) -> std::io::Result<()> {
+    pub fn fill_genotypes(&mut self) -> std::io::Result<()> {
         let genotypes_start_idx = 9;
         self.clear_buffer();
         self.skip(genotypes_start_idx-self.idx)?;
@@ -220,17 +220,17 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-    fn get_alleles(&mut self, idx: &usize) -> Result<(String, String), Box<dyn Error>> {
+    pub fn get_alleles(&mut self, idx: &usize) -> Result<(String, String), Box<dyn Error>> {
         let geno_idx=idx*4;
         let haplo1 = std::str::from_utf8(&[self.buf[geno_idx]])?.to_owned();
         let haplo2 = std::str::from_utf8(&[self.buf[geno_idx+2]])?.to_owned();
         Ok((haplo1, haplo2))
     }
-    fn clear_buffer(&mut self) {
+    pub fn clear_buffer(&mut self) {
         self.buf.clear();
     }
 
-    fn has_data_left(&mut self) -> std::io::Result<bool> {
+    pub fn has_data_left(&mut self) -> std::io::Result<bool> {
         self.source.fill_buf().map(|b| !b.is_empty())
     }
 

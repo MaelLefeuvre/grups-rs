@@ -10,12 +10,62 @@ use memmap::Mmap;
 use rust_htslib::tpool::ThreadPool;
 
 
+fn serialize(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Error>> {
+
+    for vcf in vcf_paths {
+        println!("{:?}", vcf);
+
+        //Start a reader.
+        let mut reader = io::VCFReader::new(vcf, tpool)?;
+
+        //Extract samples
+        let samples = reader.samples();
+        let samples = &samples[9..];
+
+        
+        //Convert to struct to keep id.
+        let mut struct_samples = Vec::new();
+        for (i, sample) in samples.iter().enumerate(){
+            let sample = io::Sample::new(sample, i);
+            struct_samples.push(sample);
+        }
+
+        //Sort samples
+        struct_samples.sort();
+
+        let mut i = 0;
+        while reader.has_data_left()? {
+            let chr: u8  = reader.next_field()?.parse()?;
+            reader.clear_buffer();
+            let pos: u32 = reader.next_field()?.parse()?;
+            reader.clear_buffer();
+            reader.fill_genotypes()?;
+            for sample in struct_samples.iter() {
+                let (haplo1, haplo2) = reader.get_alleles(sample.idx())?;
+                if i % 500000 == 0 {
+                    println!("{} {: >2} {: >9} {} {}",
+                        sample.idx(), chr, pos, haplo1, haplo2
+                    );
+                }
+            }
+            
+
+            reader.clear_buffer();
+
+            i+=1;
+        }
+
+
+    }
+    Ok(())
+}
+
+
 
 fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Error>> {
 
-    let wtr = std::io::BufWriter::new(File::create("tests/fst/g1k-map.fst")?);
+    let wtr = std::io::BufWriter::new(File::create("tests/test-data/fst/g1k-map.fst")?);
     let mut build= MapBuilder::new(wtr)?;
-
 
     for vcf in vcf_paths {
         println!("{:?}", vcf);
@@ -100,7 +150,7 @@ fn main() {
 
 
 
-    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-5000-filtered/");
+    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-5000/");
     println!("Fetching input VCF files in {}", &data_dir.to_str().unwrap());
     let mut input_vcf_paths = io::get_input_vcfs(&data_dir).unwrap();
     input_vcf_paths.sort();
@@ -113,15 +163,22 @@ fn main() {
     //    println!("{}", pop); 
     //}
 
+
+
+
+    // Bincode strategy
+
+    //serialize(&input_vcf_paths, &tpool).unwrap();
+
+    // FST Strategy
     println!("Generating FST index...");
     sort_vcf_map(&input_vcf_paths, &tpool).unwrap();
     println!("Done!");
 
-
-    // Memory Map strategy.
-    println!("Opening memory map");
-    let mmap = unsafe { Mmap::map(&File::open("tests/fst/g1k-map.fst").unwrap()).unwrap() };
-    let map = Map::new(mmap).unwrap();
+    //// Memory Map strategy.
+    //println!("Opening memory map");
+    //let mmap = unsafe { Mmap::map(&File::open("tests/fst/g1k-map.fst").unwrap()).unwrap() };
+    //let map = Map::new(mmap).unwrap();
 
     //// In RAM Strategy
     //println!("Reading in memory.");
@@ -131,16 +188,16 @@ fn main() {
     //let map = Map::new(bytes).unwrap();
 
 
-    println!("Searching HG02067");
-    let matcher = Subsequence::new("HG01067");
-    let mut stream = map.search(&matcher).into_stream();
+    //println!("Searching HG02067");
+    //let matcher = Subsequence::new("HG01067");
+    //let mut stream = map.search(&matcher).into_stream();
 
-    println!("Populating vector");
-    let mut kvs = vec![];
-    while let Some((k, v)) = stream.next() {
-        let record = (String::from_utf8(k.to_vec()).unwrap(), v);
-        //println!("{:?}", &record);
-        kvs.push(record);
-    }
-    //println!("{kvs:#?}");
+    //println!("Populating vector");
+    //let mut kvs = vec![];
+    //while let Some((k, v)) = stream.next() {
+    //    let record = (String::from_utf8(k.to_vec()).unwrap(), v);
+    //    //println!("{:?}", &record);
+    //    kvs.push(record);
+    //}
+    ////println!("{kvs:#?}");
 }
