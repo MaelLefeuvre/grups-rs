@@ -216,6 +216,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fst"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ab85b9b05e3978cc9a9cf8fea7f01b494e1a09ed3037e16ba39edc7a29eb61a"
+
+[[package]]
 name = "getrandom"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -248,11 +254,14 @@ name = "grups"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "fst",
  "log",
  "logger",
+ "memmap",
  "parser",
  "pedigree_sims",
  "pwd_from_stdin",
+ "rust-htslib",
 ]
 
 [[package]]
@@ -428,6 +437,16 @@ name = "memchr"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
+
+[[package]]
+name = "memmap"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
+dependencies = [
+ "libc",
+ "winapi",
+]
 
 [[package]]
 name = "miniz_oxide"
@@ -940,6 +959,19 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+]
+
+[[package]]
+name = "vcf-fst"
+version = "0.1.0"
+dependencies = [
+ "fst",
+ "logger",
+ "memmap",
+ "parser",
+ "pedigree_sims",
+ "pwd_from_stdin",
+ "rust-htslib",
 ]
 
 [[package]]

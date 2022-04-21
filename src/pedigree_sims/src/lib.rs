@@ -9,6 +9,9 @@ use pwd_from_stdin::comparison::Comparisons;
 pub mod io;
 pub mod pedigree;
 
+use rust_htslib::tpool::ThreadPool;
+
+
 pub fn run<'a>(
     _com_cli: &'a parser::Common,
     ped_cli: &'a parser::PedigreeSims,
@@ -18,6 +21,8 @@ pub fn run<'a>(
     _target_positions: &'a Option<HashSet<SNPCoord>>
 ) -> Result<(), Box<dyn Error>>
 {
+
+    let tpool = rust_htslib::tpool::ThreadPool::new(4).unwrap();
 
     // --------------------- Get the list of input vcfs.
     info!("Fetching input VCF files in {}", &ped_cli.data_dir.to_str().unwrap_or("None"));
@@ -35,7 +40,7 @@ pub fn run<'a>(
     //println!("recombination_map {:#?}", recombination_map.get(&11, &2190951));
 
     // --------------------- Parse Input Samples Panel
-    let panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).unwrap();
+    let panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path(), &tpool).unwrap();
     //println!("{:?}", panel.samples[&"EUR".to_string()]);
 
     // --------------------- Parse input pedigree File

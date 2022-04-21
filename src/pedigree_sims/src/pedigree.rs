@@ -32,9 +32,11 @@ impl Individual {
     }
 
     pub fn assign_genome(&mut self, sample: &Sample, vcfs: &Vec<PathBuf> )-> Result<(), Box<dyn Error>> {
+        let tpool = rust_htslib::tpool::ThreadPool::new(4).unwrap();
+
         println!("Sample: {}, Id: {}", sample.id(), sample.idx());
         for vcf in vcfs {
-            let mut vcf_reader = VCFReader::new(vcf.as_path())?;
+            let mut vcf_reader = VCFReader::new(vcf.as_path(), &tpool)?;
             let genome = vcf_reader.parse_sample(sample.idx())?;
             println!("{:?}", genome);
         }

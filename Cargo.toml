@@ -6,7 +6,7 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-  members = ["src/pwd_from_stdin", "src/pedigree_sims", "src/parser", "src/logger"]
+  members = ["src/pwd_from_stdin", "src/pedigree_sims", "src/parser", "src/logger", "src/vcf-fst"]
 
 
 [[bin]]
@@ -21,11 +21,17 @@
   name = "pedigree_sims"
   path = "src/pedigree_sims/src/main.rs"
 
+[[bin]]
+  name = "vcf-fst"
+  path = "src/vcf-fst/src/main.rs"
+
 [dependencies]
+  rust-htslib    = "0.38.0"
   pwd_from_stdin = {path = "src/pwd_from_stdin" }
   pedigree_sims  = {path = "src/pedigree_sims" }
   logger         = {path ="src/logger"}
   parser         = {path ="src/parser"}
-
+  fst            = "0.4.7" 
+  memmap         = "0.7.0"
   log            = "0.4.16"
   clap           = {version = "3.1.2", features = ["derive"]}

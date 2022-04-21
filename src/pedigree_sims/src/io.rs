@@ -10,6 +10,7 @@ use log::{warn, info, debug};
 use rand::seq::SliceRandom;
 
 use rust_htslib::bgzf;
+use rust_htslib::tpool::ThreadPool;
 
 #[derive(Debug)]
 pub struct RecombinationRate {
@@ -104,6 +105,7 @@ impl GenMapReader {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Sample {
     id: String,
     idx: usize,
@@ -121,14 +123,34 @@ impl Sample{
         &self.idx
     }
 }
+
+impl PartialEq for Sample {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Sample {}
+
+impl std::cmp::Ord for Sample {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
+impl std::cmp::PartialOrd for Sample {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 pub struct VCFPanelReader{
     pub samples: HashMap<String, Vec<Sample>>,
 }
 
 impl VCFPanelReader {
-    pub fn new(panel_path: &Path, vcf: &Path) -> std::io::Result<VCFPanelReader> {
+    pub fn new(panel_path: &Path, vcf: &Path, tpool: &ThreadPool) -> std::io::Result<VCFPanelReader> {
         let source = BufReader::new(File::open(panel_path)?);
-        let header = VCFReader::new(vcf)?.samples();
+        let header = VCFReader::new(vcf, tpool)?.samples();
         let samples = Self::parse_header(source, &header)?;
         Ok(VCFPanelReader{samples})
     }
@@ -156,13 +178,13 @@ impl VCFPanelReader {
 }
 
 pub struct VCFReader<'a> {
-    source: Box<dyn BufRead + 'a>,
+    pub source: Box<dyn BufRead + 'a>,
     samples: Vec<String>
 }
 
 impl<'a> VCFReader<'a> {
-    pub fn new(path: &Path) -> std::io::Result<VCFReader<'a>>{
-        let mut reader = Self::get_reader(path)?;
+    pub fn new(path: &Path, tpool: &ThreadPool) -> std::io::Result<VCFReader<'a>>{
+        let mut reader = Self::get_reader(path, tpool)?;
         let samples = Self::parse_samples(&mut reader)?;
 
         Ok(VCFReader{source: reader, samples})
@@ -195,14 +217,17 @@ impl<'a> VCFReader<'a> {
         self.samples.clone()
     }
 
-    fn get_reader(path: &Path) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
-        let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
-            Some("vcf") => Box::new(File::open(path)?),
+    fn get_reader(path: &Path, tpool: &ThreadPool) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
+        let mut source = bgzf::Reader::from_path(path).unwrap();
+        source.set_thread_pool(tpool).unwrap();
+        let source = Box::new(source);
+        
+        //let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
+            //Some("vcf") => Box::new(File::open(path)?),
             //Some("gz")  => Box::new(GzDecoder::new(File::open(path)?)),
-            Some("gz")  => Box::new(bgzf::Reader::from_path(path).unwrap()),
-
-            _ => panic!()
-        };
+            //Some("gz")  => Box::new(bgzf::Reader::from_path(path).unwrap()),
+           // _           => panic!()
+        //};
         Ok(Box::new(BufReader::new(source)))
 
     }
