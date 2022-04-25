@@ -3,7 +3,7 @@ use std::{
     error::Error,
 };
 use log::{info};
-use pwd_from_stdin::genome::{Chromosome, SNPCoord};
+use pwd_from_stdin::genome::{SNPCoord, Genome, self};
 use pwd_from_stdin::comparison::Comparisons;
 //use parser;
 pub mod io;
@@ -13,12 +13,12 @@ pub mod pedigree;
 
 
 pub fn run<'a>(
-    _com_cli: &'a parser::Common,
-    ped_cli: &'a parser::PedigreeSims,
+    _com_cli          : &'a parser::Common,
+    ped_cli           : &'a parser::PedigreeSims,
     _requested_samples: &'a [usize],
-    _genome: &'a [Chromosome],
-    _comparisons: &'a Option<Comparisons>,
-    _target_positions: &'a Option<HashSet<SNPCoord>>
+    genome            : &'a Genome,
+    comparisons       : &'a Option<Comparisons>,
+    _target_positions : &'a Option<HashSet<SNPCoord>>
 ) -> Result<(), Box<dyn Error>>
 {
 
@@ -36,8 +36,7 @@ pub fn run<'a>(
 
     // --------------------- Parse input recombination maps.
     info!("Parsing genetic maps in {}", &ped_cli.recomb_dir.to_str().unwrap_or("None"));
-    let _recombination_map = io::GenMapReader::new(&ped_cli.recomb_dir)?;
-    //println!("recombination_map {:#?}", recombination_map.get(&11, &2190951));
+    let genetic_map = genome::GeneticMap::default().from_dir(&ped_cli.recomb_dir)?;
 
     // --------------------- Parse Input Samples Panel
     let panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path(), &tpool).unwrap();
@@ -45,7 +44,7 @@ pub fn run<'a>(
 
     // --------------------- Parse input pedigree File
     info!("Parsing template pedigree.");
-    let mut pedigree= io::pedigree_parser(ped_cli.pedigree.as_path()).unwrap();
+    let mut pedigree= io::pedigree_parser(ped_cli.pedigree.as_path(), genome).unwrap();
     for founder in pedigree.founders_mut() {
         info!("Founder   : {}", founder);
     }
@@ -56,11 +55,18 @@ pub fn run<'a>(
 
     // TODO: Assign contaminant to pedigree template
 
-    // Multithread starts here.
-    for mut founder in pedigree.founders_mut() {
-            let sample = panel.random_sample(&"EUR".to_string()).unwrap();
-            founder.assign_genome(sample, &input_vcf_paths)?;
+    for comparison in comparisons.as_ref().unwrap().get() {
+        // Multithread starts here.
+        for i in 0..4 {
+            std::thread::spawn(move || {
+                println!("hi number {} from the spawned thread!", i);
+            });
+        }
+        pedigree.set_tags(&panel, &"EUR".to_string());
+        pedigree.populate_founders_vcf(&input_vcf_paths, &comparison.positions).unwrap();
+        pedigree.reproduce(&genetic_map);
+        pedigree.compare_genomes();
+        //println!("{:?}", pedigree);
     }
-    
     Ok(())
 }

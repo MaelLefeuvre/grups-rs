@@ -35,6 +35,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bio-types"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -253,6 +262,7 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 name = "grups"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "clap",
  "fst",
  "log",
@@ -262,6 +272,7 @@ dependencies = [
  "pedigree_sims",
  "pwd_from_stdin",
  "rust-htslib",
+ "serde",
 ]
 
 [[package]]
@@ -543,6 +554,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "once_cell"
+version = "1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
+
+[[package]]
 name = "openssl-src"
 version = "111.18.0+1.1.1n"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -596,6 +613,7 @@ dependencies = [
  "pwd_from_stdin",
  "rand 0.7.3",
  "rust-htslib",
+ "thread_local",
 ]
 
 [[package]]
@@ -657,6 +675,8 @@ dependencies = [
  "log",
  "parser",
  "rand 0.8.5",
+ "rust-lapper",
+ "thread_local",
 ]
 
 [[package]]
@@ -784,6 +804,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust-lapper"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc3ecb80c8c2e28bafde6b2ea4abb68c92c474364e530d97db70203395b8af0a"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "rustc_version"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -905,6 +934,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "thread_local"
+version = "1.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5516c27b78311c50bf42c071425c560ac799b11c30b31f87e3081965fe5e0180"
+dependencies = [
+ "once_cell",
 ]
 
 [[package]]

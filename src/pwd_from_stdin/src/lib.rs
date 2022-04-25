@@ -22,10 +22,10 @@ use std::process;
 
 // Main function. 
 pub fn run<'a>(
-    com_cli: &'a parser::Common,
-    pwd_cli: &'a parser::PwdFromStdin,
-    requested_samples: &'a [usize],
-    genome: &'a [Chromosome],
+    com_cli           : &'a parser::Common,
+    pwd_cli           : &'a parser::PwdFromStdin,
+    requested_samples : &'a [usize],
+    genome            : &'a Genome,
 ) -> Result<(Comparisons<'a>, HashSet<SNPCoord>), Box<dyn Error>>{
 
     // ----------------------------- Sanity checks.
@@ -73,8 +73,8 @@ pub fn run<'a>(
     let target_required: bool = ! target_positions.is_empty();
 
     // ----------------------------- Parse requested Chromosomes
-    let valid_chromosomes : Vec<u8> = match &com_cli.chr {
-        None         => genome.iter().map(|chr| chr.name).collect(),
+    let valid_chromosomes : Vec<u8> = match com_cli.chr.clone() {
+        None         => genome.keys().map(|name| *name).collect(),
         Some(vector) => parser::parse_user_ranges(vector, "chr")?
     };
     info!("Valid chromosomes: {:?}", valid_chromosomes);
@@ -118,7 +118,7 @@ pub fn run<'a>(
         }
 
         // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        
-        for comparison in comparisons.get() {
+        for comparison in comparisons.get_mut() {
             if comparison.satisfiable_depth(&line.individuals) {
                 if ! pwd_cli.filter_sites {
                     comparison.compare(&line);

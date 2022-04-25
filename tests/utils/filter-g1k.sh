@@ -21,6 +21,12 @@ for i in ${IN_DIR}/*.vcf.gz; do
     output="${OUT_DIR}/${base%.vcf.gz}.m2M2.snps.rmdup.vcf.gz";
 
     echo "Filtering: ${base} --> ${output}"
-    bcftools view --threads ${THREADS} -m2 -M2 --type snps $i | bcftools norm --threads ${THREADS} -Oz --rm-dup both -o ${output};
+
+    # In case of duplicated, multiallelic SNP lines, this will keep the first instance, and exclude all others.
+    #bcftools view --threads ${THREADS} -m2 -M2 --type snps $i | bcftools norm --threads ${THREADS} -Oz --rm-dup both -o ${output};
+
+    # This on this other hand, will remove all the duplicated lines for these "false" biallelic SNP positions
+    bcftools norm --threads ${THREADS} --multiallelics +snps $i | bcftools view --threads ${THREADS} -m2 -M2 --type snps -Oz -o ${output};
+
     tabix ${output};
 done

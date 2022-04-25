@@ -27,6 +27,8 @@
 
 [dependencies]
   rust-htslib    = "0.38.0"
+  bincode        = "1.3.3"
+  serde          = { version = "1.0", features = ["derive", "rc"] }
   pwd_from_stdin = {path = "src/pwd_from_stdin" }
   pedigree_sims  = {path = "src/pedigree_sims" }
   logger         = {path ="src/logger"}

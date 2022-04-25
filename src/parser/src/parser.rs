@@ -49,7 +49,7 @@ pub struct Cli {
     pub commands: Commands,
 }
 
-impl Cli {
+impl<'a> Cli{
     pub fn serialize(&self){
         let serialized = serde_yaml::to_string(&self).unwrap();
         info!("\n---- Command line args ----\n{}\n---", serialized);
@@ -335,7 +335,7 @@ impl Common {
 /// Convert a user-defined string "range" into a vector of integers.
 /// "9-14" thus becomes [9, 10, 11, 12, 13, 14]
 /// Note that the range is fully inclusive. 
-fn parse_user_range<T>(s: &str) -> Result<Vec<T>, <T as FromStr>::Err> 
+fn parse_user_range<'a, T>(s: &'a str) -> Result<Vec<T>, <T as FromStr>::Err> 
 where
     T: FromStr + Add<Output = T> + Ord + One,
     Range<T>: Iterator<Item = T>,
@@ -368,7 +368,7 @@ where
 /////assert_eq!(parsed_input, vec![1, 2, 3, 5, 7])
 ///```
 /// 
-pub fn parse_user_ranges<'a, T>(ranges: &[String], arg_name: &'a str) -> Result<Vec<T>, ParserError<'a>>
+pub fn parse_user_ranges<'a, T>(ranges: Vec<String>, arg_name: &'a str) -> Result<Vec<T>, ParserError<'a>>
 where
     T: FromStr + Add<Output = T> + Ord + One,
     <T as FromStr>::Err: ToString,

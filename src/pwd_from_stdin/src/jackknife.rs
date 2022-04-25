@@ -20,9 +20,9 @@ pub struct JackknifeBlocks {
 }
 
 impl JackknifeBlocks {
-    pub fn new(genome: &[Chromosome], blocksize: u32) -> JackknifeBlocks {
+    pub fn new<'a> (genome: &'a Genome, blocksize: u32) -> JackknifeBlocks {
         let mut jackknives = HashMap::new();
-        for chr in genome {
+        for chr in genome.values() {
             let mut blocks = Vec::new();
             let mut add_block = |chr, start, end| {
                 blocks.push(JackknifeBlock::new(chr, start, end))
@@ -151,16 +151,16 @@ mod tests{
 
     #[test]
     fn jackknife_blocks_check_len_unequal() {
-       let genome = vec![Chromosome{index:0, name: 1, length: 249250621},];
+       let genome = Genome::from(&vec![Chromosome::new(0, 1, 249250621)]);
        let blocks = JackknifeBlocks::new(&genome, 1000);
-       assert_eq!(blocks.blocks[&genome[0].name].len(),249251);
+       assert_eq!(blocks.blocks[&genome[&0].name].len(),249251);
     }
     
     #[test]
     fn jackknife_blocks_check_len_equal () {
-       let genome = vec![Chromosome{index:0, name: 1, length: 2000001},];
+       let genome = Genome::from(&vec![Chromosome::new(0, 1, 2000001)]);
        let blocks = JackknifeBlocks::new(&genome, 1000);
-       assert_eq!(blocks.blocks[&genome[0].name].len(), 2000);
+       assert_eq!(blocks.blocks[&genome[&0].name].len(), 2000);
     }
 
 }

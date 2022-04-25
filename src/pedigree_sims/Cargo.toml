@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
   parser         = {path ="../parser"}
   pwd_from_stdin = {path = "../pwd_from_stdin" }
+  thread_local   = "1.1.4"
   flate2         = "1.0"
   log            = "0.4.16"
   rand           = "0.7.2"

@@ -1,119 +1,28 @@
+use std::cell::RefMut;
 //use flate2::read::GzDecoder;
 use std::io::{Read, BufRead, BufReader, Lines};
 use std::error::Error;
-use std::borrow::Borrow;
 use std::path::{PathBuf, Path};
 use std::fs::File;
 use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
 use log::{warn, info, debug};
+use pwd_from_stdin::genome::{SNPCoord, Genome};
 use rand::seq::SliceRandom;
 
 use rust_htslib::bgzf;
 use rust_htslib::tpool::ThreadPool;
 
-#[derive(Debug)]
-pub struct RecombinationRate {
-    chr     : u8,
-    pos     : u32,
-    _rate    : f64,
-    _map     : f64,
-}
 
-
-impl RecombinationRate {
-    pub fn new(line: &[&str]) -> Result<RecombinationRate, Box<dyn Error>> {
-        let chr = str::replace(line[0], "chr", "").parse::<u8>()?;
-        let pos = line[1].parse::<u32>()?;
-        let _rate = line[2].parse::<f64>()?;
-        let _map = line[3].parse::<f64>()?;
-        Ok(RecombinationRate{chr, pos, _rate, _map})
-    }
-}
-
-impl PartialEq<RecombinationRate> for RecombinationRate {
-    fn eq(&self, other: &Self) -> bool { 
-        self.chr == other.chr && self.pos == other.pos
-    }
-}
-
-impl Eq for RecombinationRate {}
-
-impl Hash for RecombinationRate {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.pos.hash(state);
-    }
-}
-
-impl Borrow<u32> for RecombinationRate {
-    fn borrow(&self) -> &u32 {
-        self.pos.borrow()
-    }
-}
-
-#[derive(Debug)]
-pub struct GenMapReader {
-    inner: HashMap<u8,HashSet<RecombinationRate>>
-}
-
-
-impl GenMapReader {
-    pub fn new(input_path: &PathBuf) -> Result<GenMapReader, Box<dyn Error>> {
-        let map_paths = Self::fetch_genetic_maps(input_path)?;
-        let mut inner = HashMap::new();
-        for map in map_paths {
-            let source = BufReader::new(File::open(map.as_path())?);
-            Self::parse_genetic_map(source, &mut inner)?;
-        }
-        Ok(GenMapReader{inner})
-    }
-
-    pub fn get(&self, chr: &u8, pos: &u32) -> Option<&RecombinationRate> {
-        self.inner[chr].get(pos)
-    }
-
-    fn parse_genetic_map(source: BufReader<File>, inner: &mut HashMap<u8, HashSet<RecombinationRate>>) -> Result<(), Box<dyn Error>>{
-        let mut lines = source.lines();
-        lines.next(); // Skip header. 
-        for line in lines {
-            let line = line?;
-            let line = &line.split('\t').collect::<Vec<&str>>();
-            let recomb_rate = RecombinationRate::new(line)?;
-            inner.entry(recomb_rate.chr).or_insert_with(HashSet::new).insert(recomb_rate);
-        }
-        Ok(())
-    }
-
-    fn fetch_genetic_maps(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
-
-        let paths = std::fs::read_dir(input_dir)?;
-        let maps = paths.filter_map(Result::ok)
-            .filter_map(|d| d.path()
-                .to_str()
-                .and_then(|f|
-                    if f.ends_with(".txt") { 
-                        Some(d) 
-                    } 
-                    else { 
-                        None
-                    }
-                )
-                .map(|f| f.path())
-            )
-        .collect::<Vec<PathBuf>>();
-        Ok(maps)
-    }
-}
 
 #[derive(Debug, Clone)]
-pub struct Sample {
+pub struct SampleTag {
     id: String,
     idx: usize,
 }
 
-impl Sample{
-    pub fn new(id: &str, idx: usize) -> Sample {
-        Sample{id: id.to_string(), idx}
+impl SampleTag {
+    pub fn new(id: &str, idx: usize) -> SampleTag {
+        SampleTag{id: id.to_string(), idx}
     }
 
     pub fn id(&self) -> &String {
@@ -124,27 +33,28 @@ impl Sample{
     }
 }
 
-impl PartialEq for Sample {
+impl PartialEq for SampleTag {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl Eq for Sample {}
+impl Eq for SampleTag {}
 
-impl std::cmp::Ord for Sample {
+impl std::cmp::Ord for SampleTag {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-impl std::cmp::PartialOrd for Sample {
+impl std::cmp::PartialOrd for SampleTag {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
+
 pub struct VCFPanelReader{
-    pub samples: HashMap<String, Vec<Sample>>,
+    pub samples: HashMap<String, Vec<SampleTag>>,
 }
 
 impl VCFPanelReader {
@@ -155,12 +65,12 @@ impl VCFPanelReader {
         Ok(VCFPanelReader{samples})
     }
 
-    pub fn random_sample(&self, pop: &String) -> Option<&Sample> {
+    pub fn random_sample(&self, pop: &String) -> Option<&SampleTag> {
         self.samples[pop].choose(&mut rand::thread_rng())
     }
 
-    pub fn parse_header(source: BufReader<File>, header: &[String]) -> std::io::Result<HashMap<String, Vec<Sample>>> {
-        let mut output: HashMap<String, Vec<Sample>> = HashMap::new();
+    pub fn parse_header(source: BufReader<File>, header: &[String]) -> std::io::Result<HashMap<String, Vec<SampleTag>>> {
+        let mut output: HashMap<String, Vec<SampleTag>> = HashMap::new();
 
         for line in source.lines(){
             let line = line?;
@@ -169,8 +79,8 @@ impl VCFPanelReader {
                 Some(idx) => idx,
                 None => {warn!("Sample not found in input vcfs. Skipping:\n{:?}", line); continue}
             };
-            output.entry(line[1].into()).or_insert(Vec::new()).push(Sample::new(line[0], sample_idx));
-            output.entry(line[2].into()).or_insert(Vec::new()).push(Sample::new(line[0], sample_idx));
+            output.entry(line[1].into()).or_insert(Vec::new()).push(SampleTag::new(line[0], sample_idx));
+            output.entry(line[2].into()).or_insert(Vec::new()).push(SampleTag::new(line[0], sample_idx));
 
         }
         Ok(output)
@@ -187,12 +97,13 @@ pub struct VCFReader<'a> {
 impl<'a> VCFReader<'a> {
     pub fn new(path: &Path, tpool: &ThreadPool) -> std::io::Result<VCFReader<'a>>{
         let mut reader = Self::get_reader(path, tpool)?;
-        let samples = Self::parse_samples(&mut reader)?;
+        let samples = Self::parse_samples_id(&mut reader)?;
 
         Ok(VCFReader{source: reader, samples, buf: Vec::new(), idx:0})
     }
 
     pub fn next_field(&mut self) -> Result<&str, Box<dyn Error>> {
+        self.clear_buffer();
         self.source.read_until(b'\t', &mut self.buf)?;
         self.buf.pop();
         self.idx += 1;
@@ -205,7 +116,14 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-    fn skip(&mut self, n: usize) -> std::io::Result<()> {
+    fn skip_line(&mut self) -> std::io::Result<()>{
+        self.next_eol()?;
+        self.clear_buffer();
+        Ok(())
+    }
+
+
+    pub fn skip(&mut self, n: usize) -> std::io::Result<()> {
         for _ in 0..n {
             self.source.read_until(b'\t', &mut Vec::new())?;
         }
@@ -220,10 +138,10 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-    pub fn get_alleles(&mut self, idx: &usize) -> Result<(String, String), Box<dyn Error>> {
+    pub fn get_alleles(&mut self, idx: &usize) -> Result<(u8, u8), Box<dyn Error>> {
         let geno_idx=idx*4;
-        let haplo1 = std::str::from_utf8(&[self.buf[geno_idx]])?.to_owned();
-        let haplo2 = std::str::from_utf8(&[self.buf[geno_idx+2]])?.to_owned();
+        let haplo1 = self.buf[geno_idx]   - 48;
+        let haplo2 = self.buf[geno_idx+2] - 48;
         Ok((haplo1, haplo2))
     }
     pub fn clear_buffer(&mut self) {
@@ -234,29 +152,71 @@ impl<'a> VCFReader<'a> {
         self.source.fill_buf().map(|b| !b.is_empty())
     }
 
-    pub fn parse_sample(&mut self, idx: &usize) -> Result<(), Box<dyn Error>> {
+    pub fn parse_samples(&mut self, mut samples: Vec<RefMut<Individual>>, valid_positions: &HashSet<SNPCoord>, pop: &str) -> Result<(), Box<dyn Error>> {
         let mut i = 0;
-        let mut genotypes: Vec<u8> = Vec::new();
         while self.has_data_left()? {
-            let chr: u8  = self.next_field()?.parse()?;
-            self.clear_buffer();
-            let pos: u32 = self.next_field()?.parse()?;
-            self.clear_buffer();
-            self.fill_genotypes()?;
-            let (haplo1, haplo2) = self.get_alleles(idx)?;
-            if i % 500000 == 0 {
-                println!("{} {: >2} {: >9} {} {}",
-                    idx, chr, pos, haplo1, haplo2
-                );
 
+
+            let chromosome : u8  = self.next_field()?.parse()?; // 1
+            let position   : u32 = self.next_field()?.parse()?; // 2
+            
+            if i % 50_000 == 0 {
+                println!("{i: >9} {chromosome: >2} {position: >9}");
             }
-            self.clear_buffer();
-            genotypes.clear();
-
             i+=1;
+
+            if ! valid_positions.contains(&SNPCoord{chromosome, position, reference: None, alternate: None}){
+                self.skip_line()?;
+                continue
+            }
+
+
+            self.skip(5)?;                                      // 6 
+            let info = self.next_field()?.split(';').collect::<Vec<&str>>();
+
+            if info.iter().any(|&field| field == "MULTI_ALLELIC") {
+                self.skip_line()?;
+                continue
+            }
+            
+            let vtype = info.iter()
+                .find(|&&field| field.starts_with("VT=")).unwrap()
+                .split("=")
+                .collect::<Vec<&str>>()[1];
+
+            let pop_af = match vtype {
+                "SNP" => {
+                    let af = info.iter()
+                    .find(|&&field| field.starts_with(&format!("{pop}_AF")))
+                    .unwrap()
+                    .split("=")
+                    .collect::<Vec<&str>>()[1]
+                    .parse::<f64>().unwrap();
+                    //println!("{vtype} - POP_AF: {af:?}");
+                    Some(af)
+                },
+                _ => None
+            };
+
+
+            self.fill_genotypes()?;
+            for founder in samples.iter_mut() {
+                let alleles = self.get_alleles(founder.get_tag().unwrap().idx())?;
+                founder.add_locus(&chromosome, position, alleles, pop_af.unwrap())?;
+            }
+
+
+
         }
+
+        for sample in samples{
+            format!("{}: {}", sample.label, sample.genome[&1].snp_len());
+        }
+
         Ok(())
     }
+
+
 
     pub fn lines(self) -> Lines<Box<dyn BufRead + 'a>> {
         self.source.lines()
@@ -280,7 +240,7 @@ impl<'a> VCFReader<'a> {
         Ok(Box::new(BufReader::new(source)))
 
     }
-    fn parse_samples(reader: &mut Box<BufReader<Box<dyn Read>>>) -> std::io::Result<Vec<String>>{
+    fn parse_samples_id(reader: &mut Box<BufReader<Box<dyn Read>>>) -> std::io::Result<Vec<String>>{
         let mut samples = Vec::new();
         for line in reader.lines() {
             let line = line?;
@@ -298,7 +258,7 @@ impl<'a> VCFReader<'a> {
 
 use crate::pedigree::*;
 
-pub fn pedigree_parser(path: &Path) -> std::io::Result<Pedigree> {
+pub fn pedigree_parser(path: &Path, genome: &Genome) -> std::io::Result<Pedigree> {
     #[derive(Debug)]
     enum ParseMode {Individuals, Relationships, Comparisons}
     let mut parse_mode = None;
@@ -323,11 +283,11 @@ pub fn pedigree_parser(path: &Path) -> std::io::Result<Pedigree> {
         match parse_mode {
             Some(ParseMode::Individuals)   => {
                 let label = line[0].to_string();
-                pedigree.add_individual(&label, None)?;
+                pedigree.add_individual(&label, None, genome.clone())?;
             },
             Some(ParseMode::Relationships) => {
                 let (offspring, parent1, parent2) = parse_pedline(line, "=repro(")?;
-                pedigree.set_relationship(&offspring, (&parent1,&parent2))?;
+                pedigree.set_relationship(&offspring, (&parent1, &parent2))?;
 
             },
             Some(ParseMode::Comparisons)   => {

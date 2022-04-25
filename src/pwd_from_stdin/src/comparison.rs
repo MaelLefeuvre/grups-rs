@@ -1,5 +1,5 @@
 use crate::jackknife::JackknifeBlocks;
-use crate::genome::{Chromosome, SNPCoord};
+use crate::genome::{SNPCoord, Genome};
 use crate::pileup::{Pileup, Line, Nucleotide};
 
 use std::{
@@ -54,7 +54,7 @@ pub struct Comparison<'a> {
 }
 
 impl<'a> Comparison<'a> {
-    pub fn new(pair: (Individual<'a>, Individual<'a>), self_comparison: bool, genome: &'a[Chromosome], blocksize: u32) -> Comparison<'a> {
+    pub fn new(pair: (Individual<'a>, Individual<'a>), self_comparison: bool, genome: &'a Genome, blocksize: u32) -> Comparison<'a> {
         Comparison {pair, self_comparison, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize), positions: HashSet::new()}
     }
 
@@ -67,10 +67,10 @@ impl<'a> Comparison<'a> {
     // has been made.
     pub fn compare(&mut self, line: &Line) {
         self.positions.insert(line.coordinate.clone());
-        let random_nucl: Vec<&Nucleotide> = if self.self_comparison {                  // Self comparison => Combination without replacement. 
-            line.random_sample_self(self.pair.0.index)                                //   - possible combinations: n!/(n-2)!
-        } else {                                                                       // Std comparison  => Permutation.
-            line.random_sample_pair(&self.pair)                                        //  - possible combinations: n_1 * n_2
+        let random_nucl: Vec<&Nucleotide> = if self.self_comparison {  // Self comparison => Combination without replacement. 
+            line.random_sample_self(self.pair.0.index)                 //   - possible combinations: n!/(n-2)!
+        } else {                                                       // Std comparison  => Permutation.
+            line.random_sample_pair(&self.pair)                        //  - possible combinations: n_1 * n_2
         };
         self.add_phred(&random_nucl);
 
@@ -131,7 +131,7 @@ impl<'a> Comparisons<'a> {
         min_depths            : &'a [u16],
         names                 : &'a [String],
         allow_self_comparison : bool,
-        genome                : &'a [Chromosome],
+        genome                : &'a Genome,
         blocksize             : u32
     ) -> Comparisons<'a> {
         let mut inds = vec![];
@@ -161,7 +161,11 @@ impl<'a> Comparisons<'a> {
         self.0.is_empty()
     }
     ///Return mutable slice of our Vector of comparisons.
-    pub fn get(&mut self) -> &mut [Comparison<'a>] {
+    pub fn get(&self) -> &[Comparison<'a>] {
+        &self.0
+    }
+    ///Return mutable slice of our Vector of comparisons.
+    pub fn get_mut(&mut self) -> &mut [Comparison<'a>] {
         &mut self.0
     }
 
@@ -181,7 +185,6 @@ impl<'a> fmt::Display for Comparisons<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genome::default_genome;
 
     fn factorial(n: i32 ) -> i32 {
         match n {
@@ -202,7 +205,7 @@ mod tests {
         for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
             let min_depths = vec![2];
             let names = vec![];
-            let genome = default_genome();
+            let genome = Genome::default();
             let comparisons = Comparisons::parse(&ind_set, &min_depths, &names, true, &genome, 50_000_000);
             let len = ind_set.len() as i32;
             println!("{:?}", comparisons);
@@ -215,7 +218,7 @@ mod tests {
         for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
             let min_depths = vec![2];
             let names = vec![];
-            let genome = default_genome();
+            let genome = Genome::default();
             let comparisons = Comparisons::parse(&ind_set, &min_depths, &names, false, &genome, 50_000_000);
             let len = ind_set.len() as i32;
             assert_eq!(comparisons.len() as i32, permutations_sample_2(len)); 

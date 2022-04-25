@@ -1,19 +1,161 @@
 use pedigree_sims::io;
+use pwd_from_stdin::genome::SNPCoord;
 use std::path::{PathBuf};
 use std::error::Error;
 
 use std::fs::File;
 use fst::{IntoStreamer, Streamer, Map, MapBuilder};
-use fst::automaton::Subsequence;
+use fst::automaton::{Automaton, Str, Subsequence};
 use memmap::Mmap;
 
 use rust_htslib::tpool::ThreadPool;
 
+use std::rc::Rc;
+use std::collections::HashMap;
+use std::collections::BTreeSet;
+// [POP][SAMPLES][Nucleotide]
+
+#[derive(Clone, Debug)]
+pub struct VCFCoord {
+    coordinate: SNPCoord,
+    af: f32,
+}
+
+impl VCFCoord {
+    pub fn new(chromosome: u8, position: u32, reference: Option<char>, alternate: Option<char>, af: f32) -> VCFCoord {
+        let coordinate = SNPCoord{chromosome, position, reference, alternate };
+        VCFCoord{coordinate, af}
+    }
+}
+
+impl std::borrow::Borrow<u32> for VCFCoord {
+    fn borrow(&self) -> &u32 {
+        self.coordinate.position.borrow()
+    }
+}
+
+
+impl PartialEq for VCFCoord {
+    fn eq(&self, other: &VCFCoord) -> bool {
+        self.coordinate == other.coordinate
+    }
+}
+
+impl Eq for VCFCoord {}
+
+impl std::cmp::Ord for VCFCoord {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.coordinate).cmp(&(other.coordinate))
+    }
+}
+
+impl PartialOrd for VCFCoord {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Allele {
+    coordinate: Rc<VCFCoord>,
+    haplos: (u8,u8)
+}
+
+impl Allele {
+    pub fn new(coordinate: &Rc<VCFCoord>, haplos: (u8,u8)) -> Allele {
+        Allele {coordinate: Rc::clone(coordinate), haplos}
+    }
+}
+
+impl PartialEq for Allele {
+    fn eq(&self, other: &Allele) -> bool {
+        self.coordinate == other.coordinate
+    }
+}
+
+impl Eq for Allele {}
+
+impl Ord for Allele {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.coordinate).cmp(&(other.coordinate))
+    }
+}
+
+impl PartialOrd for Allele {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct VCFSample {
+    id: String,
+    idx: usize,
+    pub genome: BTreeSet<Allele>
+}
+
+impl VCFSample {
+    pub fn new(id: String, idx: usize) -> VCFSample {
+        VCFSample{ id, idx, genome: BTreeSet::new()}
+    }
+
+    pub fn insert_allele(&mut self, coordinate:  &Rc<VCFCoord>, haplos: (u8,u8)) {
+        self.genome.insert(Allele::new(coordinate, haplos));
+    }
+
+    pub fn id(&self) -> &String {
+        &self.id
+    }
+    pub fn idx(&self) -> &usize {
+        &self.idx
+    }
+}
+
+impl<'a> std::borrow::Borrow<String> for VCFSample {
+    fn borrow(&self) -> &String {
+        self.id.borrow()
+    }
+}
+
+impl<'a> std::borrow::Borrow<usize> for VCFSample {
+    fn borrow(&self) -> &usize {
+        self.idx.borrow()
+    }
+}
+
+#[derive(Debug)]
+pub struct VCF {
+    pub coordinates: BTreeSet<Rc<VCFCoord>>,
+    pub samples : Vec<VCFSample>
+}
+
+impl VCF {
+    pub fn new() -> VCF {
+        VCF{coordinates: BTreeSet::new(), samples: Vec::new()}
+    }
+
+    pub fn insert_coordinate(&mut self, chromosome: u8, position: u32, reference: char, alternate: char, af: f32) -> Rc<VCFCoord> {
+        let coordinate = Rc::new(VCFCoord::new(chromosome, position, Some(reference), Some(alternate), af));
+        let rcx = Rc::clone(&coordinate);
+
+        self.coordinates.insert(coordinate);
+        rcx
+
+    }
+
+    pub fn insert_sample(&mut self, id: String, idx: usize) {
+        let sample = VCFSample::new(id, idx);
+        self.samples.push(sample);
+    }
+}
 
 fn serialize(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Error>> {
 
     for vcf in vcf_paths {
         println!("{:?}", vcf);
+
+
+        let mut vcf_hash = VCF::new();
 
         //Start a reader.
         let mut reader = io::VCFReader::new(vcf, tpool)?;
@@ -26,12 +168,16 @@ fn serialize(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Er
         //Convert to struct to keep id.
         let mut struct_samples = Vec::new();
         for (i, sample) in samples.iter().enumerate(){
-            let sample = io::Sample::new(sample, i);
+            let sample = io::SampleTag::new(sample, i);
             struct_samples.push(sample);
         }
 
         //Sort samples
         struct_samples.sort();
+
+        for sample in struct_samples.iter() {
+            vcf_hash.insert_sample(sample.id().clone(), *sample.idx())
+        }
 
         let mut i = 0;
         while reader.has_data_left()? {
@@ -39,19 +185,34 @@ fn serialize(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Er
             reader.clear_buffer();
             let pos: u32 = reader.next_field()?.parse()?;
             reader.clear_buffer();
+            reader.skip(1).unwrap();
+            let reference: char = reader.next_field()?.parse()?;
+            reader.clear_buffer();
+            let alternate: char = reader.next_field()?.parse()?;
+            reader.clear_buffer();
+
+            let coord = vcf_hash.insert_coordinate(chr, pos, reference, alternate, 0.0);
+
+            //let coord: &Rc<VCFCoord> = vcf_hash.coordinates.get().unwrap();
+
             reader.fill_genotypes()?;
-            for sample in struct_samples.iter() {
-                let (haplo1, haplo2) = reader.get_alleles(sample.idx())?;
-                if i % 500000 == 0 {
-                    println!("{} {: >2} {: >9} {} {}",
-                        sample.idx(), chr, pos, haplo1, haplo2
-                    );
-                }
+            for mut sample in vcf_hash.samples.iter_mut() {
+                let haplos = reader.get_alleles(sample.idx())?;
+                //sample.insert_allele(&Rc::clone(coord), haplos);
+                sample.genome.insert(Allele::new(&Rc::clone(&coord), haplos));
+                //if i % 500000 == 0 {
+                //    println!("{:?}", sample);
+                    //println!("{} {: >2} {: >9} {} {}",
+                    //    sample.idx(), chr, pos, haplos.0, haplos.1
+                    //);
+                //}
             }
             
 
             reader.clear_buffer();
-
+            if i % 1000 == 0 {
+                println!("{}", i);
+            }
             i+=1;
         }
 
@@ -59,8 +220,6 @@ fn serialize(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Er
     }
     Ok(())
 }
-
-
 
 fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Error>> {
 
@@ -80,7 +239,7 @@ fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn
         //Convert to struct to keep id.
         let mut struct_samples = Vec::new();
         for (i, sample) in samples.iter().enumerate(){
-            let sample = io::Sample::new(sample, i);
+            let sample = io::SampleTag::new(sample, i);
             struct_samples.push(sample);
         }
 
@@ -106,18 +265,6 @@ fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn
             }
             
             reader.source.read_until(b'\n', &mut genotypes)?;
-            //let line = line?;
-            //let line = line.split('\t');
-
-            //match i % 50000 {
-            //    0 => println!("{}", line[1]),
-            //    _ => ()
-            //}
-            //let chr = line.next(); // 1
-            //let pos = line.next(); // 2
-
-            //line.skip(7);                       // 9
-            //let line = line.to_str();
 
             if i % 50000 == 0 {
                 println!("{i: >9} {:?}",std::str::from_utf8(&buf)?);
@@ -128,6 +275,9 @@ fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn
                 let genotype = genotypes[geno_idx..geno_idx+3].to_owned();
                 let mut key = buf.clone();
                 key.append(sample.id().clone().as_mut_vec()); //Unsafe! 
+
+                let haplo1 = genotypes[geno_idx]   - 64;
+                let haplo2 = genotypes[geno_idx+2] - 64;
 
                 let val = std::str::from_utf8(&[genotype[0]+1, genotype[2]+1])?.parse::<u64>()?;
                 //println!("{:?} {:?}", std::str::from_utf8(&key), val);
@@ -150,7 +300,7 @@ fn main() {
 
 
 
-    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-5000/");
+    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-50k-filtered/");
     println!("Fetching input VCF files in {}", &data_dir.to_str().unwrap());
     let mut input_vcf_paths = io::get_input_vcfs(&data_dir).unwrap();
     input_vcf_paths.sort();
@@ -172,7 +322,7 @@ fn main() {
 
     // FST Strategy
     println!("Generating FST index...");
-    sort_vcf_map(&input_vcf_paths, &tpool).unwrap();
+    //sort_vcf_map(&input_vcf_paths, &tpool).unwrap();
     println!("Done!");
 
     //// Memory Map strategy.
@@ -181,23 +331,36 @@ fn main() {
     //let map = Map::new(mmap).unwrap();
 
     //// In RAM Strategy
-    //println!("Reading in memory.");
-    //let mut file_handle = File::open("tests/fst/g1k-map.fst").unwrap();
-    //let mut bytes = vec![];
-    //std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
-    //let map = Map::new(bytes).unwrap();
+    println!("Reading in memory.");
+    let mut file_handle = File::open("tests/test-data/fst/g1k-map.fst").unwrap();
+    let mut bytes = vec![];
+    std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
+    let map = Map::new(bytes).unwrap();
 
 
-    //println!("Searching HG02067");
-    //let matcher = Subsequence::new("HG01067");
-    //let mut stream = map.search(&matcher).into_stream();
+    let samples = ["HG01067", "NA20885", "HG00267", "HG00236", "NA20356", "NA19346"];
 
-    //println!("Populating vector");
-    //let mut kvs = vec![];
-    //while let Some((k, v)) = stream.next() {
-    //    let record = (String::from_utf8(k.to_vec()).unwrap(), v);
-    //    //println!("{:?}", &record);
-    //    kvs.push(record);
-    //}
-    ////println!("{kvs:#?}");
+    for sample in samples.iter() {
+        println!("Searching {sample}");
+        let regex = format!("1 000055164 {sample}");
+        //let matcher = Subsequence::new(&regex);
+        let matcher = Str::new(&regex)
+            .starts_with();
+            //.intersection(Subsequence::new(&sample));
+        let mut stream = map.search(&matcher).into_stream();
+
+        println!("  - Populating vector");
+        //let mut kvs = vec![];
+        
+        let kvs = stream.into_str_vec().unwrap();
+        println!("{kvs:?}");
+        //while let Some((k, v)) = stream.next() {
+        //    println!("{:?} {}", k, v);
+        //    let record = (String::from_utf8(k.to_vec()).unwrap(), v);
+        //    println!("{:?}", &record);
+        //    kvs.push(record);
+        //    break
+        //}
+        //println!("{kvs:?}\n");
+    }
 }

@@ -16,12 +16,12 @@ fn run(cli: &Cli) -> Result<(), Box<dyn Error>> {
         Run {common, pwd, ped} => {
             println!("Command Run : {:#?}", cli.commands);
             // ----------------------------- Parse Requested_samples
-            let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
+            let requested_samples: Vec<usize> = parser::parse_user_ranges(pwd.samples.clone(), "samples")?;
             // ----------------------------- Initialize genome.
             info!("Indexing reference genome...");
             let genome = match &common.genome {
-                Some(file) => fasta_index_reader(file)?,
-                None => default_genome(),
+                Some(file) => Genome::from_fasta_index(file)?,
+                None => Genome::default(),
             };
             // ----------------------------- Run PWD_from_stdin.
             let (comparisons, target_positions) = pwd_from_stdin::run(common, pwd, &requested_samples, &genome)?;
@@ -29,12 +29,12 @@ fn run(cli: &Cli) -> Result<(), Box<dyn Error>> {
         },
         PwdFromStdin {common, pwd} => {
             // ----------------------------- Parse Requested_samples
-            let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
+            let requested_samples: Vec<usize> = parser::parse_user_ranges(pwd.samples.clone(), "samples")?;
             // ----------------------------- Initialize genome.
             info!("Indexing reference genome...");
             let genome = match &common.genome {
-                Some(file) => fasta_index_reader(file)?,
-                None => default_genome(),
+                Some(file) => Genome::from_fasta_index(file)?,
+                None => Genome::default(),
             };
             // ----------------------------- Run PWD_from_stdin.
             let (_,_) = pwd_from_stdin::run(common, pwd, &requested_samples, &genome)?;
