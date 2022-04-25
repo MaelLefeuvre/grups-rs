@@ -10,7 +10,6 @@ use pwd_from_stdin::genome::{SNPCoord, Genome};
 use rand::seq::SliceRandom;
 
 use rust_htslib::bgzf;
-use rust_htslib::tpool::ThreadPool;
 
 
 
@@ -58,9 +57,9 @@ pub struct VCFPanelReader{
 }
 
 impl VCFPanelReader {
-    pub fn new(panel_path: &Path, vcf: &Path, tpool: &ThreadPool) -> std::io::Result<VCFPanelReader> {
+    pub fn new(panel_path: &Path, vcf: &Path) -> std::io::Result<VCFPanelReader> {
         let source = BufReader::new(File::open(panel_path)?);
-        let header = VCFReader::new(vcf, tpool)?.samples();
+        let header = VCFReader::new(vcf)?.samples();
         let samples = Self::parse_header(source, &header)?;
         Ok(VCFPanelReader{samples})
     }
@@ -95,8 +94,8 @@ pub struct VCFReader<'a> {
 }
 
 impl<'a> VCFReader<'a> {
-    pub fn new(path: &Path, tpool: &ThreadPool) -> std::io::Result<VCFReader<'a>>{
-        let mut reader = Self::get_reader(path, tpool)?;
+    pub fn new(path: &Path) -> std::io::Result<VCFReader<'a>>{
+        let mut reader = Self::get_reader(path)?;
         let samples = Self::parse_samples_id(&mut reader)?;
 
         Ok(VCFReader{source: reader, samples, buf: Vec::new(), idx:0})
@@ -181,7 +180,7 @@ impl<'a> VCFReader<'a> {
             
             let vtype = info.iter()
                 .find(|&&field| field.starts_with("VT=")).unwrap()
-                .split("=")
+                .split('=')
                 .collect::<Vec<&str>>()[1];
 
             let pop_af = match vtype {
@@ -189,7 +188,7 @@ impl<'a> VCFReader<'a> {
                     let af = info.iter()
                     .find(|&&field| field.starts_with(&format!("{pop}_AF")))
                     .unwrap()
-                    .split("=")
+                    .split('=')
                     .collect::<Vec<&str>>()[1]
                     .parse::<f64>().unwrap();
                     //println!("{vtype} - POP_AF: {af:?}");
@@ -226,9 +225,8 @@ impl<'a> VCFReader<'a> {
         self.samples.clone()
     }
 
-    fn get_reader(path: &Path, tpool: &ThreadPool) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
-        let mut source = bgzf::Reader::from_path(path).unwrap();
-        source.set_thread_pool(tpool).unwrap();
+    fn get_reader(path: &Path) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
+        let source = bgzf::Reader::from_path(path).unwrap();
         let source = Box::new(source);
         
         //let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
@@ -258,7 +256,7 @@ impl<'a> VCFReader<'a> {
 
 use crate::pedigree::*;
 
-pub fn pedigree_parser(path: &Path, genome: &Genome) -> std::io::Result<Pedigree> {
+pub fn pedigree_parser<'a> (path: &'a Path, genome: &'a Genome) -> std::io::Result<Pedigree> {
     #[derive(Debug)]
     enum ParseMode {Individuals, Relationships, Comparisons}
     let mut parse_mode = None;

@@ -15,14 +15,14 @@ use itertools::Itertools;
 ///                since the first three columns of a pileup respectively define 'chr', 'pos', 'ref'.
 ///  - min_depth : minimum sequencing depth that is allowed before making a comparison. User-defined, or defaults to 1.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Individual<'a> {
+pub struct Individual {
     pub name     : String,
-    pub index    : &'a usize,
-    pub min_depth: &'a u16,
+    pub index    : usize,
+    pub min_depth: u16,
 }
 
-impl<'a> Individual<'a> {
-    pub fn new(name: Option<&'a String>, index: &'a usize, min_depth: &'a u16) -> Individual<'a> {
+impl Individual {
+    pub fn new(name: Option<&String>, index: usize, min_depth: u16) -> Individual {
         let name = match name {                            // Parse name and give default if non-existent
             Some(name) => name.to_string(),
             None => format!("Ind{}", index),
@@ -44,8 +44,8 @@ impl<'a> Individual<'a> {
 /// 
 /// # Traits : `Debug`
 #[derive(Debug)]
-pub struct Comparison<'a> {
-    pair            : (Individual<'a>, Individual<'a>),
+pub struct Comparison {
+    pair            : (Individual, Individual),
     self_comparison : bool,
     pwd             : u32,
     sum_phred       : u32,
@@ -53,14 +53,14 @@ pub struct Comparison<'a> {
     pub positions   : HashSet<SNPCoord>
 }
 
-impl<'a> Comparison<'a> {
-    pub fn new(pair: (Individual<'a>, Individual<'a>), self_comparison: bool, genome: &'a Genome, blocksize: u32) -> Comparison<'a> {
+impl Comparison {
+    pub fn new(pair: (Individual, Individual), self_comparison: bool, genome: &Genome, blocksize: u32) -> Comparison {
         Comparison {pair, self_comparison, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize), positions: HashSet::new()}
     }
 
     // Check if the sequencing of a given overlap is over the minimum required sequencing depth for each individual.
     pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
-        pileups[*self.pair.0.index].depth >= *self.pair.0.min_depth && pileups[*self.pair.1.index].depth >= *self.pair.1.min_depth
+        pileups[self.pair.0.index].depth >= self.pair.0.min_depth && pileups[self.pair.1.index].depth >= self.pair.1.min_depth
     }
 
     // Compare our two individuals at the given SNPposition ; increment the appropriate counters after the comparison 
@@ -68,7 +68,7 @@ impl<'a> Comparison<'a> {
     pub fn compare(&mut self, line: &Line) {
         self.positions.insert(line.coordinate.clone());
         let random_nucl: Vec<&Nucleotide> = if self.self_comparison {  // Self comparison => Combination without replacement. 
-            line.random_sample_self(self.pair.0.index)                 //   - possible combinations: n!/(n-2)!
+            line.random_sample_self(&self.pair.0.index)                 //   - possible combinations: n!/(n-2)!
         } else {                                                       // Std comparison  => Permutation.
             line.random_sample_pair(&self.pair)                        //  - possible combinations: n_1 * n_2
         };
@@ -108,7 +108,7 @@ impl<'a> Comparison<'a> {
     }
 }
 
-impl<'a> fmt::Display for Comparison<'a> {
+impl fmt::Display for Comparison {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f,
             "{: <20} - {: <7} - {: <7} - {: <8.5} - {: <8.5}",
@@ -123,22 +123,22 @@ impl<'a> fmt::Display for Comparison<'a> {
 
 /// Vector of all the user-requested comparisons
 #[derive(Debug)]
-pub struct Comparisons<'a> (Vec<Comparison<'a>>);
+pub struct Comparisons (Vec<Comparison>);
 
-impl<'a> Comparisons<'a> {
+impl Comparisons {
     pub fn parse(
-        individuals           : &'a [usize],
-        min_depths            : &'a [u16],
-        names                 : &'a [String],
+        individuals           : &[usize],
+        min_depths            : &[u16],
+        names                 : &[String],
         allow_self_comparison : bool,
-        genome                : &'a Genome,
+        genome                : &Genome,
         blocksize             : u32
-    ) -> Comparisons<'a> {
+    ) -> Comparisons {
         let mut inds = vec![];
         for (i, index) in individuals.iter().enumerate() {
             let name = names.get(i);
             let min_depth = &min_depths[(i % (min_depths.len())) as usize]; // wrap around min_depths if its length is lesser than the number of inds.
-            inds.push(Individual::new(name, index, min_depth));
+            inds.push(Individual::new(name, *index, *min_depth));
         }
         let mut comparisons: Vec<Comparison> = vec![];
         for pair in inds.iter().combinations_with_replacement(2) {
@@ -160,12 +160,13 @@ impl<'a> Comparisons<'a> {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-    ///Return mutable slice of our Vector of comparisons.
-    pub fn get(&self) -> &[Comparison<'a>] {
+    ///Return slice of our Vector of comparisons.
+    pub fn get(&self) -> &[Comparison] {
         &self.0
     }
+
     ///Return mutable slice of our Vector of comparisons.
-    pub fn get_mut(&mut self) -> &mut [Comparison<'a>] {
+    pub fn get_mut(&mut self) -> &mut [Comparison] {
         &mut self.0
     }
 
@@ -174,7 +175,7 @@ impl<'a> Comparisons<'a> {
     }
 }
 
-impl<'a> fmt::Display for Comparisons<'a> {
+impl fmt::Display for Comparisons {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         self.0.iter().fold(Ok(()), |result, comparison| {
             result.and_then(|_| writeln!(f, "{}", comparison))

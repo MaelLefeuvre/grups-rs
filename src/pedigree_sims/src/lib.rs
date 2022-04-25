@@ -1,28 +1,26 @@
 use std::{
-    collections::HashSet,
     error::Error,
 };
-use log::{info};
-use pwd_from_stdin::genome::{SNPCoord, Genome, self};
-use pwd_from_stdin::comparison::Comparisons;
-//use parser;
+use log::{info, debug};
+//use rayon;
+
+use pwd_from_stdin::{
+    genome::{Genome, self},
+    comparison::Comparisons,
+};
+
 pub mod io;
 pub mod pedigree;
 
-//use rust_htslib::tpool::ThreadPool;
-
-
-pub fn run<'a>(
-    _com_cli          : &'a parser::Common,
-    ped_cli           : &'a parser::PedigreeSims,
-    _requested_samples: &'a [usize],
-    genome            : &'a Genome,
-    comparisons       : &'a Option<Comparisons>,
-    _target_positions : &'a Option<HashSet<SNPCoord>>
+pub fn run(
+    //_com_cli          : parser::Common,
+    ped_cli           : parser::PedigreeSims,
+    //_requested_samples: &'a [usize],
+    genome            : Genome,
+    comparisons       : &Comparisons,
+    //_target_positions : Option<HashSet<SNPCoord>>
 ) -> Result<(), Box<dyn Error>>
 {
-
-    let tpool = rust_htslib::tpool::ThreadPool::new(4).unwrap();
 
     // --------------------- Get the list of input vcfs.
     info!("Fetching input VCF files in {}", &ped_cli.data_dir.to_str().unwrap_or("None"));
@@ -39,34 +37,38 @@ pub fn run<'a>(
     let genetic_map = genome::GeneticMap::default().from_dir(&ped_cli.recomb_dir)?;
 
     // --------------------- Parse Input Samples Panel
-    let panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path(), &tpool).unwrap();
-    //println!("{:?}", panel.samples[&"EUR".to_string()]);
+    let panel =io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).unwrap();
 
-    // --------------------- Parse input pedigree File
-    info!("Parsing template pedigree.");
-    let mut pedigree= io::pedigree_parser(ped_cli.pedigree.as_path(), genome).unwrap();
-    for founder in pedigree.founders_mut() {
-        info!("Founder   : {}", founder);
-    }
+    // --------------------- Set ThreadPool
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(ped_cli.threads)
+        .build()
+        .unwrap();
 
-    for offspring in pedigree.offsprings_mut() {
-        info!("Offspring : {}", offspring);
-    }
+    for comparison in comparisons.get() {
+        pool.scope(|scope| {
+            for _ in 0..ped_cli.reps {
+                scope.spawn(|_| {
+                    let thread_idx = pool.current_thread_index().unwrap();
+                    debug!("[Thread {thread_idx}]: spawned!", );
 
-    // TODO: Assign contaminant to pedigree template
+                    // --------------------- Parse input pedigree File
+                    info!("[Thread {thread_idx}]: Parsing template pedigree.");
 
-    for comparison in comparisons.as_ref().unwrap().get() {
-        // Multithread starts here.
-        for i in 0..4 {
-            std::thread::spawn(move || {
-                println!("hi number {} from the spawned thread!", i);
-            });
-        }
-        pedigree.set_tags(&panel, &"EUR".to_string());
-        pedigree.populate_founders_vcf(&input_vcf_paths, &comparison.positions).unwrap();
-        pedigree.reproduce(&genetic_map);
-        pedigree.compare_genomes();
-        //println!("{:?}", pedigree);
+                    let mut pedigree= io::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
+                    pedigree.set_tags(&panel, &"EUR".to_string());
+                    for founder in pedigree.founders_mut() {
+                        info!("[Thread {thread_idx}]: Founder   : {}", founder);
+                    }
+                    for offspring in pedigree.offsprings_mut() {
+                        info!("[Thread {thread_idx}]: Offspring : {}", offspring);
+                    }
+                    pedigree.populate_founders_vcf(&input_vcf_paths, &comparison.positions).unwrap();
+                    pedigree.reproduce(&genetic_map);
+                    pedigree.compare_genomes();
+                });
+            }
+        });
     }
     Ok(())
 }

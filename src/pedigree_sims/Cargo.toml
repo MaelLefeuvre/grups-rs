@@ -9,6 +9,8 @@ edition = "2021"
   parser         = {path ="../parser"}
   pwd_from_stdin = {path = "../pwd_from_stdin" }
   thread_local   = "1.1.4"
+  crossbeam      = "0.8.1"
+  rayon          = "1.5.2"
   flate2         = "1.0"
   log            = "0.4.16"
   rand           = "0.7.2"

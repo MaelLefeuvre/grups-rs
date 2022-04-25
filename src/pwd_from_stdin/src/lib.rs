@@ -26,7 +26,7 @@ pub fn run<'a>(
     pwd_cli           : &'a parser::PwdFromStdin,
     requested_samples : &'a [usize],
     genome            : &'a Genome,
-) -> Result<(Comparisons<'a>, HashSet<SNPCoord>), Box<dyn Error>>{
+) -> Result<(Comparisons, HashSet<SNPCoord>), Box<dyn Error>>{
 
     // ----------------------------- Sanity checks.
     pwd_cli.check_depth()?; // Ensure min_depths are > 2 when allowing self-comparisons
@@ -74,7 +74,7 @@ pub fn run<'a>(
 
     // ----------------------------- Parse requested Chromosomes
     let valid_chromosomes : Vec<u8> = match com_cli.chr.clone() {
-        None         => genome.keys().map(|name| *name).collect(),
+        None         => genome.keys().copied().collect(),
         Some(vector) => parser::parse_user_ranges(vector, "chr")?
     };
     info!("Valid chromosomes: {:?}", valid_chromosomes);

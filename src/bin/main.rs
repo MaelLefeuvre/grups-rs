@@ -9,12 +9,10 @@ extern crate log;
 
 use std::error::Error;
 
-
 /// @TODO : Stay dry...
-fn run(cli: &Cli) -> Result<(), Box<dyn Error>> {
-    match &cli.commands {
+fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
+    match cli.commands {
         Run {common, pwd, ped} => {
-            println!("Command Run : {:#?}", cli.commands);
             // ----------------------------- Parse Requested_samples
             let requested_samples: Vec<usize> = parser::parse_user_ranges(pwd.samples.clone(), "samples")?;
             // ----------------------------- Initialize genome.
@@ -24,8 +22,9 @@ fn run(cli: &Cli) -> Result<(), Box<dyn Error>> {
                 None => Genome::default(),
             };
             // ----------------------------- Run PWD_from_stdin.
-            let (comparisons, target_positions) = pwd_from_stdin::run(common, pwd, &requested_samples, &genome)?;
-            pedigree_sims::run(common, ped, &requested_samples, &genome, &Some(comparisons), &Some(target_positions))?;
+            let (comparisons, _target_positions) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
+            //let comparisons = Arc::new(comparisons);
+            pedigree_sims::run( ped, genome, &comparisons)?;
         },
         PwdFromStdin {common, pwd} => {
             // ----------------------------- Parse Requested_samples
@@ -37,7 +36,7 @@ fn run(cli: &Cli) -> Result<(), Box<dyn Error>> {
                 None => Genome::default(),
             };
             // ----------------------------- Run PWD_from_stdin.
-            let (_,_) = pwd_from_stdin::run(common, pwd, &requested_samples, &genome)?;
+            let (_,_) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
         },
         PedigreeSims {..} => {
             println!("Command pedigree-sims: {:#?}", cli.commands);
@@ -57,7 +56,7 @@ fn main() {
     cli.serialize();
     
     // ----------------------------- unpack Cli and run the appropriate modules.
-    match run(&cli) {
+    match run(cli) {
         Ok(()) => (),
         Err(e) => {
             error!("{}", e);

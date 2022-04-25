@@ -28,7 +28,7 @@ type ParentsRef<'a> = (&'a Rc<RefCell<Individual>>, &'a Rc<RefCell<Individual>>)
 impl Individual {
     pub fn new(label: String, parents: Option<ParentsRef>, genome: Genome) -> Individual {
         let parents = parents.map(Self::format_parents);
-        Individual {tag: None, label, parents, genome: genome.clone()}
+        Individual {tag: None, label, parents, genome}
     }
 
     pub fn get_tag(&self) -> Option<&SampleTag> {
@@ -121,7 +121,11 @@ impl std::fmt::Display for Individual {
             None => "None".to_string(),
             Some(parents) => format!("{}", parents)
         };
-        write!(f, "label: {: <10} - parents: {: <25}", self.label, parents)
+        let tag = match &self.tag {
+            Some(tag) => tag.id().clone(),
+            None => "None".to_owned()
+        };
+        write!(f, "tab: {: <10} label: {: <10} - parents: {: <25}", tag, self.label, parents)
     }
 }
 
@@ -328,13 +332,11 @@ impl Pedigree {
     }
 
     pub fn populate_founders_vcf(&mut self, input_vcf_paths: &Vec<PathBuf>, valid_positions: &HashSet<SNPCoord>) -> Result<(), Box<dyn Error>> {
-        let tpool = rust_htslib::tpool::ThreadPool::new(4).unwrap();
-
         for vcf in input_vcf_paths {
             info!("Parsing vcf file: {}", vcf.to_str().unwrap_or("None"));
-            let mut vcf_reader = VCFReader::new(vcf.as_path(), &tpool)?;
+            let mut vcf_reader = VCFReader::new(vcf.as_path())?;
             let pop_tag = &self.pop.as_ref().unwrap().clone();
-            vcf_reader.parse_samples(self.founders_mut(), valid_positions, &pop_tag)?;
+            vcf_reader.parse_samples(self.founders_mut(), valid_positions, pop_tag)?;
 
         }
         Ok(())

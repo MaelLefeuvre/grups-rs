@@ -32,7 +32,7 @@ pub struct SNPCoord {
 
 impl Ord for SNPCoord {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        ((self.chromosome, self.position)).cmp(&((other.chromosome, other.position)))
+        (self.chromosome, self.position).cmp(&(other.chromosome, other.position))
     }
 }
 
@@ -69,17 +69,12 @@ pub struct Allele {
     af: f64,
 }
 
+#[derive(Default)]
 pub struct Alleles (Vec<Allele>);
 
 impl Alleles{
     pub fn add_allele(&mut self, allele: Allele){
         self.0.push(allele);
-    }
-}
-
-impl Default for Alleles {
-    fn default() -> Self {
-        Self(Vec::new())
     }
 }
 
@@ -207,7 +202,7 @@ impl Chromosome {
 
         let alleles: (Alleles, Alleles) = gamete.into_iter()
             .map(|Locus{pos, alleles, af}| {
-                (Allele{pos: pos, allele: alleles.0, af}, Allele{pos: pos, allele: alleles.1, af})
+                (Allele{pos, allele: alleles.0, af}, Allele{pos, allele: alleles.1, af})
             })
             .unzip();
 
@@ -262,6 +257,7 @@ impl std::fmt::Display for FastaIndexReaderError {
 }
 
 
+#[derive(Default)]
 pub struct Gamete(BTreeMap<u8, Chromatid>);
 
 impl Deref for Gamete {
@@ -279,9 +275,6 @@ impl DerefMut for Gamete {
 }
 
 impl Gamete {
-    pub fn new() -> Gamete {
-        Gamete(BTreeMap::new())
-    }
 
     pub fn add_chromatid(&mut self, chr: u8, chromatid: Chromatid) -> bool {
         self.insert(chr,  chromatid).is_none()
@@ -407,7 +400,7 @@ impl Genome {
 
 
     pub fn meiosis(&mut self, genetic_map: &GeneticMap) -> Gamete {
-        let mut gamete = Gamete::new();
+        let mut gamete = Gamete::default();
         for chr in self.0.values_mut() {
             if ! chr.is_empty(){
                 let chromatid = chr.meiosis(genetic_map);
@@ -452,16 +445,14 @@ impl Default for Genome {
 
 #[derive(Debug, Clone)]
 pub struct RecombinationRange {
-    chr  : u8,
     range: Range<u32>,
     prob : f64,
-    map  : f64,
 }
 
 impl RecombinationRange {
-    pub fn new(chr: u8, start: u32, end: u32, rate: f64, map: f64) -> RecombinationRange {
+    pub fn new(start: u32, end: u32, rate: f64) -> RecombinationRange {
         let prob: f64 = rate / 100.0 / 1_000_000.0 ;  // rate/cM/Mb.
-        RecombinationRange{chr, range: Range{start, end}, prob, map}
+        RecombinationRange{range: Range{start, end}, prob}
     }
 
     pub fn prob(&self) -> &f64 {
@@ -499,6 +490,7 @@ impl std::borrow::Borrow<Range<u32>> for RecombinationRange {
     }
 }
 
+#[derive(Default)]
 pub struct GeneticMap(HashMap<u8, Lapper<u32, RecombinationRange>>);
 
 impl Deref for GeneticMap {
@@ -523,8 +515,8 @@ impl GeneticMap {
         }
         Ok(self)
     }
-    pub fn from_map(&mut self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
-        let source = BufReader::new(File::open(path.as_path())?);
+    pub fn from_map(&mut self, path: &Path) -> Result<(), Box<dyn Error>> {
+        let source = BufReader::new(File::open(path)?);
         let mut intervals: HashMap<u8, Vec<Interval<u32, RecombinationRange>>> = HashMap::new();
 
         let mut start = 0;
@@ -535,9 +527,8 @@ impl GeneticMap {
             let chr   = str::replace(line[0], "chr", "").parse::<u8>()?;
             let stop = line[1].parse::<u32>()?;
             let rate = line[2].parse::<f64>()?;
-            let map  = line[3].parse::<f64>()?;
 
-            let recomb_rate = RecombinationRange::new(chr, start, stop, rate, map);
+            let recomb_rate = RecombinationRange::new(start, stop, rate);
             let interval = Interval{start, stop, val: recomb_rate};
             intervals.entry(chr).or_insert_with(Vec::new).push(interval);
             start = stop;
@@ -561,12 +552,6 @@ impl GeneticMap {
             )
         .collect::<Vec<PathBuf>>();
         Ok(maps)
-    }
-}
-
-impl Default for GeneticMap {
-    fn default() -> Self {
-        Self(HashMap::new())
     }
 }
 

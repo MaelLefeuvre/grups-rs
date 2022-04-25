@@ -4,27 +4,26 @@ use std::path::{PathBuf};
 use std::error::Error;
 
 use std::fs::File;
-use fst::{IntoStreamer, Streamer, Map, MapBuilder};
-use fst::automaton::{Automaton, Str, Subsequence};
-use memmap::Mmap;
-
-use rust_htslib::tpool::ThreadPool;
+use fst::{IntoStreamer, Map, MapBuilder};
+//use fst::Streamer;
+use fst::automaton::{Automaton, Str};
+//use fst::automaton::Subsequence;
+//use memmap::Mmap;
 
 use std::rc::Rc;
-use std::collections::HashMap;
 use std::collections::BTreeSet;
 // [POP][SAMPLES][Nucleotide]
 
 #[derive(Clone, Debug)]
 pub struct VCFCoord {
     coordinate: SNPCoord,
-    af: f32,
+    _af: f32,
 }
 
 impl VCFCoord {
     pub fn new(chromosome: u8, position: u32, reference: Option<char>, alternate: Option<char>, af: f32) -> VCFCoord {
         let coordinate = SNPCoord{chromosome, position, reference, alternate };
-        VCFCoord{coordinate, af}
+        VCFCoord{coordinate, _af: af}
     }
 }
 
@@ -58,12 +57,12 @@ impl PartialOrd for VCFCoord {
 #[derive(Clone, Debug)]
 pub struct Allele {
     coordinate: Rc<VCFCoord>,
-    haplos: (u8,u8)
+    _haplos: (u8,u8)
 }
 
 impl Allele {
     pub fn new(coordinate: &Rc<VCFCoord>, haplos: (u8,u8)) -> Allele {
-        Allele {coordinate: Rc::clone(coordinate), haplos}
+        Allele {coordinate: Rc::clone(coordinate), _haplos: haplos}
     }
 }
 
@@ -123,16 +122,13 @@ impl<'a> std::borrow::Borrow<usize> for VCFSample {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct VCF {
     pub coordinates: BTreeSet<Rc<VCFCoord>>,
     pub samples : Vec<VCFSample>
 }
 
 impl VCF {
-    pub fn new() -> VCF {
-        VCF{coordinates: BTreeSet::new(), samples: Vec::new()}
-    }
 
     pub fn insert_coordinate(&mut self, chromosome: u8, position: u32, reference: char, alternate: char, af: f32) -> Rc<VCFCoord> {
         let coordinate = Rc::new(VCFCoord::new(chromosome, position, Some(reference), Some(alternate), af));
@@ -149,16 +145,16 @@ impl VCF {
     }
 }
 
-fn serialize(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Error>> {
+fn _serialize(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
 
     for vcf in vcf_paths {
         println!("{:?}", vcf);
 
 
-        let mut vcf_hash = VCF::new();
+        let mut vcf_hash = VCF::default();
 
         //Start a reader.
-        let mut reader = io::VCFReader::new(vcf, tpool)?;
+        let mut reader = io::VCFReader::new(vcf)?;
 
         //Extract samples
         let samples = reader.samples();
@@ -196,7 +192,7 @@ fn serialize(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Er
             //let coord: &Rc<VCFCoord> = vcf_hash.coordinates.get().unwrap();
 
             reader.fill_genotypes()?;
-            for mut sample in vcf_hash.samples.iter_mut() {
+            for sample in vcf_hash.samples.iter_mut() {
                 let haplos = reader.get_alleles(sample.idx())?;
                 //sample.insert_allele(&Rc::clone(coord), haplos);
                 sample.genome.insert(Allele::new(&Rc::clone(&coord), haplos));
@@ -221,7 +217,7 @@ fn serialize(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Er
     Ok(())
 }
 
-fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn Error>> {
+fn _sort_vcf_map(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
 
     let wtr = std::io::BufWriter::new(File::create("tests/test-data/fst/g1k-map.fst")?);
     let mut build= MapBuilder::new(wtr)?;
@@ -230,7 +226,7 @@ fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn
         println!("{:?}", vcf);
 
         //Start a reader.
-        let mut reader = io::VCFReader::new(vcf, tpool)?;
+        let mut reader = io::VCFReader::new(vcf)?;
 
         //Extract samples
         let samples = reader.samples();
@@ -276,8 +272,8 @@ fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn
                 let mut key = buf.clone();
                 key.append(sample.id().clone().as_mut_vec()); //Unsafe! 
 
-                let haplo1 = genotypes[geno_idx]   - 64;
-                let haplo2 = genotypes[geno_idx+2] - 64;
+                let _haplo1 = genotypes[geno_idx]   - 64;
+                let _haplo2 = genotypes[geno_idx+2] - 64;
 
                 let val = std::str::from_utf8(&[genotype[0]+1, genotype[2]+1])?.parse::<u64>()?;
                 //println!("{:?} {:?}", std::str::from_utf8(&key), val);
@@ -296,10 +292,6 @@ fn sort_vcf_map(vcf_paths: &[PathBuf], tpool: &ThreadPool) -> Result<(), Box<dyn
 
 fn main() {
 
-    let tpool = rust_htslib::tpool::ThreadPool::new(16).unwrap();
-
-
-
     let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-50k-filtered/");
     println!("Fetching input VCF files in {}", &data_dir.to_str().unwrap());
     let mut input_vcf_paths = io::get_input_vcfs(&data_dir).unwrap();
@@ -307,7 +299,7 @@ fn main() {
 
 
     let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
-    let _panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path(), &tpool).unwrap();
+    let _panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).unwrap();
 
     //for pop in panel.samples.into_keys(){
     //    println!("{}", pop); 
@@ -347,7 +339,7 @@ fn main() {
         let matcher = Str::new(&regex)
             .starts_with();
             //.intersection(Subsequence::new(&sample));
-        let mut stream = map.search(&matcher).into_stream();
+        let stream = map.search(&matcher).into_stream();
 
         println!("  - Populating vector");
         //let mut kvs = vec![];

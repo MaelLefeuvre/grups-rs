@@ -249,8 +249,8 @@ impl Line {
     pub fn random_sample_pair(&self, pair: &(Individual, Individual)) -> Vec<&Nucleotide> {
         let mut rng = &mut rand::thread_rng();
         vec![
-            self.individuals[*pair.0.index].nucleotides.choose(&mut rng).unwrap(),
-            self.individuals[*pair.1.index].nucleotides.choose(&mut rng).unwrap(),
+            self.individuals[pair.0.index].nucleotides.choose(&mut rng).unwrap(),
+            self.individuals[pair.1.index].nucleotides.choose(&mut rng).unwrap(),
         ]
 
     }
