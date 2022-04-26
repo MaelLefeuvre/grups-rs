@@ -1,0 +1,50 @@
+1. Parse input vcf files.
+2. Parse panel of individuals.
+3. Parse genetic maps -> Convert it to an interval tree.
+4. Get the index of each panel individual.
+
+5. Generate template pedigree
+6. Create a vector of blank pedigrees. n = 500;
+7. Add random tags for each pedigree.
+
+8. Start making simulations.
+
+    -> For each chromosome:
+        + let last_position = 0;
+        -> For each line:
+            a. parse position:
+            b. check if in "valid" positions (valid == within our pileup AND within our targets files.)
+            c. check if biallelic
+            d. check if not duplicate
+            e. check in not indel.
+
+            f. search ranges through geneticMap
+            + let current_position = line.pos;
+            + let position interval = Range(start: last_position, line.pos))
+            + let intervals = geneticMap.find(position_interval)
+            
+
+            g. parse genome line.
+            -> For each pedigree.
+                -> For each founder
+                    a. assign genome.
+                -> For each offspring.
+                    -> offspring.assign_genome(self){
+                        |    let alleles: Vec<Allele> = vec![].with_capacity(2);
+                        |    -> For parent in self.parent:
+                        |           @ if ! parent.has_genome()
+                        |               parent.assign_genome()                   // Yay for recursivity.
+                        |           let allele: Allele = parent.meiosis(self) {
+                        |                                |    return self.random_allele()
+                        |                                }
+                        |           alleles.push(allele);
+                        }
+
+                    -> 
+                        
+
+            
+
+
+
+    

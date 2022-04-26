@@ -161,7 +161,7 @@ impl PartialOrd for Individual {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Comparison {
     label           : String,
     pair            : (Rc<RefCell<Individual>>, Rc<RefCell<Individual>>),
@@ -244,7 +244,7 @@ impl Comparison {
 //    }
 //}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Pedigree {
     pub individuals: BTreeMap<String, Rc<RefCell<Individual>>>,
     comparisons: Vec<Comparison>,

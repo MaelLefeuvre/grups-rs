@@ -45,6 +45,19 @@ pub fn run(
         .build()
         .unwrap();
 
+
+    let template_pedigree= io::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
+    let mut pedigrees = Vec::new();
+    println!("Hi.");
+    for i in 0..500 {
+        let mut new_pedigree = template_pedigree.clone();
+        new_pedigree.set_tags(&panel, &"EUR".to_string());
+        pedigrees.push(new_pedigree);
+    }
+    println!("Done");
+
+
+
     for comparison in comparisons.get() {
         pool.scope(|scope| {
             for _ in 0..ped_cli.reps {
