@@ -6,8 +6,17 @@
 5. Generate template pedigree
 6. Create a vector of blank pedigrees. n = 500;
 7. Add random tags for each pedigree.
+8. Randomly select strands for each parent.
+    -> For founder in pedigree.founders() {
+        founder.select_random_strands() {
+            for i, parent in self.parents().enumerate() {
+                self.strand [i] = rng.choose([0,1])
+            }
+        }
+    }
 
-8. Start making simulations.
+
+9. Start making simulations.
 
     -> For each chromosome:
         + let last_position = 0;

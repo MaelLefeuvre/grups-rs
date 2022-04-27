@@ -145,7 +145,7 @@ impl VCF {
     }
 }
 
-fn _serialize(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
+async fn _serialize(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
 
     for vcf in vcf_paths {
         println!("{:?}", vcf);
@@ -154,7 +154,7 @@ fn _serialize(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
         let mut vcf_hash = VCF::default();
 
         //Start a reader.
-        let mut reader = io::VCFReader::new(vcf)?;
+        let mut reader = io::VCFAsyncReader::new(vcf, 1).await?;
 
         //Extract samples
         let samples = reader.samples();
@@ -176,22 +176,22 @@ fn _serialize(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
         }
 
         let mut i = 0;
-        while reader.has_data_left()? {
-            let chr: u8  = reader.next_field()?.parse()?;
+        while reader.has_data_left().await? {
+            let chr: u8  = reader.next_field().await?.parse()?;
             reader.clear_buffer();
-            let pos: u32 = reader.next_field()?.parse()?;
+            let pos: u32 = reader.next_field().await?.parse()?;
             reader.clear_buffer();
-            reader.skip(1).unwrap();
-            let reference: char = reader.next_field()?.parse()?;
+            reader.skip(1).await?;
+            let reference: char = reader.next_field().await?.parse()?;
             reader.clear_buffer();
-            let alternate: char = reader.next_field()?.parse()?;
+            let alternate: char = reader.next_field().await?.parse()?;
             reader.clear_buffer();
 
             let coord = vcf_hash.insert_coordinate(chr, pos, reference, alternate, 0.0);
 
             //let coord: &Rc<VCFCoord> = vcf_hash.coordinates.get().unwrap();
 
-            reader.fill_genotypes()?;
+            reader.fill_genotypes().await?;
             for sample in vcf_hash.samples.iter_mut() {
                 let haplos = reader.get_alleles(sample.idx())?;
                 //sample.insert_allele(&Rc::clone(coord), haplos);
@@ -217,78 +217,78 @@ fn _serialize(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn _sort_vcf_map(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
-
-    let wtr = std::io::BufWriter::new(File::create("tests/test-data/fst/g1k-map.fst")?);
-    let mut build= MapBuilder::new(wtr)?;
-
-    for vcf in vcf_paths {
-        println!("{:?}", vcf);
-
-        //Start a reader.
-        let mut reader = io::VCFReader::new(vcf)?;
-
-        //Extract samples
-        let samples = reader.samples();
-        let samples = &samples[9..];
-
-        //Convert to struct to keep id.
-        let mut struct_samples = Vec::new();
-        for (i, sample) in samples.iter().enumerate(){
-            let sample = io::SampleTag::new(sample, i);
-            struct_samples.push(sample);
-        }
-
-        //Sort
-        struct_samples.sort();
-
-        //Read vcf
-        let (mut buf, mut genotypes) = (Vec::new(), Vec::new());
-        //for (i, line) in reader.lines().enumerate() {
-            let mut i = 0;
-        loop {
-            let chr_bytes = reader.source.read_until(b'\t', &mut buf)?; // 1
-            if chr_bytes == 0 { break };
-            buf.pop(); buf.push(b' ');
-            let pos_bytes = reader.source.read_until(b'\t', &mut buf)?; // 2
-            buf.pop(); buf.push(b' ');
-            for _ in 0..(10-pos_bytes) {                 // Add 9 leading zeroes.
-                buf.insert(chr_bytes, b'0')   
-            }
-
-            for _ in 3..10 {
-                reader.source.read_until(b'\t', &mut Vec::new())?;
-            }
-            
-            reader.source.read_until(b'\n', &mut genotypes)?;
-
-            if i % 50000 == 0 {
-                println!("{i: >9} {:?}",std::str::from_utf8(&buf)?);
-            }
-            unsafe{
-            for sample in struct_samples.iter() {
-                let geno_idx=sample.idx()*4;
-                let genotype = genotypes[geno_idx..geno_idx+3].to_owned();
-                let mut key = buf.clone();
-                key.append(sample.id().clone().as_mut_vec()); //Unsafe! 
-
-                let _haplo1 = genotypes[geno_idx]   - 64;
-                let _haplo2 = genotypes[geno_idx+2] - 64;
-
-                let val = std::str::from_utf8(&[genotype[0]+1, genotype[2]+1])?.parse::<u64>()?;
-                //println!("{:?} {:?}", std::str::from_utf8(&key), val);
-                build.insert(key, val).unwrap();
-
-            }}
-            genotypes.clear();
-            buf.clear();
-            i+=1;
-
-        }
-    }
-    build.finish()?;
-    Ok(())
-}
+//fn _sort_vcf_map(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
+//
+//    let wtr = std::io::BufWriter::new(File::create("tests/test-data/fst/g1k-map.fst")?);
+//    let mut build= MapBuilder::new(wtr)?;
+//
+//    for vcf in vcf_paths {
+//        println!("{:?}", vcf);
+//
+//        //Start a reader.
+//        let mut reader = io::VCFReader::new(vcf)?;
+//
+//        //Extract samples
+//        let samples = reader.samples();
+//        let samples = &samples[9..];
+//
+//        //Convert to struct to keep id.
+//        let mut struct_samples = Vec::new();
+//        for (i, sample) in samples.iter().enumerate(){
+//            let sample = io::SampleTag::new(sample, i);
+//            struct_samples.push(sample);
+//        }
+//
+//        //Sort
+//        struct_samples.sort();
+//
+//        //Read vcf
+//        let (mut buf, mut genotypes) = (Vec::new(), Vec::new());
+//        //for (i, line) in reader.lines().enumerate() {
+//            let mut i = 0;
+//        loop {
+//            let chr_bytes = reader.source.read_until(b'\t', &mut buf)?; // 1
+//            if chr_bytes == 0 { break };
+//            buf.pop(); buf.push(b' ');
+//            let pos_bytes = reader.source.read_until(b'\t', &mut buf)?; // 2
+//            buf.pop(); buf.push(b' ');
+//            for _ in 0..(10-pos_bytes) {                 // Add 9 leading zeroes.
+//                buf.insert(chr_bytes, b'0')   
+//            }
+//
+//            for _ in 3..10 {
+//                reader.source.read_until(b'\t', &mut Vec::new())?;
+//            }
+//            
+//            reader.source.read_until(b'\n', &mut genotypes)?;
+//
+//            if i % 50000 == 0 {
+//                println!("{i: >9} {:?}",std::str::from_utf8(&buf)?);
+//            }
+//            unsafe{
+//            for sample in struct_samples.iter() {
+//                let geno_idx=sample.idx()*4;
+//                let genotype = genotypes[geno_idx..geno_idx+3].to_owned();
+//                let mut key = buf.clone();
+//                key.append(sample.id().clone().as_mut_vec()); //Unsafe! 
+//
+//                let _haplo1 = genotypes[geno_idx]   - 64;
+//                let _haplo2 = genotypes[geno_idx+2] - 64;
+//
+//                let val = std::str::from_utf8(&[genotype[0]+1, genotype[2]+1])?.parse::<u64>()?;
+//                //println!("{:?} {:?}", std::str::from_utf8(&key), val);
+//                build.insert(key, val).unwrap();
+//
+//            }}
+//            genotypes.clear();
+//            buf.clear();
+//            i+=1;
+//
+//        }
+//    }
+//    build.finish()?;
+//    Ok(())
+//}
 
 fn main() {
 
@@ -299,7 +299,7 @@ fn main() {
 
 
     let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
-    let _panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).unwrap();
+    //let _panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).await?;
 
     //for pop in panel.samples.into_keys(){
     //    println!("{}", pop); 

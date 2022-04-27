@@ -63,18 +63,25 @@ impl Hash for SNPCoord {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Allele {
     pos: u32,
     allele: u8,
     af: f64,
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone)]
 pub struct Alleles (Vec<Allele>);
 
 impl Alleles{
     pub fn add_allele(&mut self, allele: Allele){
         self.0.push(allele);
+    }
+}
+
+impl Default for Alleles {
+    fn default() -> Self {
+        Alleles(Vec::new())
     }
 }
 
@@ -144,7 +151,6 @@ pub struct Chromosome {
     pub name   : u8,
     pub length : u32,
     loci       : Vec<Locus>,
-
 }
 
 impl Chromosome {

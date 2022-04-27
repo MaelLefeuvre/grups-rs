@@ -37,3 +37,5 @@
   memmap         = "0.7.0"
   log            = "0.4.16"
   clap           = {version = "3.1.2", features = ["derive"]}
+  tokio          = { version = "1.17.0", features = ["full"] }
+

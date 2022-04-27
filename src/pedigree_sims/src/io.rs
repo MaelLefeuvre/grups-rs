@@ -10,7 +10,9 @@ use pwd_from_stdin::genome::{SNPCoord, Genome};
 use rand::seq::SliceRandom;
 
 use rust_htslib::bgzf;
-
+use noodles_bgzf::{AsyncReader};
+use tokio::io::{self, AsyncBufRead};
+use tokio::io::AsyncBufReadExt;
 
 
 #[derive(Debug, Clone)]
@@ -57,10 +59,11 @@ pub struct VCFPanelReader{
 }
 
 impl VCFPanelReader {
-    pub fn new(panel_path: &Path, vcf: &Path) -> std::io::Result<VCFPanelReader> {
+    pub async fn new(panel_path: &Path, vcf: &Path) -> std::io::Result<VCFPanelReader> {
         let source = BufReader::new(File::open(panel_path)?);
-        let header = VCFReader::new(vcf)?.samples();
-        let samples = Self::parse_header(source, &header)?;
+        let reader = VCFReader::new(vcf)?;
+        let samples = Self::parse_header(source, &reader.samples())?;
+        drop(reader);
         Ok(VCFPanelReader{samples})
     }
 
@@ -86,8 +89,114 @@ impl VCFPanelReader {
     }
 }
 
+
+pub struct VCFAsyncReader {
+    pub source: AsyncReader<tokio::fs::File>,
+    samples   : Vec<String>,
+    buf       : Vec<u8>,
+    idx       : usize,
+}
+
+impl VCFAsyncReader {
+    pub async fn new(path: &Path, threads: usize) -> std::io::Result<VCFAsyncReader>{
+        let mut reader = Self::get_asyncreader(path, threads).await?;
+        let samples = Self::parse_samples_id(&mut reader).await?;
+
+        Ok(VCFAsyncReader{source: reader, samples, buf: Vec::new(), idx:0})
+    }
+
+    pub async fn next_field(&mut self) -> Result<&str, Box<dyn Error>> {
+        self.clear_buffer();
+        self.source.read_until(b'\t', &mut self.buf).await?;
+        self.buf.pop();
+        self.idx += 1;
+        Ok(std::str::from_utf8(&self.buf)?)
+    }
+
+    async fn next_eol(&mut self) -> std::io::Result<()> {
+        let _ = self.source.read_until(b'\n', &mut self.buf).await?;
+        self.idx=0;
+        Ok(())
+    }
+
+    pub async fn skip_line(&mut self) -> std::io::Result<()>{
+        self.next_eol().await?;
+        self.clear_buffer();
+        Ok(())
+    }
+
+
+    pub async fn skip(&mut self, n: usize) -> std::io::Result<()> {
+        for _ in 0..n {
+            self.source.read_until(b'\t', &mut Vec::new()).await?;
+        }
+        self.idx+=n;
+        Ok(())
+    }
+    pub async fn fill_genotypes(&mut self) -> std::io ::Result<()> {
+        let genotypes_start_idx = 9;
+        self.clear_buffer();
+        self.skip(genotypes_start_idx-self.idx).await?;
+        self.next_eol().await?;
+        Ok(())
+    }
+
+    pub fn get_alleles(&mut self, idx: &usize) -> Result<(u8, u8), Box<dyn Error>> {
+        let geno_idx=idx*4;
+        let haplo1 = self.buf[geno_idx]   - 48;
+        let haplo2 = self.buf[geno_idx+2] - 48;
+        Ok((haplo1, haplo2))
+    }
+
+    pub fn get_alleles2(&mut self, idx: &usize) -> Result<Option<[u8; 2]>, Box<dyn Error>> {
+        let geno_idx=idx*4;
+        let haplo1 = self.buf[geno_idx]   - 48;
+        let haplo2 = self.buf[geno_idx+2] - 48;
+        let alleles = Some([haplo1, haplo2]);
+        Ok(alleles)
+    }
+
+
+    pub fn clear_buffer(&mut self) {
+        self.buf.clear();
+    }
+
+    pub async fn has_data_left(&mut self) -> std::io::Result<bool> {
+        Ok(! self.source.fill_buf().await?.is_empty())
+    
+    }
+
+    pub fn samples(&self) -> Vec<String> {
+        self.samples.clone()
+    }
+
+    async fn get_asyncreader(path: &Path, threads: usize) -> std::io::Result<AsyncReader<tokio::fs::File>> {
+        use tokio::fs::File;
+
+        let builder = noodles_bgzf::AsyncReader::builder(File::open(path).await?).set_worker_count(threads);
+        let source = builder.build();
+
+        Ok(source)
+    }
+
+    async fn parse_samples_id(reader: &mut AsyncReader<tokio::fs::File>) -> std::io::Result<Vec<String>>{
+        let mut samples = Vec::new();
+        let mut lines = reader.lines();
+        while let Some(line) = lines.next_line().await.unwrap() {
+            let split_line: Vec<&str> = line.split('\t').collect();
+            if split_line[0] == "#CHROM" {
+                for ind in &split_line[..]{
+                    samples.push(ind.to_string());
+                }
+                return Ok(samples)
+            }
+        }
+        panic!();
+    }
+}
+
 pub struct VCFReader<'a> {
-    pub source: Box<dyn BufRead + 'a>,
+    pub source: Box<BufReader<Box<dyn Read + 'a>>>,
     samples   : Vec<String>,
     buf       : Vec<u8>,
     idx       : usize,
@@ -115,7 +224,7 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-    fn skip_line(&mut self) -> std::io::Result<()>{
+    pub fn skip_line(&mut self) -> std::io::Result<()>{
         self.next_eol()?;
         self.clear_buffer();
         Ok(())
@@ -129,7 +238,7 @@ impl<'a> VCFReader<'a> {
         self.idx+=n;
         Ok(())
     }
-    pub fn fill_genotypes(&mut self) -> std::io::Result<()> {
+    pub fn fill_genotypes(&mut self) -> std::io ::Result<()> {
         let genotypes_start_idx = 9;
         self.clear_buffer();
         self.skip(genotypes_start_idx-self.idx)?;
@@ -143,15 +252,26 @@ impl<'a> VCFReader<'a> {
         let haplo2 = self.buf[geno_idx+2] - 48;
         Ok((haplo1, haplo2))
     }
+
+    pub fn get_alleles2(&mut self, idx: &usize) -> Result<Option<[u8; 2]>, Box<dyn Error>> {
+        let geno_idx=idx*4;
+        let haplo1 = self.buf[geno_idx]   - 48;
+        let haplo2 = self.buf[geno_idx+2] - 48;
+        let alleles = Some([haplo1, haplo2]);
+        Ok(alleles)
+    }
+
+
     pub fn clear_buffer(&mut self) {
         self.buf.clear();
     }
 
     pub fn has_data_left(&mut self) -> std::io::Result<bool> {
-        self.source.fill_buf().map(|b| !b.is_empty())
+        Ok(self.source.fill_buf().map(|b| ! b.is_empty())?)
+    
     }
 
-    pub fn parse_samples(&mut self, mut samples: Vec<RefMut<Individual>>, valid_positions: &HashSet<SNPCoord>, pop: &str) -> Result<(), Box<dyn Error>> {
+    pub fn parse_samples(&mut self, mut samples: Vec<RefMut<'_, Individual>>, valid_positions: &HashSet<SNPCoord>, pop: &str) -> Result<(), Box<dyn Error>> {
         let mut i = 0;
         while self.has_data_left()? {
 
@@ -191,7 +311,6 @@ impl<'a> VCFReader<'a> {
                     .split('=')
                     .collect::<Vec<&str>>()[1]
                     .parse::<f64>().unwrap();
-                    //println!("{vtype} - POP_AF: {af:?}");
                     Some(af)
                 },
                 _ => None
@@ -217,30 +336,38 @@ impl<'a> VCFReader<'a> {
 
 
 
-    pub fn lines(self) -> Lines<Box<dyn BufRead + 'a>> {
-        self.source.lines()
-    }
+    //pub async fn lines(self) -> Lines<Box<dyn BufRead + 'a>> {
+    //    self.source.lines().await?
+    //}
 
     pub fn samples(&self) -> Vec<String> {
         self.samples.clone()
     }
 
     fn get_reader(path: &Path) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
-        let source = bgzf::Reader::from_path(path).unwrap();
+        let source = noodles_bgzf::Reader::new(File::open(path)?);
         let source = Box::new(source);
-        
+        Ok(Box::new(BufReader::new(source)))
+
+
+        //Ok(source);
+        //let source = Box::new(AsyncBufRead::)
+         
+
         //let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
-            //Some("f") => Box::new(File::open(path)?),
+            //Some("f") => Box::new(File::open(path)?),<
             //Some("gz")  => Box::new(GzDecoder::new(File::open(path)?)),
             //Some("gz")  => Box::new(bgzf::Reader::from_path(path).unwrap()),
            // _           => panic!()
         //};
-        Ok(Box::new(BufReader::new(source)))
+        //Ok(Box::new(BufReader::new(source)))
 
     }
+
     fn parse_samples_id(reader: &mut Box<BufReader<Box<dyn Read>>>) -> std::io::Result<Vec<String>>{
         let mut samples = Vec::new();
-        for line in reader.lines() {
+        let mut lines = reader.lines();
+        while let Some(line) = lines.next() {
             let line = line?;
             let split_line: Vec<&str> = line.split('\t').collect();
             if split_line[0] == "#CHROM" {

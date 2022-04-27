@@ -24,7 +24,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             // ----------------------------- Run PWD_from_stdin.
             let (comparisons, _target_positions) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
             //let comparisons = Arc::new(comparisons);
-            pedigree_sims::run( ped, genome, &comparisons)?;
+            pedigree_sims::run(common, ped, genome, &comparisons)?;
         },
         PwdFromStdin {common, pwd} => {
             // ----------------------------- Parse Requested_samples

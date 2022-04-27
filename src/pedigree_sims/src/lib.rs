@@ -12,8 +12,11 @@ use pwd_from_stdin::{
 pub mod io;
 pub mod pedigree;
 
-pub fn run(
-    //_com_cli          : parser::Common,
+use tokio;
+
+#[tokio::main]
+pub async fn run(
+    _com_cli          : parser::Common,
     ped_cli           : parser::PedigreeSims,
     //_requested_samples: &'a [usize],
     genome            : Genome,
@@ -37,51 +40,42 @@ pub fn run(
     let genetic_map = genome::GeneticMap::default().from_dir(&ped_cli.recomb_dir)?;
 
     // --------------------- Parse Input Samples Panel
-    let panel =io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).unwrap();
+    let panel =io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).await?;
 
     // --------------------- Set ThreadPool
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(ped_cli.threads)
-        .build()
-        .unwrap();
+    //let pool = rayon::ThreadPoolBuilder::new()
+    //    .num_threads(ped_cli.threads)
+    //    .build()
+    //    .unwrap();
 
 
     let template_pedigree= io::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
     let mut pedigrees = Vec::new();
-    println!("Hi.");
-    for i in 0..500 {
+    for _ in 0..ped_cli.reps {
         let mut new_pedigree = template_pedigree.clone();
-        new_pedigree.set_tags(&panel, &"EUR".to_string());
+        new_pedigree.set_tags(&panel, &ped_cli.pedigree_pop);
+        new_pedigree.assign_offspring_strands()?;
         pedigrees.push(new_pedigree);
     }
-    println!("Done");
 
-
-
+    // Perform pedigree simulations for each pedigree, using all chromosomes.
+    info!("Starting pedigree comparisons.");
     for comparison in comparisons.get() {
-        pool.scope(|scope| {
-            for _ in 0..ped_cli.reps {
-                scope.spawn(|_| {
-                    let thread_idx = pool.current_thread_index().unwrap();
-                    debug!("[Thread {thread_idx}]: spawned!", );
-
-                    // --------------------- Parse input pedigree File
-                    info!("[Thread {thread_idx}]: Parsing template pedigree.");
-
-                    let mut pedigree= io::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
-                    pedigree.set_tags(&panel, &"EUR".to_string());
-                    for founder in pedigree.founders_mut() {
-                        info!("[Thread {thread_idx}]: Founder   : {}", founder);
-                    }
-                    for offspring in pedigree.offsprings_mut() {
-                        info!("[Thread {thread_idx}]: Offspring : {}", offspring);
-                    }
-                    pedigree.populate_founders_vcf(&input_vcf_paths, &comparison.positions).unwrap();
-                    pedigree.reproduce(&genetic_map);
-                    pedigree.compare_genomes();
-                });
+        comparison.get_pair();
+        for vcf in input_vcf_paths.iter() {
+            let simulations = pedigree::pedigree_simulations(&mut pedigrees, vcf, &comparison.positions, &ped_cli.pedigree_pop, &genetic_map, ped_cli.threads);
+            simulations.await?;
+        }
+        // Print pedigree simulation results.
+        for req_comparison in comparisons.get() {
+            //println!("----------------- {}", req_comparison.get_pair());
+            for (i, pedigree) in pedigrees.iter().enumerate() {
+                pedigree.print_results(i);
             }
-        });
+        }
+        pedigree::compute_results(&pedigrees, comparison);
     }
+    println!("Done!");
+
     Ok(())
 }
