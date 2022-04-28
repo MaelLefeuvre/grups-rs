@@ -1,6 +1,6 @@
 use std::cell::RefMut;
 //use flate2::read::GzDecoder;
-use std::io::{Read, BufRead, BufReader, Lines};
+use std::io::{Read, BufRead, BufReader};
 use std::error::Error;
 use std::path::{PathBuf, Path};
 use std::fs::File;
@@ -9,11 +9,10 @@ use log::{warn, info, debug};
 use pwd_from_stdin::genome::{SNPCoord, Genome};
 use rand::seq::SliceRandom;
 
-use rust_htslib::bgzf;
-use noodles_bgzf::{AsyncReader};
-use tokio::io::{self, AsyncBufRead};
+use noodles_bgzf;
+use tokio::io::{AsyncBufRead};
 use tokio::io::AsyncBufReadExt;
-
+use std::pin::Pin;
 
 #[derive(Debug, Clone)]
 pub struct SampleTag {
@@ -78,7 +77,7 @@ impl VCFPanelReader {
             let line = line?;
             let line: Vec<&str> = line.split('\t').collect();
             let sample_idx = match header.iter().position(|id| id == line[0]){
-                Some(idx) => idx,
+                Some(idx) => idx - 9, // Correct for previous fields.
                 None => {warn!("Sample not found in input vcfs. Skipping:\n{:?}", line); continue}
             };
             output.entry(line[1].into()).or_insert(Vec::new()).push(SampleTag::new(line[0], sample_idx));
@@ -91,7 +90,7 @@ impl VCFPanelReader {
 
 
 pub struct VCFAsyncReader {
-    pub source: AsyncReader<tokio::fs::File>,
+    pub source: Pin<Box<dyn AsyncBufRead>>,
     samples   : Vec<String>,
     buf       : Vec<u8>,
     idx       : usize,
@@ -141,20 +140,38 @@ impl VCFAsyncReader {
         Ok(())
     }
 
-    pub fn get_alleles(&mut self, idx: &usize) -> Result<(u8, u8), Box<dyn Error>> {
+    pub fn get_alleles(&self, idx: &usize) -> Result<(u8, u8), Box<dyn Error>> {
         let geno_idx=idx*4;
         let haplo1 = self.buf[geno_idx]   - 48;
         let haplo2 = self.buf[geno_idx+2] - 48;
         Ok((haplo1, haplo2))
     }
 
-    pub fn get_alleles2(&mut self, idx: &usize) -> Result<Option<[u8; 2]>, Box<dyn Error>> {
+    pub fn get_alleles2(&self, idx: &usize) -> Result<Option<[u8; 2]>, Box<dyn Error>> {
         let geno_idx=idx*4;
         let haplo1 = self.buf[geno_idx]   - 48;
         let haplo2 = self.buf[geno_idx+2] - 48;
         let alleles = Some([haplo1, haplo2]);
         Ok(alleles)
     }
+
+
+    pub fn compute_local_cont_af(&self, contam_ind_ids: &Vec<usize>) -> Result<f64, Box<dyn Error>>{
+        let mut ref_allele_count = 0;
+        let mut alt_allele_count = 0;
+        for idx in contam_ind_ids.iter() {
+            let cont_alleles = self.get_alleles2(idx)?.unwrap();
+            for allele in cont_alleles.into_iter() {
+                match allele {
+                    0 => ref_allele_count +=1,
+                    1 => alt_allele_count +=1,
+                    _ => panic!("Contaminating individual is multiallelic.")
+                }
+            }
+        }
+        Ok((alt_allele_count as f64) /(alt_allele_count as f64 + ref_allele_count as f64))
+    }
+    
 
 
     pub fn clear_buffer(&mut self) {
@@ -170,16 +187,24 @@ impl VCFAsyncReader {
         self.samples.clone()
     }
 
-    async fn get_asyncreader(path: &Path, threads: usize) -> std::io::Result<AsyncReader<tokio::fs::File>> {
+    async fn get_asyncreader(path: &Path, threads: usize) -> std::io::Result<Pin<Box<dyn tokio::io::AsyncBufRead>>> {
         use tokio::fs::File;
 
-        let builder = noodles_bgzf::AsyncReader::builder(File::open(path).await?).set_worker_count(threads);
-        let source = builder.build();
+        //let builder = noodles_bgzf::AsyncReader::builder(File::open(path).await?).set_worker_count(threads);
+        //let source = builder.build();
+
+
+        
+        let source: Pin<Box<dyn tokio::io::AsyncBufRead>> = match path.extension().unwrap().to_str(){
+            Some("vcf") => Box::pin(Box::new(tokio::io::BufReader::new(File::open(path).await?))),
+            Some("gz")  => Box::pin(Box::new(noodles_bgzf::AsyncReader::builder(File::open(path).await?).set_worker_count(threads).build())),
+            _           => panic!()
+        };
 
         Ok(source)
     }
 
-    async fn parse_samples_id(reader: &mut AsyncReader<tokio::fs::File>) -> std::io::Result<Vec<String>>{
+    async fn parse_samples_id(reader: &mut Pin<Box<dyn tokio::io::AsyncBufRead>>) -> std::io::Result<Vec<String>>{
         let mut samples = Vec::new();
         let mut lines = reader.lines();
         while let Some(line) = lines.next_line().await.unwrap() {
@@ -246,14 +271,14 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-    pub fn get_alleles(&mut self, idx: &usize) -> Result<(u8, u8), Box<dyn Error>> {
+    pub fn get_alleles(&self, idx: &usize) -> Result<(u8, u8), Box<dyn Error>> {
         let geno_idx=idx*4;
         let haplo1 = self.buf[geno_idx]   - 48;
         let haplo2 = self.buf[geno_idx+2] - 48;
         Ok((haplo1, haplo2))
     }
 
-    pub fn get_alleles2(&mut self, idx: &usize) -> Result<Option<[u8; 2]>, Box<dyn Error>> {
+    pub fn get_alleles2(&self, idx: &usize) -> Result<Option<[u8; 2]>, Box<dyn Error>> {
         let geno_idx=idx*4;
         let haplo1 = self.buf[geno_idx]   - 48;
         let haplo2 = self.buf[geno_idx+2] - 48;
@@ -345,22 +370,22 @@ impl<'a> VCFReader<'a> {
     }
 
     fn get_reader(path: &Path) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
-        let source = noodles_bgzf::Reader::new(File::open(path)?);
-        let source = Box::new(source);
-        Ok(Box::new(BufReader::new(source)))
+        //let source = noodles_bgzf::Reader::new(File::open(path)?);
+        //let source = Box::new(source);
+        //Ok(Box::new(BufReader::new(source)))
 
 
         //Ok(source);
         //let source = Box::new(AsyncBufRead::)
          
 
-        //let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
-            //Some("f") => Box::new(File::open(path)?),<
-            //Some("gz")  => Box::new(GzDecoder::new(File::open(path)?)),
+        let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
+            Some("vcf") => Box::new(File::open(path)?),
+            Some("gz")  => Box::new(noodles_bgzf::Reader::new(File::open(path)?)),
             //Some("gz")  => Box::new(bgzf::Reader::from_path(path).unwrap()),
-           // _           => panic!()
-        //};
-        //Ok(Box::new(BufReader::new(source)))
+            _           => panic!()
+        };
+        Ok(Box::new(BufReader::new(source)))
 
     }
 
@@ -379,6 +404,23 @@ impl<'a> VCFReader<'a> {
         }
         panic!();
     }
+
+    pub fn compute_local_cont_af(&self, contam_ind_ids: &Vec<usize>) -> Result<f64, Box<dyn Error>>{
+        let mut ref_allele_count = 0;
+        let mut alt_allele_count = 0;
+        for idx in contam_ind_ids.iter() {
+            let cont_alleles = self.get_alleles2(idx)?.unwrap();
+            for allele in cont_alleles.into_iter() {
+                match allele {
+                    0 => ref_allele_count +=1,
+                    1 => alt_allele_count +=1,
+                    _ => panic!("Contaminating individual is multiallelic.")
+                }
+            }
+        }
+        Ok((alt_allele_count as f64) /(alt_allele_count as f64 + ref_allele_count as f64))
+    }
+
 }
 
 use crate::pedigree::*;

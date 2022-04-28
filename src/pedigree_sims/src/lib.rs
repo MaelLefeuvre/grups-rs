@@ -1,7 +1,7 @@
 use std::{
     error::Error, collections::HashMap,
 };
-use log::{info, debug};
+use log::{info};
 //use rayon;
 
 use pwd_from_stdin::{
@@ -14,6 +14,43 @@ pub mod pedigree;
 
 use tokio;
 
+/// @TODO! 
+///   - [CRUCIAL] Print simulations results into files.
+///   - [CRUCIAL] Pop selected contaminating individuals out of the pedigree founders candidates.
+///   - [CRUCIAL] Add ability to compute error rate from pileup file (see grups_module.pyx:610). 
+///               - comparisons positions should keep a record of phred scales.
+///   - [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
+///   - [CRUCIAL] Find a way to restrict the number of tokio worker-threads!
+/// -------------------------------------------------------------------------------------------------------------------
+///   - [FEATURE] Implement ability to add multiple --contam-pop
+///   - [FEATURE] ability to add multiple --contam-num-inds
+///   - [FEATURE] ability to add different contaminating individuals per pair. 
+///   - [FEATURE] Add nSNP downsampling (ds_rate_num_snps)
+///   - [FEATURE] Add range ability for contamination-rate, pmd-rate, depth-rate
+///               + these should be expressed as floats --> itertools::linspace could be a candidate package
+///                 to work-out ranges.
+///               + param_num_rep might not be the most suitable parameter choice ?
+///   - [FEATURE] Add built-in vcf filtration module.
+/// -------------------------------------------------------------------------------------------------------------------
+///   - [ SPEED ] Implement per-vcf parallelization (?)
+///               - Will most probably require refactoring from Rc<RefCell<Individual>> to Arc<Mutex<Individual>>.
+///                 => Might prove unproductive, as this could greatly impact memory consumption.
+///                 => Still needs some testing, as VCF I/O remains the biggest performance bottleneck.
+///   - [ SPEED ] Benchmark Finite-State Transducer indexation mode.
+/// -------------------------------------------------------------------------------------------------------------------
+///   - [  QoL  ] If multiple parallelization options, separate into --threads and --decompression-threads for more 
+///               flexibility.
+///   - [  QoL  ] Finish implementing CLI Args (de)serialization.
+///   - [  QoL  ] Add .vcf and GZip compressed support for vcf. (async I/O support for vcf, please...)
+/// -------------------------------------------------------------------------------------------------------------------
+///
+/// @ TODO! META
+///   - [CRUCIAL] Refactor pwd_from_stdin::io and pedigree_sims::io into a self-contained library.
+///   - [CRUCIAL] More unit-testing, please!!! 
+///   - [CRUCIAL] Document pedigree_sims::* libraries.
+///   - [CRUCIAL] Split up pedigree_sims::pedigree::pedigree_simulations() into a managable Object or function, please.
+///   - [  QoL  ] Clean up or refactor dead code
+/// 
 #[tokio::main]
 pub async fn run(
     _com_cli          : parser::Common,
@@ -46,6 +83,13 @@ pub async fn run(
     //    .build()
     //    .unwrap();
 
+    // --------------------- Get random contaminating individuals. [PROTOTYPE]
+    let mut contam_ind_ids = Vec::new();
+    for _ in 0..1 {
+        let contam_sample_tag = panel.random_sample(&ped_cli.contam_pop[0]).unwrap();
+        contam_ind_ids.push(*contam_sample_tag.idx());
+    }
+
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
     let template_pedigree= io::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
@@ -69,6 +113,11 @@ pub async fn run(
             vcf,
             comparisons,
             &ped_cli.pedigree_pop,
+            ped_cli.contamination_rate[0][0] as f64 / 100.0,
+            &contam_ind_ids,
+            ped_cli.pmd_rate[0][0] as f64 / 100.0,
+            ped_cli.af_downsampling_rate,
+            ped_cli.snp_downsampling_rate,
             &genetic_map,
             ped_cli.maf,
             ped_cli.threads

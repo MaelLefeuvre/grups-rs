@@ -16,7 +16,7 @@ use std::error::Error;
 use std::collections::HashSet;
 use std::io::{BufReader, BufRead};
 
-use log::{error, warn, info, debug, trace};
+use log::{error, warn, info, debug};
 use std::process;
 
 

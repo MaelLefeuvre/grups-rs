@@ -1,10 +1,10 @@
 use pedigree_sims::io;
 use pwd_from_stdin::genome::SNPCoord;
-use std::path::{PathBuf};
+use std::path::{PathBuf, Path};
 use std::error::Error;
 
 use std::fs::File;
-use fst::{IntoStreamer, Map, MapBuilder};
+use fst::{IntoStreamer, Map, MapBuilder, SetBuilder, Set};
 //use fst::Streamer;
 use fst::automaton::{Automaton, Str};
 //use fst::automaton::Subsequence;
@@ -13,6 +13,8 @@ use fst::automaton::{Automaton, Str};
 use std::rc::Rc;
 use std::collections::BTreeSet;
 // [POP][SAMPLES][Nucleotide]
+
+use tokio::io::AsyncBufReadExt;
 
 #[derive(Clone, Debug)]
 pub struct VCFCoord {
@@ -217,6 +219,93 @@ async fn _serialize(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+async fn vcf_fst_index(vcf: &Path, threads: usize) -> Result<(), Box<dyn Error>> {
+    let wtr = std::io::BufWriter::new(File::create("tests/test-data/fst/g1k-set.fst")?);
+
+    let mut build= SetBuilder::new(wtr)?;
+
+    // ----------------------- Start a reader.
+    let mut reader = io::VCFAsyncReader::new(vcf, threads).await?;
+
+    // ----------------------- Extract Samples
+    let samples = reader.samples();
+    let samples = &samples[9..];
+    // ----------------------- Convert to struct to keep id.
+    let mut struct_samples = Vec::new();
+    for (i, sample) in samples.iter().enumerate(){
+        let sample = io::SampleTag::new(sample, i);
+        struct_samples.push(sample);
+    }
+
+    // ----------------------- Sort
+    struct_samples.sort();
+
+    // ----------------------- Read VCF
+    let mut previous_coordinate = Vec::new();
+
+    let (mut buf, mut genotypes) = (Vec::new(), Vec::new());
+
+    let mut i = 0;
+    'line: while reader.has_data_left().await? {
+
+        // ---------------------------- Get current chromosome and position.
+        let chr_bytes = reader.source.read_until(b'\t', &mut buf).await?; // 1
+        buf.pop(); buf.push(b' ');
+        let pos_bytes = reader.source.read_until(b'\t', &mut buf).await?; // 2
+        buf.pop(); buf.push(b' ');
+        for _ in 0..(10-pos_bytes) {                 // Add 9 leading zeroes.
+            buf.insert(chr_bytes, b'0')   
+        }
+
+        // Ensure we're not inserting duplicate lines.
+        if buf == previous_coordinate {
+            let mut dummy_buf = Vec::new();
+            reader.source.read_until(b'\n', &mut dummy_buf).await?;
+            continue 'line
+        }
+        previous_coordinate = buf.clone();
+
+        for _ in 3..10 {
+            reader.source.read_until(b'\t', &mut Vec::new()).await?;
+        }            
+        reader.source.read_until(b'\n', &mut genotypes).await?;
+
+        if i % 50000 == 0 {
+            println!("{i: >9} {:?}",std::str::from_utf8(&buf)?);
+        }
+        i+= 1;
+        unsafe{
+            for sample in struct_samples.iter() {
+
+                // Extract genotype info.
+                let geno_idx=sample.idx()*4;
+                let genotype = genotypes[geno_idx..geno_idx+3].to_owned();
+                let haplo1 = genotypes[geno_idx];
+                let haplo2 = genotypes[geno_idx+2];
+                
+
+                // Complete value to insert.
+                let mut key = buf.clone();
+                key.append(sample.id().clone().as_mut_vec());  // UNSAFE: add sampleID
+                key.push(b' ');
+                key.push(haplo1);                              // Add genotypes
+                key.push(haplo2);                              // Add genotypes
+
+                //println!("{}", std::str::from_utf8(&key)?);
+
+                build.insert(key).unwrap();
+
+
+            }
+        }
+        genotypes.clear();
+        buf.clear();
+    }
+    build.finish()?;
+    Ok(())
+}
+
+
 //fn _sort_vcf_map(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
 //
 //    let wtr = std::io::BufWriter::new(File::create("tests/test-data/fst/g1k-map.fst")?);
@@ -290,20 +379,24 @@ async fn _serialize(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
 //    Ok(())
 //}
 
-fn main() {
+use tokio;
 
-    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-50k-filtered/");
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+async fn main() -> Result<(), Box<dyn Error>> {
+
+    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-EUR-AFR-filtered");
+    //let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-50k-filtered/");
     println!("Fetching input VCF files in {}", &data_dir.to_str().unwrap());
     let mut input_vcf_paths = io::get_input_vcfs(&data_dir).unwrap();
     input_vcf_paths.sort();
 
 
     let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
-    //let _panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).await?;
+    let panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).await?;
 
-    //for pop in panel.samples.into_keys(){
-    //    println!("{}", pop); 
-    //}
+    for pop in panel.samples.into_keys(){
+        println!("{}", pop); 
+    }
 
 
 
@@ -315,6 +408,7 @@ fn main() {
     // FST Strategy
     println!("Generating FST index...");
     //sort_vcf_map(&input_vcf_paths, &tpool).unwrap();
+    //vcf_fst_index(&input_vcf_paths[0], 4).await?;
     println!("Done!");
 
     //// Memory Map strategy.
@@ -324,27 +418,34 @@ fn main() {
 
     //// In RAM Strategy
     println!("Reading in memory.");
-    let mut file_handle = File::open("tests/test-data/fst/g1k-map.fst").unwrap();
+    let mut file_handle = File::open("tests/test-data/fst/g1k-set.fst").unwrap();
     let mut bytes = vec![];
     std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
-    let map = Map::new(bytes).unwrap();
+    //let map = Map::new(bytes).unwrap();
+
+    let set = Set::new(bytes).unwrap();
 
 
     let samples = ["HG01067", "NA20885", "HG00267", "HG00236", "NA20356", "NA19346"];
+    let samples =  ["HG00096", "HG00264", "HG01618", "HG01920"]; //EUR + AFR
 
     for sample in samples.iter() {
         println!("Searching {sample}");
+        //000061543
+        //000030524
         let regex = format!("1 000055164 {sample}");
         //let matcher = Subsequence::new(&regex);
         let matcher = Str::new(&regex)
             .starts_with();
             //.intersection(Subsequence::new(&sample));
-        let stream = map.search(&matcher).into_stream();
+        let stream = set.search(&matcher).into_stream();
 
         println!("  - Populating vector");
         //let mut kvs = vec![];
+        let kvs = stream.into_strs().unwrap();
+        //let stream = map.search(&matcher).into_stream();
+        //let kvs = stream.into_str_vec().unwrap();
         
-        let kvs = stream.into_str_vec().unwrap();
         println!("{kvs:?}");
         //while let Some((k, v)) = stream.next() {
         //    println!("{:?} {}", k, v);
@@ -355,4 +456,6 @@ fn main() {
         //}
         //println!("{kvs:?}\n");
     }
+
+    Ok(())
 }

@@ -192,12 +192,12 @@ pub struct PwdFromStdin {
 #[derive(Args, Debug, Serialize)]
 pub struct PedigreeSims {
     /// Proportion of SNPs to keep at true frequency
-    #[clap(short='d', long, required(false), default_value("1.0"))]
-    pub downsample_rate: f64,
+    #[clap(short='d', long, default_value("0.0"))]
+    pub af_downsampling_rate: f64,
 
     /// Proportion of filtered SNP positions to include in the analysis
-    #[clap(short='D', long, required(false), default_value("1.0"))]
-    pub ds_rate_num_snps: f64,
+    #[clap(short='D', long, default_value("0.0"))]
+    pub snp_downsampling_rate: f64,
 
     /// Contamination rates (or rate ranges) for each desired scenario. 
     /// 
@@ -209,7 +209,7 @@ pub struct PedigreeSims {
     /// 
     /// Format: FLOAT,FLOAT or FLOAT,FLOAT/FLOAT,FLOAT ... or FLOAT-FLOAT,FLOAT-FLOAT/FLOAT-FLOAT,FLOAT-FLOAT ...
     /// Default_values: ['FromPileup', 'FromPileup']
-    #[clap(short='U', long, required(false), multiple_values(true), parse(try_from_str=parse_user_range))]
+    #[clap(short='U', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_user_range))]
     pub pmd_rate : Vec<Vec<u8>>,
 
     /// Mean sequencing depths (or depth ranges) for each desired scenario. 
@@ -253,7 +253,7 @@ pub struct PedigreeSims {
     /// Superpopulation with which to contaminate pedigree simulations.
     /// 
     /// Format: STR, STR
-    #[clap(short='C', long, multiple_values(true), max_values(2), default_values(&["EUR","EUR"]))]
+    #[clap(short='C', long, multiple_values(true), max_values(2), default_values(&["AFR","AFR"]))]
     pub contam_pop: Vec<String>,
 
     ///Number of random individual genomes with which to contaminate pedigree simulations.

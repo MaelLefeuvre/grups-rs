@@ -1414,6 +1414,7 @@ dependencies = [
  "pedigree_sims",
  "pwd_from_stdin",
  "rust-htslib",
+ "tokio",
 ]
 
 [[package]]

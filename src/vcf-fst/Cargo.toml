@@ -13,3 +13,4 @@
   pedigree_sims  = {path = "../pedigree_sims" }
   logger         = {path ="../logger"}
   parser         = {path ="../parser"}
+  tokio          = { version = "1.17.0", features = ["full"] }

@@ -1,6 +1,6 @@
 use std::{collections::{BTreeMap, HashSet, HashMap}, path::PathBuf, error::Error};
 use crate::io::{SampleTag, VCFReader, VCFAsyncReader, VCFPanelReader};
-use log::{info, debug, trace};
+use log::{info, trace};
 use pwd_from_stdin::genome::{SNPCoord, Genome, GeneticMap, Chromosome};
 use rand::Rng;
 use rand::seq::SliceRandom;
@@ -488,7 +488,7 @@ impl Default for Pedigree {
     }
 }
 
-pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_vcf_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
+pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_vcf_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, contam_rate: f64, contam_ind_ids: &Vec<usize>, seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
 
     // Keep track of the last typed SNP's position for each comparison.
     let mut previous_positions = HashMap::new();
@@ -496,6 +496,9 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
         previous_positions.insert(comparison.get_pair().to_owned(), 0);
 
     }
+
+    let mut rng = rand::thread_rng();
+
 
     let mut i = 0;
     let mut vcf_reader = VCFAsyncReader::new(input_vcf_path.as_path(), threads).await?;
@@ -512,6 +515,7 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
 
         let mut pop_af: Option<f64> = None;
         let mut cont_af: Option<f64> = None;
+        //let mut downsample_af = false;
         let mut genotypes_filled: bool = false;
         'comparison: for comparison in comparisons.get(){
             // Check if the current position is a valid candidate. Skip if not.
@@ -567,8 +571,17 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
                         None => panic!("Empty population allele frequency!")
                     }
 
+                    ////Check if downsampling should be performed.
+                    //if rng.gen::<f64>() < downsample_rate {
+                    //    downsample_af = true;
+                    //    pop_af = Some(0.0)
+                    //}
+
                     vcf_reader.fill_genotypes().await?;
                     genotypes_filled = true;
+
+                    // Compute contaminating pop allele frequency
+                    cont_af = Some(vcf_reader.compute_local_cont_af(contam_ind_ids)?);
                 }
 
                 // Compute the interval between current and previous position, search trough the genetic map interval tree,
@@ -590,9 +603,17 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
                 let pedigree_vec = pedigrees.get_mut(&comparison_label).unwrap();
                 for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
                 
-                    // Update founder alleles.
+                    // Perform SNP downsampling if necessary
+                    if rng.gen::<f64>() < snp_downsampling_rate {
+                        continue 'comparison
+                    }
+
+                    // Update founder alleles. Perform Allele Frequency downsampling if necessary.
                     for mut founder in pedigree.founders_mut() {
-                        founder.alleles = vcf_reader.get_alleles2(founder.get_tag().unwrap().idx())?;
+                        founder.alleles = match rng.gen::<f64>() < af_downsampling_rate { 
+                        false => vcf_reader.get_alleles2(founder.get_tag().unwrap().idx())?,
+                        true  => Some([0, 0]),
+                        };
                     }
                 
                     //Compute offspring genomes
@@ -602,7 +623,7 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
                 
                     // Compare genomes.
                     for comparison in &mut pedigree.comparisons {
-                        comparison.compare_alleles(0.0, 0.0, 0.0);
+                        comparison.compare_alleles(contam_rate, cont_af.unwrap(), seq_error_rate);
                     }
                 
                     // Clear genotypes before the next line!
@@ -624,7 +645,6 @@ pub fn compute_results(pedigrees: &Vec<Pedigree>, comparison: &pwd_from_stdin::c
     let mut avg_simulated_pwd = HashMap::new();
     for pedigree in pedigrees.iter() {
         for comparison in pedigree.comparisons.iter() {
-            //intervals.entry(chr).or_insert_with(Vec::new).push(interval);
             *avg_simulated_pwd.entry(comparison.label.to_owned()).or_insert(0.0) += comparison.get_avg_pwd()
         }
     }
@@ -642,6 +662,8 @@ pub fn compute_results(pedigrees: &Vec<Pedigree>, comparison: &pwd_from_stdin::c
             most_likely_avg_pwd = avg_avg_pwd;
         }
     }
+
+    let min_z_score = if min_z_score == f64::MAX {f64::NAN} else {min_z_score};
 
     println!("{: <20} {: <20} {: >8.6} {: >8.6} {: <8.6}", comparison.get_pair(), most_likely_rel, observed_avg_pwd, most_likely_avg_pwd, min_z_score);
 }
