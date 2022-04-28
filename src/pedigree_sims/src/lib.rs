@@ -1,5 +1,5 @@
 use std::{
-    error::Error,
+    error::Error, collections::HashMap,
 };
 use log::{info, debug};
 //use rayon;
@@ -18,10 +18,8 @@ use tokio;
 pub async fn run(
     _com_cli          : parser::Common,
     ped_cli           : parser::PedigreeSims,
-    //_requested_samples: &'a [usize],
     genome            : Genome,
     comparisons       : &Comparisons,
-    //_target_positions : Option<HashSet<SNPCoord>>
 ) -> Result<(), Box<dyn Error>>
 {
 
@@ -49,32 +47,54 @@ pub async fn run(
     //    .unwrap();
 
 
+    // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
     let template_pedigree= io::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
-    let mut pedigrees = Vec::new();
-    for _ in 0..ped_cli.reps {
-        let mut new_pedigree = template_pedigree.clone();
-        new_pedigree.set_tags(&panel, &ped_cli.pedigree_pop);
-        new_pedigree.assign_offspring_strands()?;
-        pedigrees.push(new_pedigree);
+    let mut pedigrees = HashMap::new();
+    for comparison in comparisons.get() {
+        let comparison_label = comparison.get_pair();
+        pedigrees.insert(comparison_label.to_owned(), Vec::new());
+        for _ in 0..ped_cli.reps {
+            let mut new_pedigree = template_pedigree.clone();
+            new_pedigree.set_tags(&panel, &ped_cli.pedigree_pop);
+            new_pedigree.assign_offspring_strands()?;
+            pedigrees.get_mut(&comparison_label).unwrap().push(new_pedigree);
+        }
     }
 
-    // Perform pedigree simulations for each pedigree, using all chromosomes.
+    // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
     info!("Starting pedigree comparisons.");
-    for comparison in comparisons.get() {
-        comparison.get_pair();
-        for vcf in input_vcf_paths.iter() {
-            let simulations = pedigree::pedigree_simulations(&mut pedigrees, vcf, &comparison.positions, &ped_cli.pedigree_pop, &genetic_map, ped_cli.threads);
-            simulations.await?;
-        }
-        // Print pedigree simulation results.
-        for req_comparison in comparisons.get() {
-            //println!("----------------- {}", req_comparison.get_pair());
-            for (i, pedigree) in pedigrees.iter().enumerate() {
-                pedigree.print_results(i);
-            }
-        }
-        pedigree::compute_results(&pedigrees, comparison);
+    for vcf in input_vcf_paths.iter() {
+        let simulations = pedigree::pedigree_simulations(
+            &mut pedigrees, 
+            vcf,
+            comparisons,
+            &ped_cli.pedigree_pop,
+            &genetic_map,
+            ped_cli.maf,
+            ped_cli.threads
+        );
+        simulations.await?;
     }
+
+    // --------------------- Print pedigree simulation results.
+    for req_comparison in comparisons.get() {
+        let comparison_label = req_comparison.get_pair();
+        println!("--------------------- {comparison_label}");
+        let pedigree_vec = pedigrees.get_mut(&comparison_label).unwrap();
+        for (i, pedigree) in pedigree_vec.iter().enumerate() {
+            pedigree.print_results(i);
+        }
+    }
+
+    // --------------------- Compute most likely relationship for each Comparison
+    println!("----------------------------------------------------");
+    for req_comparison in comparisons.get() {
+        let comparison_label = req_comparison.get_pair();
+        let pedigree_vec = pedigrees.get_mut(&comparison_label).unwrap();
+        pedigree::compute_results(&pedigree_vec, req_comparison);
+    }
+
+
     println!("Done!");
 
     Ok(())

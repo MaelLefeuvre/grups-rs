@@ -1,6 +1,6 @@
 use std::{collections::{BTreeMap, HashSet, HashMap}, path::PathBuf, error::Error};
 use crate::io::{SampleTag, VCFReader, VCFAsyncReader, VCFPanelReader};
-use log::{info, debug};
+use log::{info, debug, trace};
 use pwd_from_stdin::genome::{SNPCoord, Genome, GeneticMap, Chromosome};
 use rand::Rng;
 use rand::seq::SliceRandom;
@@ -106,7 +106,7 @@ impl Individual {
     pub fn clear_alleles(&mut self){
         self.alleles = None
     }
-    pub fn assign_alleles(&mut self, recombination_prob: f64) -> Result<bool, Box<dyn Error>> {
+    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize) -> Result<bool, Box<dyn Error>> {
         if self.alleles != None {
             //println!("{} Genome already generated.", self.label);
             return Ok(false)
@@ -121,13 +121,13 @@ impl Individual {
 
                     //Assign parent genome if not previously generated.
                     if parent.borrow().alleles == None {
-                        parent.borrow_mut().assign_alleles(recombination_prob).unwrap();
+                        parent.borrow_mut().assign_alleles(recombination_prob, i).unwrap();
                     }
 
                     // Check if recombination occured for each parent and update counters if so.
 
                     if rng.gen::<f64>() < recombination_prob {
-                        //println!("Switch!");
+                        trace!("Cross-over occured in ped: {:<5} - ind: {}", ped_idx, self.label);
                         self.currently_recombining[i] = ! self.currently_recombining[i];
                     }
                     i+=1;
@@ -488,94 +488,134 @@ impl Default for Pedigree {
     }
 }
 
-pub async fn pedigree_simulations(pedigrees: &mut Vec<Pedigree>, input_vcf_path: &PathBuf, valid_positions: &HashSet<SNPCoord>, pop: &String, genetic_map: &GeneticMap, threads: usize) -> Result<(), Box<dyn Error>>{
-    let mut vcf_reader = VCFAsyncReader::new(input_vcf_path.as_path(), threads).await?;
-    let mut previous_position = 0;
+pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_vcf_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
+
+    // Keep track of the last typed SNP's position for each comparison.
+    let mut previous_positions = HashMap::new();
+    for comparison in comparisons.get() {
+        previous_positions.insert(comparison.get_pair().to_owned(), 0);
+
+    }
+
     let mut i = 0;
-    while vcf_reader.has_data_left().await? {
+    let mut vcf_reader = VCFAsyncReader::new(input_vcf_path.as_path(), threads).await?;
+    'line: while vcf_reader.has_data_left().await? {
 
         // Get current chromosome and position.
         let chromosome : u8  = vcf_reader.next_field().await?.parse()?; // 1
         let position   : u32 = vcf_reader.next_field().await?.parse()?; // 2
         
         if i % 50_000 == 0 {
-            debug!("{i: >9} {chromosome: >2} {position: >9}");
+            info!(" {i: >9}: [{chromosome: <2} {position: >9}]");
         }
         i+=1;
 
-        // Check if the current position is a valid candidate. Skip if not.
-        if ! valid_positions.contains(&SNPCoord{chromosome, position, reference: None, alternate: None}){
-            vcf_reader.skip_line().await?;
-            continue
-        }
-
-        // Go to INFO field.
-        vcf_reader.skip(5).await?;                                      // 6 
-        let info = vcf_reader.next_field().await?.split(';').collect::<Vec<&str>>();
-
-        // Check if Bi-Allelic and skip line if not.
-        if info.iter().any(|&field| field == "MULTI_ALLELIC") {
-            vcf_reader.skip_line().await?;
-            continue
-        }
-
-        // Get the mutation type from INFO...
-        let vtype = info.iter()
-            .find(|&&field| field.starts_with("VT=")).unwrap()
-            .split('=')
-            .collect::<Vec<&str>>()[1];
-
-        // ...and skip if this is not an snp.
-        if vtype != "SNP" {
-            vcf_reader.skip_line().await?;
-            continue
-        }
-
-        // Extract population allele frequency.
-        let pop_af = info.iter()
-            .find(|&&field| field.starts_with(&format!("{pop}_AF")))
-            .unwrap()
-            .split('=')
-            .collect::<Vec<&str>>()[1]
-            .parse::<f64>()
-            .unwrap();
-
-        // Compute the interval between current and previous position, search trough the genetic map interval tree,
-        // And compute the probability of recombination.
-        let mut interval_prob_recomb: f64 = 0.0;
-        for recombination_range in genetic_map[&chromosome].find(previous_position, position) {
-            let real_start = if previous_position < recombination_range.start {recombination_range.start} else {previous_position};
-            let real_stop  = if position          > recombination_range.stop  {recombination_range.stop } else {position         };
-
-            interval_prob_recomb += recombination_range.val.prob() * (real_stop as f64 - real_start as f64 + 1.0);
-        }
-
-        //println!("{interval_prob_recomb}");
-
-        // Parse genotype fields and start updating dynamic simulations.
-        vcf_reader.fill_genotypes().await?;
-        for pedigree in pedigrees.iter_mut() {
-
-            // Update founder alleles.
-            for mut founder in pedigree.founders_mut() {
-                founder.alleles = vcf_reader.get_alleles2(founder.get_tag().unwrap().idx())?;
+        let mut pop_af: Option<f64> = None;
+        let mut cont_af: Option<f64> = None;
+        let mut genotypes_filled: bool = false;
+        'comparison: for comparison in comparisons.get(){
+            // Check if the current position is a valid candidate. Skip if not.
+            if ! comparison.positions.contains(&SNPCoord{chromosome, position, reference: None, alternate: None}){
+                //vcf_reader.skip_line().await?;
+                continue 'comparison
             }
+            else {
+                if ! genotypes_filled {
 
-            //Compute offspring genomes
-            for mut offspring in pedigree.offsprings_mut() {
-                offspring.assign_alleles(interval_prob_recomb)?;
+                    // Go to INFO field.
+                    vcf_reader.skip(5).await?;                                      // 6 
+                    let info = vcf_reader.next_field().await?.split(';').collect::<Vec<&str>>();
+
+                    // Check if Bi-Allelic and skip line if not.
+                    if info.iter().any(|&field| field == "MULTI_ALLELIC") {
+                        vcf_reader.skip_line().await?;
+                        continue 'line
+                    }
+
+                    // Get the mutation type from INFO...
+                    let vtype = info.iter()
+                        .find(|&&field| field.starts_with("VT=")).unwrap()
+                        .split('=')
+                        .collect::<Vec<&str>>()[1];
+
+                    // ...and skip line if this is not an SNP.
+                    if vtype != "SNP" {
+                        vcf_reader.skip_line().await?;
+                        continue 'line
+                    }
+
+                    // Extract population allele frequency.
+                    pop_af = Some(
+                        info.iter()
+                            .find(|&&field| field.starts_with(&format!("{pop}_AF")))
+                            .unwrap()
+                            .split('=')
+                            .collect::<Vec<&str>>()[1]
+                            .parse::<f64>()
+                            .unwrap()
+                    );
+
+                    // Skip line if allele frequency is < maf
+                    // [WARN]: Note that {POP}_AF entries in the INFO field relate to the REF allele frequency, not MAF.
+                    //         ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
+                    match pop_af {
+                        Some(af) => if af < maf || af > (1.0-maf) {
+                            trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {af:<8.5} --maf: {maf}");
+                            vcf_reader.skip_line().await?;
+                            continue 'line
+                        },
+                        None => panic!("Empty population allele frequency!")
+                    }
+
+                    vcf_reader.fill_genotypes().await?;
+                    genotypes_filled = true;
+                }
+
+                // Compute the interval between current and previous position, search trough the genetic map interval tree,
+                // And compute the probability of recombination.
+                let comparison_label = comparison.get_pair().to_owned();
+                let previous_position = previous_positions[&comparison_label];
+                let mut interval_prob_recomb: f64 = 0.0;
+                for recombination_range in genetic_map[&chromosome].find(previous_position, position) {
+                    let real_start = if previous_position < recombination_range.start {recombination_range.start} else {previous_position};
+                    let real_stop  = if position          > recombination_range.stop  {recombination_range.stop } else {position         };
+
+                    interval_prob_recomb += recombination_range.val.prob() * (real_stop as f64 - real_start as f64 + 1.0);
+                }
+
+                trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
+
+
+                // Parse genotype fields and start updating dynamic simulations.
+                let pedigree_vec = pedigrees.get_mut(&comparison_label).unwrap();
+                for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
+                
+                    // Update founder alleles.
+                    for mut founder in pedigree.founders_mut() {
+                        founder.alleles = vcf_reader.get_alleles2(founder.get_tag().unwrap().idx())?;
+                    }
+                
+                    //Compute offspring genomes
+                    for mut offspring in pedigree.offsprings_mut() {
+                        offspring.assign_alleles(interval_prob_recomb, i)?;
+                    }
+                
+                    // Compare genomes.
+                    for comparison in &mut pedigree.comparisons {
+                        comparison.compare_alleles(0.0, 0.0, 0.0);
+                    }
+                
+                    // Clear genotypes before the next line!
+                    pedigree.clear_alleles();
+                }
+                //Update last typed position for this comparison.
+                *previous_positions.get_mut(&comparison_label).unwrap() = position;
             }
-
-            // Compare genomes.
-            for comparison in &mut pedigree.comparisons {
-                comparison.compare_alleles(0.0, 0.0, 0.0);
-            }
-
-            // Clear genotypes before the next line!
-            pedigree.clear_alleles();
         }
-    previous_position = position;
-
+        // Reset line if we never parsed genotypes.
+        if ! genotypes_filled {
+            vcf_reader.skip_line().await?;
+        }
     }
     Ok(())
 }

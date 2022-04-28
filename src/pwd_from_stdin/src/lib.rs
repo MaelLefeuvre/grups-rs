@@ -94,7 +94,6 @@ pub fn run<'a>(
             Ok(line) => line,
             Err(e) => {error!("Error: {}", e); process::exit(1);},
         };
-        trace!("{:?}", &line);
 
         // ----------------------- Check if line should be skipped.
         if ! valid_chromosomes.contains(&line.coordinate.chromosome) {
