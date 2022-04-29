@@ -488,6 +488,12 @@ impl Default for Pedigree {
     }
 }
 
+
+trait GenotypeParser {
+    fn next_field(&mut self) -> Result<&str, Box<dyn Error>>;
+}
+
+
 pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_vcf_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, contam_rate: f64, contam_ind_ids: &Vec<usize>, seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
 
     // Keep track of the last typed SNP's position for each comparison.

@@ -1,13 +1,15 @@
+use crate::pedigree::*;
+use pwd_from_stdin::genome::{SNPCoord, Genome};
+
 use std::cell::RefMut;
-//use flate2::read::GzDecoder;
 use std::io::{Read, BufRead, BufReader};
 use std::error::Error;
 use std::path::{PathBuf, Path};
 use std::fs::File;
 use std::collections::{HashMap, HashSet};
 use log::{warn, info, debug};
-use pwd_from_stdin::genome::{SNPCoord, Genome};
 use rand::seq::SliceRandom;
+use std::collections::BTreeMap;
 
 use noodles_bgzf;
 use tokio::io::{AsyncBufRead};
@@ -16,7 +18,7 @@ use std::pin::Pin;
 
 #[derive(Debug, Clone)]
 pub struct SampleTag {
-    id: String,
+    id : String,
     idx: usize,
 }
 
@@ -53,11 +55,15 @@ impl std::cmp::PartialOrd for SampleTag {
     }
 }
 
+// TODO: Convert this into named tuple with deref.
+#[derive(Debug, Clone)]
 pub struct VCFPanelReader{
     pub samples: HashMap<String, Vec<SampleTag>>,
 }
 
 impl VCFPanelReader {
+
+    // TODO: Convert this into ::from()
     pub async fn new(panel_path: &Path, vcf: &Path) -> std::io::Result<VCFPanelReader> {
         let source = BufReader::new(File::open(panel_path)?);
         let reader = VCFReader::new(vcf)?;
@@ -68,6 +74,24 @@ impl VCFPanelReader {
 
     pub fn random_sample(&self, pop: &String) -> Option<&SampleTag> {
         self.samples[pop].choose(&mut rand::thread_rng())
+    }
+
+    pub fn subset_panel(&mut self, subset_pops: &Vec<&str>) {
+        self.samples.retain(|key,_| subset_pops.contains(&key.as_str()));
+    }
+
+    pub fn into_transposed_btreemap(&self) -> BTreeMap<SampleTag, String> {
+        let mut transposed_data = BTreeMap::new();
+        for (key, values) in self.samples.iter(){
+            for value in values.into_iter() {
+                transposed_data.insert(value.clone(), key.clone());
+            }
+        }
+        transposed_data
+    }
+
+    pub fn sort_panel(&mut self){
+        self.samples.iter_mut().for_each(|(_, tag_vec)| tag_vec.sort());
     }
 
     pub fn parse_header(source: BufReader<File>, header: &[String]) -> std::io::Result<HashMap<String, Vec<SampleTag>>> {
@@ -189,18 +213,11 @@ impl VCFAsyncReader {
 
     async fn get_asyncreader(path: &Path, threads: usize) -> std::io::Result<Pin<Box<dyn tokio::io::AsyncBufRead>>> {
         use tokio::fs::File;
-
-        //let builder = noodles_bgzf::AsyncReader::builder(File::open(path).await?).set_worker_count(threads);
-        //let source = builder.build();
-
-
-        
         let source: Pin<Box<dyn tokio::io::AsyncBufRead>> = match path.extension().unwrap().to_str(){
             Some("vcf") => Box::pin(Box::new(tokio::io::BufReader::new(File::open(path).await?))),
             Some("gz")  => Box::pin(Box::new(noodles_bgzf::AsyncReader::builder(File::open(path).await?).set_worker_count(threads).build())),
             _           => panic!()
         };
-
         Ok(source)
     }
 
@@ -219,6 +236,7 @@ impl VCFAsyncReader {
         panic!();
     }
 }
+
 
 pub struct VCFReader<'a> {
     pub source: Box<BufReader<Box<dyn Read + 'a>>>,
@@ -314,7 +332,6 @@ impl<'a> VCFReader<'a> {
                 continue
             }
 
-
             self.skip(5)?;                                      // 6 
             let info = self.next_field()?.split(';').collect::<Vec<&str>>();
 
@@ -341,15 +358,11 @@ impl<'a> VCFReader<'a> {
                 _ => None
             };
 
-
             self.fill_genotypes()?;
             for founder in samples.iter_mut() {
                 let alleles = self.get_alleles(founder.get_tag().unwrap().idx())?;
                 founder.add_locus(&chromosome, position, alleles, pop_af.unwrap())?;
             }
-
-
-
         }
 
         for sample in samples{
@@ -359,34 +372,17 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-
-
-    //pub async fn lines(self) -> Lines<Box<dyn BufRead + 'a>> {
-    //    self.source.lines().await?
-    //}
-
     pub fn samples(&self) -> Vec<String> {
         self.samples.clone()
     }
 
     fn get_reader(path: &Path) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
-        //let source = noodles_bgzf::Reader::new(File::open(path)?);
-        //let source = Box::new(source);
-        //Ok(Box::new(BufReader::new(source)))
-
-
-        //Ok(source);
-        //let source = Box::new(AsyncBufRead::)
-         
-
         let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
             Some("vcf") => Box::new(File::open(path)?),
             Some("gz")  => Box::new(noodles_bgzf::Reader::new(File::open(path)?)),
-            //Some("gz")  => Box::new(bgzf::Reader::from_path(path).unwrap()),
             _           => panic!()
         };
         Ok(Box::new(BufReader::new(source)))
-
     }
 
     fn parse_samples_id(reader: &mut Box<BufReader<Box<dyn Read>>>) -> std::io::Result<Vec<String>>{
@@ -423,7 +419,6 @@ impl<'a> VCFReader<'a> {
 
 }
 
-use crate::pedigree::*;
 
 pub fn pedigree_parser<'a> (path: &'a Path, genome: &'a Genome) -> std::io::Result<Pedigree> {
     #[derive(Debug)]

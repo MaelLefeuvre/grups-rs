@@ -1,401 +1,230 @@
 use pedigree_sims::io;
-use pwd_from_stdin::genome::SNPCoord;
 use std::path::{PathBuf, Path};
 use std::error::Error;
 
 use std::fs::File;
-use fst::{IntoStreamer, Map, MapBuilder, SetBuilder, Set};
+use fst::{IntoStreamer, SetBuilder, Set};
 //use fst::Streamer;
 use fst::automaton::{Automaton, Str};
 //use fst::automaton::Subsequence;
 //use memmap::Mmap;
 
-use std::rc::Rc;
-use std::collections::BTreeSet;
-// [POP][SAMPLES][Nucleotide]
+use std::collections::BTreeMap;
 
 use tokio::io::AsyncBufReadExt;
+use tokio;
 
-#[derive(Clone, Debug)]
-pub struct VCFCoord {
-    coordinate: SNPCoord,
-    _af: f32,
-}
+pub struct VCFIndexer{
+    reader              : io::VCFAsyncReader,                   // VCFReader.
+    builder             : SetBuilder<std::io::BufWriter<File>>, // FST SetBuilder
+    //samples             : Vec<io::SampleTag>,                   // Sorter vector of sampletags, sorted across Id.
+    samples             : BTreeMap<io::SampleTag, String>,
+    counter             : usize,                                // Line counter.
+    coordinate_buffer   : Vec<u8>,                              // Coordinate of the current line
+    previous_coordinate : Vec<u8>,                              // Coordinate of the previous line
+    genotypes_buffer    : Vec<u8>,                              // Genotypes  of the current line.
+    keys                : Vec<Vec<u8>>,                         // Values that should be inserted into the set builder.
+}      
 
-impl VCFCoord {
-    pub fn new(chromosome: u8, position: u32, reference: Option<char>, alternate: Option<char>, af: f32) -> VCFCoord {
-        let coordinate = SNPCoord{chromosome, position, reference, alternate };
-        VCFCoord{coordinate, _af: af}
-    }
-}
-
-impl std::borrow::Borrow<u32> for VCFCoord {
-    fn borrow(&self) -> &u32 {
-        self.coordinate.position.borrow()
-    }
-}
-
-
-impl PartialEq for VCFCoord {
-    fn eq(&self, other: &VCFCoord) -> bool {
-        self.coordinate == other.coordinate
-    }
-}
-
-impl Eq for VCFCoord {}
-
-impl std::cmp::Ord for VCFCoord {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.coordinate).cmp(&(other.coordinate))
-    }
-}
-
-impl PartialOrd for VCFCoord {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Allele {
-    coordinate: Rc<VCFCoord>,
-    _haplos: (u8,u8)
-}
-
-impl Allele {
-    pub fn new(coordinate: &Rc<VCFCoord>, haplos: (u8,u8)) -> Allele {
-        Allele {coordinate: Rc::clone(coordinate), _haplos: haplos}
-    }
-}
-
-impl PartialEq for Allele {
-    fn eq(&self, other: &Allele) -> bool {
-        self.coordinate == other.coordinate
-    }
-}
-
-impl Eq for Allele {}
-
-impl Ord for Allele {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.coordinate).cmp(&(other.coordinate))
-    }
-}
-
-impl PartialOrd for Allele {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct VCFSample {
-    id: String,
-    idx: usize,
-    pub genome: BTreeSet<Allele>
-}
-
-impl VCFSample {
-    pub fn new(id: String, idx: usize) -> VCFSample {
-        VCFSample{ id, idx, genome: BTreeSet::new()}
+impl VCFIndexer {
+    pub async fn new(vcf: &Path, output_file: &str, samples: BTreeMap<io::SampleTag, String>, threads: usize) -> Result<Self, Box<dyn Error>> {
+        // ----------------------- Initialize Writer
+        let writer  = std::io::BufWriter::new(File::create(output_file)?);
+        let builder =  SetBuilder::new(writer)?;
+        // ----------------------- Initialize Reader.
+        let reader  = io::VCFAsyncReader::new(vcf, threads).await?;
+        // ----------------------- Preprocess samples ID and Index.
+        //let samples = Self::parse_samples(&reader);
+        Ok(Self {
+            reader,
+            builder,
+            samples,
+            counter            : 0,
+            coordinate_buffer  : Vec::new(),
+            previous_coordinate: Vec::new(),
+            genotypes_buffer   : Vec::new(),
+            keys               : Vec::new(),
+        })
     }
 
-    pub fn insert_allele(&mut self, coordinate:  &Rc<VCFCoord>, haplos: (u8,u8)) {
-        self.genome.insert(Allele::new(coordinate, haplos));
+    pub async unsafe fn build_fst(&mut self) -> Result<(), Box<dyn Error>> {
+        'line: while self.reader.has_data_left().await? {
+
+            self.fill_current_position_buffer().await?; // Parse the current_position
+            if self.insert_previous_keys().await? {     // Check if the previous line had the same coordinates. Do NOT insert keys of the previous line if it is the case.
+                continue 'line
+            }
+            self.save_previous_line();                  // Save the current coordinate for the next iteration
+    
+            self.skip_fields(7).await?;                 // Skip INFO field
+            self.fill_genotypes_buffer().await?;      
+            self.print_progress(50000)?;              
+            self.parse_keys()?;
+            //println!("{:?}", self.keys);
+            self.genotypes_buffer.clear();
+            self.coordinate_buffer.clear();
+        }
+
+        self.insert_previous_keys().await?;
+        Ok(())
     }
 
-    pub fn id(&self) -> &String {
-        &self.id
-    }
-    pub fn idx(&self) -> &usize {
-        &self.idx
-    }
-}
-
-impl<'a> std::borrow::Borrow<String> for VCFSample {
-    fn borrow(&self) -> &String {
-        self.id.borrow()
-    }
-}
-
-impl<'a> std::borrow::Borrow<usize> for VCFSample {
-    fn borrow(&self) -> &usize {
-        self.idx.borrow()
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct VCF {
-    pub coordinates: BTreeSet<Rc<VCFCoord>>,
-    pub samples : Vec<VCFSample>
-}
-
-impl VCF {
-
-    pub fn insert_coordinate(&mut self, chromosome: u8, position: u32, reference: char, alternate: char, af: f32) -> Rc<VCFCoord> {
-        let coordinate = Rc::new(VCFCoord::new(chromosome, position, Some(reference), Some(alternate), af));
-        let rcx = Rc::clone(&coordinate);
-
-        self.coordinates.insert(coordinate);
-        rcx
-
+    pub fn finish_build(self) -> Result<(), Box<dyn Error>> {
+        self.builder.finish()?;
+        Ok(())
     }
 
-    pub fn insert_sample(&mut self, id: String, idx: usize) {
-        let sample = VCFSample::new(id, idx);
-        self.samples.push(sample);
-    }
-}
-
-async fn _serialize(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
-
-    for vcf in vcf_paths {
-        println!("{:?}", vcf);
-
-
-        let mut vcf_hash = VCF::default();
-
-        //Start a reader.
-        let mut reader = io::VCFAsyncReader::new(vcf, 1).await?;
-
-        //Extract samples
+    fn parse_samples(reader: &io::VCFAsyncReader) -> Vec<io::SampleTag> {
+        // Extract and sort samples 
         let samples = reader.samples();
         let samples = &samples[9..];
-
-        
-        //Convert to struct to keep id.
+        // ----------------------- Convert to struct to keep id.
         let mut struct_samples = Vec::new();
         for (i, sample) in samples.iter().enumerate(){
             let sample = io::SampleTag::new(sample, i);
             struct_samples.push(sample);
         }
-
-        //Sort samples
+        // ----------------------- Sort samples by ID.
         struct_samples.sort();
-
-        for sample in struct_samples.iter() {
-            vcf_hash.insert_sample(sample.id().clone(), *sample.idx())
-        }
-
-        let mut i = 0;
-        while reader.has_data_left().await? {
-            let chr: u8  = reader.next_field().await?.parse()?;
-            reader.clear_buffer();
-            let pos: u32 = reader.next_field().await?.parse()?;
-            reader.clear_buffer();
-            reader.skip(1).await?;
-            let reference: char = reader.next_field().await?.parse()?;
-            reader.clear_buffer();
-            let alternate: char = reader.next_field().await?.parse()?;
-            reader.clear_buffer();
-
-            let coord = vcf_hash.insert_coordinate(chr, pos, reference, alternate, 0.0);
-
-            //let coord: &Rc<VCFCoord> = vcf_hash.coordinates.get().unwrap();
-
-            reader.fill_genotypes().await?;
-            for sample in vcf_hash.samples.iter_mut() {
-                let haplos = reader.get_alleles(sample.idx())?;
-                //sample.insert_allele(&Rc::clone(coord), haplos);
-                sample.genome.insert(Allele::new(&Rc::clone(&coord), haplos));
-                //if i % 500000 == 0 {
-                //    println!("{:?}", sample);
-                    //println!("{} {: >2} {: >9} {} {}",
-                    //    sample.idx(), chr, pos, haplos.0, haplos.1
-                    //);
-                //}
-            }
-            
-
-            reader.clear_buffer();
-            if i % 1000 == 0 {
-                println!("{}", i);
-            }
-            i+=1;
-        }
-
-
-    }
-    Ok(())
-}
-
-async fn vcf_fst_index(vcf: &Path, threads: usize) -> Result<(), Box<dyn Error>> {
-    let wtr = std::io::BufWriter::new(File::create("tests/test-data/fst/g1k-set.fst")?);
-
-    let mut build= SetBuilder::new(wtr)?;
-
-    // ----------------------- Start a reader.
-    let mut reader = io::VCFAsyncReader::new(vcf, threads).await?;
-
-    // ----------------------- Extract Samples
-    let samples = reader.samples();
-    let samples = &samples[9..];
-    // ----------------------- Convert to struct to keep id.
-    let mut struct_samples = Vec::new();
-    for (i, sample) in samples.iter().enumerate(){
-        let sample = io::SampleTag::new(sample, i);
-        struct_samples.push(sample);
+        struct_samples
     }
 
-    // ----------------------- Sort
-    struct_samples.sort();
-
-    // ----------------------- Read VCF
-    let mut previous_coordinate = Vec::new();
-
-    let (mut buf, mut genotypes) = (Vec::new(), Vec::new());
-
-    let mut i = 0;
-    'line: while reader.has_data_left().await? {
-
+    async fn fill_current_position_buffer(&mut self) -> Result<(), Box<dyn Error>> {
         // ---------------------------- Get current chromosome and position.
-        let chr_bytes = reader.source.read_until(b'\t', &mut buf).await?; // 1
-        buf.pop(); buf.push(b' ');
-        let pos_bytes = reader.source.read_until(b'\t', &mut buf).await?; // 2
-        buf.pop(); buf.push(b' ');
-        for _ in 0..(10-pos_bytes) {                 // Add 9 leading zeroes.
-            buf.insert(chr_bytes, b'0')   
+        let chr_bytes = self.reader.source.read_until(b'\t', &mut self.coordinate_buffer).await?; // Add chromosome
+        self.add_field_separator(b' ').await?;
+        let pos_bytes = self.reader.source.read_until(b'\t', &mut self.coordinate_buffer).await?; // Add position.
+        self.add_field_separator(b' ').await?;
+        for _ in 0..(10-pos_bytes) {                 // Add 9 leading zeroes for padding (this ensure our key is sorted.)
+            self.coordinate_buffer.insert(chr_bytes, b'0')   
         }
-
-        // Ensure we're not inserting duplicate lines.
-        if buf == previous_coordinate {
-            let mut dummy_buf = Vec::new();
-            reader.source.read_until(b'\n', &mut dummy_buf).await?;
-            continue 'line
-        }
-        previous_coordinate = buf.clone();
-
-        for _ in 3..10 {
-            reader.source.read_until(b'\t', &mut Vec::new()).await?;
-        }            
-        reader.source.read_until(b'\n', &mut genotypes).await?;
-
-        if i % 50000 == 0 {
-            println!("{i: >9} {:?}",std::str::from_utf8(&buf)?);
-        }
-        i+= 1;
-        unsafe{
-            for sample in struct_samples.iter() {
-
-                // Extract genotype info.
-                let geno_idx=sample.idx()*4;
-                let genotype = genotypes[geno_idx..geno_idx+3].to_owned();
-                let haplo1 = genotypes[geno_idx];
-                let haplo2 = genotypes[geno_idx+2];
-                
-
-                // Complete value to insert.
-                let mut key = buf.clone();
-                key.append(sample.id().clone().as_mut_vec());  // UNSAFE: add sampleID
-                key.push(b' ');
-                key.push(haplo1);                              // Add genotypes
-                key.push(haplo2);                              // Add genotypes
-
-                //println!("{}", std::str::from_utf8(&key)?);
-
-                build.insert(key).unwrap();
-
-
-            }
-        }
-        genotypes.clear();
-        buf.clear();
+        Ok(())
     }
-    build.finish()?;
-    Ok(())
+
+    async fn add_field_separator(&mut self, field: u8) -> Result<(), Box<dyn Error>> {
+        self.coordinate_buffer.pop();
+        self.coordinate_buffer.push(field);
+        Ok(())
+    }
+    
+    fn duplicate_line(&self) -> bool {
+        self.coordinate_buffer == self.previous_coordinate
+    }
+
+
+    async fn insert_previous_keys(&mut self) -> Result<bool, Box<dyn Error>> {
+        if self.duplicate_line() {
+            println!("Duplicate line at : [{}]. Skipping.", std::str::from_utf8(&self.previous_coordinate)?);
+            self.clear_buffers().await?;     // If so, skip this lines, and don't insert the keys of the previous line.
+            self.coordinate_buffer.clear();
+            Ok(true)
+        } else {
+            self.insert_keys().await?;       // If the line is different, we can then insert the keys of the previous line.
+            Ok(false)
+        }
+    }
+
+    async fn clear_buffers(&mut self) -> Result<(), Box<dyn Error>> {
+        self.reader.source.read_until(b'\n', &mut Vec::new()).await?;
+        self.keys.clear();
+        Ok(())
+    }
+
+    async fn insert_keys(&mut self) -> Result<(), Box<dyn Error>> {
+        for key in self.keys.iter() {
+            self.builder.insert(key)?;
+        }
+        self.keys.clear();
+        Ok(())
+    }
+
+    fn save_previous_line(&mut self) {
+        self.previous_coordinate = self.coordinate_buffer.clone();
+    }
+
+    async fn skip_fields(&mut self, n: usize) -> Result<(), Box<dyn Error>> {
+        for _ in 0..n {
+            self.reader.source.read_until(b'\t', &mut Vec::new()).await?;
+        }    
+        Ok(())
+    }
+
+    async fn fill_genotypes_buffer(&mut self) -> Result<(), Box<dyn Error>> {   
+        self.reader.source.read_until(b'\n', &mut self.genotypes_buffer).await?;
+        Ok(())
+    }
+
+    fn print_progress(&mut self, every_n: usize) -> Result<(), Box<dyn Error>> {
+        if self.counter % every_n == 0 {
+            println!("{: >9} {:?}", self.counter, std::str::from_utf8(&self.coordinate_buffer)?);
+        }
+        self.counter+= 1;
+        Ok(())
+    }
+
+    unsafe fn parse_keys(&mut self) -> Result<(), Box<dyn Error>> {
+        for (sample_tag, sample_pop) in self.samples.iter() {            
+
+            // Complete value to insert.
+            let mut key = self.coordinate_buffer.clone();
+            key.append(sample_tag.id().clone().as_mut_vec());  // UNSAFE: add sampleID
+            key.push(b' ');
+
+            // Extract genotype info for thesample and add it to the key.
+            let geno_idx = sample_tag.idx()*4;                // x4, since each field+separator is four characters long. (e.g.: '0|0 ')
+            key.push(self.genotypes_buffer[geno_idx  ]); // haplo1
+            key.push(self.genotypes_buffer[geno_idx+2]); // haplo2
+
+            //println!("{}", std::str::from_utf8(&key)?);
+            self.keys.push(key);
+        }
+        Ok(())
+    }
 }
 
 
-//fn _sort_vcf_map(vcf_paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
-//
-//    let wtr = std::io::BufWriter::new(File::create("tests/test-data/fst/g1k-map.fst")?);
-//    let mut build= MapBuilder::new(wtr)?;
-//
-//    for vcf in vcf_paths {
-//        println!("{:?}", vcf);
-//
-//        //Start a reader.
-//        let mut reader = io::VCFReader::new(vcf)?;
-//
-//        //Extract samples
-//        let samples = reader.samples();
-//        let samples = &samples[9..];
-//
-//        //Convert to struct to keep id.
-//        let mut struct_samples = Vec::new();
-//        for (i, sample) in samples.iter().enumerate(){
-//            let sample = io::SampleTag::new(sample, i);
-//            struct_samples.push(sample);
-//        }
-//
-//        //Sort
-//        struct_samples.sort();
-//
-//        //Read vcf
-//        let (mut buf, mut genotypes) = (Vec::new(), Vec::new());
-//        //for (i, line) in reader.lines().enumerate() {
-//            let mut i = 0;
-//        loop {
-//            let chr_bytes = reader.source.read_until(b'\t', &mut buf)?; // 1
-//            if chr_bytes == 0 { break };
-//            buf.pop(); buf.push(b' ');
-//            let pos_bytes = reader.source.read_until(b'\t', &mut buf)?; // 2
-//            buf.pop(); buf.push(b' ');
-//            for _ in 0..(10-pos_bytes) {                 // Add 9 leading zeroes.
-//                buf.insert(chr_bytes, b'0')   
-//            }
-//
-//            for _ in 3..10 {
-//                reader.source.read_until(b'\t', &mut Vec::new())?;
-//            }
-//            
-//            reader.source.read_until(b'\n', &mut genotypes)?;
-//
-//            if i % 50000 == 0 {
-//                println!("{i: >9} {:?}",std::str::from_utf8(&buf)?);
-//            }
-//            unsafe{
-//            for sample in struct_samples.iter() {
-//                let geno_idx=sample.idx()*4;
-//                let genotype = genotypes[geno_idx..geno_idx+3].to_owned();
-//                let mut key = buf.clone();
-//                key.append(sample.id().clone().as_mut_vec()); //Unsafe! 
-//
-//                let _haplo1 = genotypes[geno_idx]   - 64;
-//                let _haplo2 = genotypes[geno_idx+2] - 64;
-//
-//                let val = std::str::from_utf8(&[genotype[0]+1, genotype[2]+1])?.parse::<u64>()?;
-//                //println!("{:?} {:?}", std::str::from_utf8(&key), val);
-//                build.insert(key, val).unwrap();
-//
-//            }}
-//            genotypes.clear();
-//            buf.clear();
-//            i+=1;
-//
-//        }
-//    }
-//    build.finish()?;
-//    Ok(())
-//}
-
-use tokio;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<(), Box<dyn Error>> {
 
+    
     let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-EUR-AFR-filtered");
-    //let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-50k-filtered/");
+    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-50k-filtered/");
+    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-5000/");
     println!("Fetching input VCF files in {}", &data_dir.to_str().unwrap());
     let mut input_vcf_paths = io::get_input_vcfs(&data_dir).unwrap();
     input_vcf_paths.sort();
 
 
     let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
-    let panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).await?;
+    let mut panel = io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).await?;
 
-    for pop in panel.samples.into_keys(){
-        println!("{}", pop); 
+    // User defined subset-arguments.
+    let user_defined_subset = Some(vec!["EUR", "AFR"]);
+    match &user_defined_subset {
+        Some(subset) => panel.subset_panel(&subset.clone()),
+        None         => (),
+    }
+
+
+    for vcf in input_vcf_paths.iter(){
+        // -------------------------- Format output filename
+        let file_stem = vcf.as_path()
+                .file_name()
+                .unwrap()
+                .to_str().unwrap()
+                .replace(".vcf.gz", "")
+                .replace(".vcf", "");
+
+        let pop_tag = match &user_defined_subset {
+            Some(subset) => format!("-{}", subset.join("-")),
+            None => "".to_string(),
+        };
+        let output_path =format!("tests/test-data/fst/{}{}.fst", file_stem, pop_tag);
+        println!("{output_path:?}");
+        let mut setbuilder = VCFIndexer::new(vcf, &output_path, panel.into_transposed_btreemap(), 4).await?;
+        unsafe {setbuilder.build_fst().await?;}
+        setbuilder.finish_build()?;
     }
 
 
