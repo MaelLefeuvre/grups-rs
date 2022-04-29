@@ -274,7 +274,13 @@ pub struct PedigreeSims {
     /// 
     /// Parallelization is dispatched according to the number of replicates.
     #[clap(short='@', long, default_value("1"))]
-    pub threads: usize
+    pub threads: usize,
+
+    ///Number of additional parallel decompression threads when decompressing (BGZF compressed files only).
+    /// 
+    /// Parallelization is dispatched according to the number of replicates.
+    #[clap(short='#', long, default_value("0"))]
+    pub decompression_threads: usize
 
 }
 

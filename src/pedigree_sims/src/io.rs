@@ -1,4 +1,5 @@
 use crate::pedigree::*;
+use gzp::{deflate::Bgzf, par::decompress::{ParDecompressBuilder}};
 use pwd_from_stdin::genome::{SNPCoord, Genome};
 
 use std::cell::RefMut;
@@ -62,11 +63,10 @@ pub struct VCFPanelReader{
 }
 
 impl VCFPanelReader {
-
     // TODO: Convert this into ::from()
     pub async fn new(panel_path: &Path, vcf: &Path) -> std::io::Result<VCFPanelReader> {
         let source = BufReader::new(File::open(panel_path)?);
-        let reader = VCFReader::new(vcf)?;
+        let reader = VCFReader::new(vcf, 0)?;
         let samples = Self::parse_header(source, &reader.samples())?;
         drop(reader);
         Ok(VCFPanelReader{samples})
@@ -246,8 +246,8 @@ pub struct VCFReader<'a> {
 }
 
 impl<'a> VCFReader<'a> {
-    pub fn new(path: &Path) -> std::io::Result<VCFReader<'a>>{
-        let mut reader = Self::get_reader(path)?;
+    pub fn new(path: &Path, threads: usize) -> std::io::Result<VCFReader<'a>>{
+        let mut reader = Self::get_reader(path, threads)?;
         let samples = Self::parse_samples_id(&mut reader)?;
 
         Ok(VCFReader{source: reader, samples, buf: Vec::new(), idx:0})
@@ -376,10 +376,17 @@ impl<'a> VCFReader<'a> {
         self.samples.clone()
     }
 
-    fn get_reader(path: &Path) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
+    fn get_reader(path: &Path, threads: usize) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
+
+
         let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
             Some("vcf") => Box::new(File::open(path)?),
-            Some("gz")  => Box::new(noodles_bgzf::Reader::new(File::open(path)?)),
+            //Some("gz")  => Box::new(noodles_bgzf::Reader::new(File::open(path)?)),
+            Some("gz")  => {
+                let reader = File::open(path)?;
+                let builder = ParDecompressBuilder::<Bgzf>::new().maybe_num_threads(threads).maybe_par_from_reader(reader);
+                Box::new(builder)
+            }
             _           => panic!()
         };
         Ok(Box::new(BufReader::new(source)))

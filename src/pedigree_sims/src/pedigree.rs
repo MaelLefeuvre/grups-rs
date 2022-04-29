@@ -439,7 +439,7 @@ impl Pedigree {
     pub fn populate_founders_vcf(&mut self, input_vcf_paths: &Vec<PathBuf>, valid_positions: &HashSet<SNPCoord>) -> Result<(), Box<dyn Error>> {
         for vcf in input_vcf_paths {
             info!("Parsing vcf file: {}", vcf.to_str().unwrap_or("None"));
-            let mut vcf_reader = VCFReader::new(vcf.as_path())?;
+            let mut vcf_reader = VCFReader::new(vcf.as_path(), 0)?;
             let pop_tag = &self.pop.as_ref().unwrap().clone();
             vcf_reader.parse_samples(self.founders_mut(), valid_positions, pop_tag)?;
 
@@ -494,7 +494,7 @@ trait GenotypeParser {
 }
 
 
-pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_vcf_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, contam_rate: f64, contam_ind_ids: &Vec<usize>, seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
+pub fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_vcf_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, contam_rate: f64, contam_ind_ids: &Vec<usize>, seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
 
     // Keep track of the last typed SNP's position for each comparison.
     let mut previous_positions = HashMap::new();
@@ -507,12 +507,12 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
 
 
     let mut i = 0;
-    let mut vcf_reader = VCFAsyncReader::new(input_vcf_path.as_path(), threads).await?;
-    'line: while vcf_reader.has_data_left().await? {
+    let mut vcf_reader = VCFReader::new(input_vcf_path.as_path(), threads)?;
+    'line: while vcf_reader.has_data_left()? {
 
         // Get current chromosome and position.
-        let chromosome : u8  = vcf_reader.next_field().await?.parse()?; // 1
-        let position   : u32 = vcf_reader.next_field().await?.parse()?; // 2
+        let chromosome : u8  = vcf_reader.next_field()?.parse()?; // 1
+        let position   : u32 = vcf_reader.next_field()?.parse()?; // 2
         
         if i % 50_000 == 0 {
             info!(" {i: >9}: [{chromosome: <2} {position: >9}]");
@@ -533,12 +533,12 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
                 if ! genotypes_filled {
 
                     // Go to INFO field.
-                    vcf_reader.skip(5).await?;                                      // 6 
-                    let info = vcf_reader.next_field().await?.split(';').collect::<Vec<&str>>();
+                    vcf_reader.skip(5)?;                                      // 6 
+                    let info = vcf_reader.next_field()?.split(';').collect::<Vec<&str>>();
 
                     // Check if Bi-Allelic and skip line if not.
                     if info.iter().any(|&field| field == "MULTI_ALLELIC") {
-                        vcf_reader.skip_line().await?;
+                        vcf_reader.skip_line()?;
                         continue 'line
                     }
 
@@ -550,7 +550,7 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
 
                     // ...and skip line if this is not an SNP.
                     if vtype != "SNP" {
-                        vcf_reader.skip_line().await?;
+                        vcf_reader.skip_line()?;
                         continue 'line
                     }
 
@@ -571,7 +571,7 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
                     match pop_af {
                         Some(af) => if af < maf || af > (1.0-maf) {
                             trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {af:<8.5} --maf: {maf}");
-                            vcf_reader.skip_line().await?;
+                            vcf_reader.skip_line()?;
                             continue 'line
                         },
                         None => panic!("Empty population allele frequency!")
@@ -583,7 +583,7 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
                     //    pop_af = Some(0.0)
                     //}
 
-                    vcf_reader.fill_genotypes().await?;
+                    vcf_reader.fill_genotypes()?;
                     genotypes_filled = true;
 
                     // Compute contaminating pop allele frequency
@@ -641,7 +641,7 @@ pub async fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>
         }
         // Reset line if we never parsed genotypes.
         if ! genotypes_filled {
-            vcf_reader.skip_line().await?;
+            vcf_reader.skip_line()?;
         }
     }
     Ok(())

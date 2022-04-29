@@ -120,9 +120,9 @@ pub async fn run(
             ped_cli.snp_downsampling_rate,
             &genetic_map,
             ped_cli.maf,
-            ped_cli.threads
+            ped_cli.decompression_threads
         );
-        simulations.await?;
+        simulations?;
     }
 
     // --------------------- Print pedigree simulation results.
