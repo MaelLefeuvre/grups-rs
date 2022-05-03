@@ -7,6 +7,7 @@
 
 [dependencies]
   parser       = {path ="../parser"}
+  genome       = {path ="../genome"}
   thread_local = "1.1.4"
   rust-lapper  = "1.0.0"
   itertools    = "0.10.3"

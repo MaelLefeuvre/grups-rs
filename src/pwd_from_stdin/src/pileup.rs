@@ -1,4 +1,4 @@
-use crate::genome::{SNPCoord};
+use genome::SNPCoord;
 use crate::comparison::Individual;
 use std::iter::Peekable;
 use std::error::Error;
@@ -260,7 +260,7 @@ impl Line {
 #[cfg(test)]
 mod tests {
     use crate::pileup;
-    use crate::genome::SNPCoord;
+    use genome::SNPCoord;
 
     fn create_dummy_pileup(line_input: &str, score_input: &str, ignore_dels: bool) -> pileup::Pileup {
         let line_input : String = line_input.to_string();

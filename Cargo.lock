@@ -403,6 +403,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "genome"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+ "log",
+ "rand 0.8.5",
+ "rust-lapper",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -439,6 +449,7 @@ dependencies = [
  "bincode",
  "clap",
  "fst",
+ "genome",
  "log",
  "logger",
  "memmap",
@@ -947,6 +958,8 @@ version = "0.1.0"
 dependencies = [
  "crossbeam",
  "flate2",
+ "fst",
+ "genome",
  "gzp",
  "log",
  "noodles-bgzf",
@@ -1046,6 +1059,7 @@ dependencies = [
 name = "pwd_from_stdin"
 version = "0.1.0"
 dependencies = [
+ "genome",
  "itertools",
  "log",
  "parser",
@@ -1539,8 +1553,6 @@ dependencies = [
  "memmap",
  "parser",
  "pedigree_sims",
- "pwd_from_stdin",
- "rust-htslib",
  "tokio",
 ]
 

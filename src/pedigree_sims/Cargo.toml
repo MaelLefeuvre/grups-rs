@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
   parser         = {path ="../parser"}
   pwd_from_stdin = {path = "../pwd_from_stdin" }
+  genome         = {path = "../genome"}
+  fst            = "0.4"
   thread_local   = "1.1.4"
   crossbeam      = "0.8.1"
   rayon          = "1.5.2"

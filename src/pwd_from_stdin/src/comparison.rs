@@ -1,7 +1,6 @@
-use crate::jackknife::JackknifeBlocks;
-use crate::genome::{SNPCoord, Genome};
+use genome::JackknifeBlocks;
+use genome::{SNPCoord, Genome};
 use crate::pileup::{Pileup, Line, Nucleotide};
-
 use std::{
     fmt,
     collections::HashSet

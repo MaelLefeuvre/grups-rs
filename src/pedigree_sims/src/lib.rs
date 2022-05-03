@@ -1,18 +1,16 @@
 use std::{
-    error::Error, collections::HashMap,
+    error::Error, collections::HashMap, path::PathBuf,
 };
 use log::{info};
 //use rayon;
 
-use pwd_from_stdin::{
-    genome::{Genome, self},
-    comparison::Comparisons,
+use genome::{
+    Genome,
+    GeneticMap,
 };
-
+use pwd_from_stdin::comparison::Comparisons;
 pub mod io;
 pub mod pedigree;
-
-use tokio;
 
 /// @TODO! 
 ///   - [CRUCIAL] Print simulations results into files.
@@ -51,8 +49,7 @@ use tokio;
 ///   - [CRUCIAL] Split up pedigree_sims::pedigree::pedigree_simulations() into a managable Object or function, please.
 ///   - [  QoL  ] Clean up or refactor dead code
 /// 
-#[tokio::main]
-pub async fn run(
+pub fn run(
     _com_cli          : parser::Common,
     ped_cli           : parser::PedigreeSims,
     genome            : Genome,
@@ -62,20 +59,19 @@ pub async fn run(
 
     // --------------------- Get the list of input vcfs.
     info!("Fetching input VCF files in {}", &ped_cli.data_dir.to_str().unwrap_or("None"));
-    let input_vcf_paths = io::get_input_vcfs(&ped_cli.data_dir)?;
-
+    let input_vcf_paths = io::vcf::get_input_vcfs(&ped_cli.data_dir)?;
     // --------------------- Fetch the input panel.
     let panel = match ped_cli.panel.clone() {
         Some(path) => path,
-        None => io::fetch_input_panel(&ped_cli.data_dir)?,
+        None => io::vcf::fetch_input_panel(&ped_cli.data_dir)?,
     };
 
     // --------------------- Parse input recombination maps.
     info!("Parsing genetic maps in {}", &ped_cli.recomb_dir.to_str().unwrap_or("None"));
-    let genetic_map = genome::GeneticMap::default().from_dir(&ped_cli.recomb_dir)?;
+    let genetic_map = GeneticMap::default().from_dir(&ped_cli.recomb_dir)?;
 
     // --------------------- Parse Input Samples Panel
-    let panel =io::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path()).await?;
+    let panel =io::vcf::reader::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path())?;
 
     // --------------------- Set ThreadPool
     //let pool = rayon::ThreadPoolBuilder::new()
@@ -92,7 +88,7 @@ pub async fn run(
 
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
-    let template_pedigree= io::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
+    let template_pedigree= io::pedigree::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
     let mut pedigrees = HashMap::new();
     for comparison in comparisons.get() {
         let comparison_label = comparison.get_pair();
@@ -106,6 +102,31 @@ pub async fn run(
     }
 
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
+
+
+    //// -------------- [PROTOTYPE]
+    //let fst_dir = PathBuf::from("./tests/test-data/fst/");
+    //let input_fst_paths = io::fst::get_input_fst(&fst_dir)?;
+    //info!("Starting FST pedigree comparisons.");
+    //for fst in input_fst_paths.iter(){
+    //    let simulations = pedigree::pedigree_simulations_fst(
+    //        &mut pedigrees, 
+    //        fst,
+    //        comparisons,
+    //        &ped_cli.pedigree_pop,
+    //        ped_cli.contamination_rate[0][0] as f64 / 100.0,
+    //        &contam_ind_ids,
+    //        ped_cli.pmd_rate[0][0] as f64 / 100.0,
+    //        ped_cli.af_downsampling_rate,
+    //        ped_cli.snp_downsampling_rate,
+    //        &genetic_map,
+    //        ped_cli.maf,
+    //        ped_cli.decompression_threads
+    //    );
+    //    simulations?;
+    //}
+    //// -------------- [END PROTOTYPE]
+
     info!("Starting pedigree comparisons.");
     for vcf in input_vcf_paths.iter() {
         let simulations = pedigree::pedigree_simulations(

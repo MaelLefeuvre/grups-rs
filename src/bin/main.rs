@@ -1,5 +1,5 @@
 use parser::{Cli, Commands::*};
-use pwd_from_stdin::genome::*;
+use genome::Genome;
 
 use std::process;
 use clap::Parser;

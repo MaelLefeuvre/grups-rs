@@ -2,7 +2,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io::{self, BufRead, Read};
 
-use crate::genome::SNPCoord;
+use genome::SNPCoord;
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;

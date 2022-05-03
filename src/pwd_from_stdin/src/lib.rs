@@ -1,6 +1,4 @@
-pub mod genome;
 pub mod pileup;
-pub mod jackknife;
 pub mod comparison;
 pub mod io;
 
@@ -8,7 +6,10 @@ pub mod io;
 //use parser;
 
 use comparison::*;
-use genome::*;
+use genome::{
+    SNPCoord,
+    Genome,
+};
 use io::*;
 
 use std::fs;
