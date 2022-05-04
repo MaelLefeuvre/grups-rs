@@ -242,34 +242,34 @@ impl<'a> VCFIndexer<'a> {
 }
 
 
-
-
-fn main() -> Result<(), Box<dyn Error>> {
+pub fn run(
+    fst_cli: &parser::Fst,
+) -> Result<(), Box<dyn Error>> {
     // ---------- Command line arguments
-    let cli_threads = 22;
-    let decompression_threads= 0;
-    let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/");
-    let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
-    let user_defined_subset: Option<Vec<&str>>  = Some(vec!["EUR", "AFR"]);
+    //let cli_threads = 22;
+    //let decompression_threads= 0;
+    //let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/");
+    //let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
+    //let user_defined_subset: Option<Vec<&str>>  = Some(vec!["EUR", "AFR"]);
     // ------------------------------------
 
-    println!("Fetching input VCF files in {}", &data_dir.to_str().unwrap());
-    let mut input_vcf_paths = vcf::get_input_vcfs(&data_dir).unwrap();
+    println!("Fetching input VCF files in {}", &fst_cli.vcf_dir.to_str().unwrap());
+    let mut input_vcf_paths = vcf::get_input_vcfs(&fst_cli.vcf_dir).unwrap();
     input_vcf_paths.sort();
 
 
-    let mut panel = VCFPanelReader::new(panel.as_path())?;
+    let mut panel = VCFPanelReader::new(&fst_cli.panel.as_path())?;
     panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
 
     // User defined subset-arguments.
-    match &user_defined_subset {
-        Some(subset) => panel.subset_panel(&subset.clone()),
+    match &fst_cli.pop_subset {
+        Some(subset) => panel.subset_panel(subset),
         None         => (),
     }
 
     // --------------------- Set ThreadPool
     let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(cli_threads)
+        .num_threads(fst_cli.threads)
         .build()
         .unwrap();
 
@@ -285,13 +285,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .replace(".vcf.gz", "")
                     .replace(".vcf", "");
 
-                let pop_tag = match &user_defined_subset {
+                let pop_tag = match &fst_cli.pop_subset {
                     Some(subset) => format!("-{}", subset.join("-")),
                     None => "".to_string(),
                 };
-                let output_path =format!("tests/test-data/fst/{}{}", file_stem, pop_tag);
+                let output_path =format!("{}/{}{}", fst_cli.output_dir.to_str().unwrap(), file_stem, pop_tag);
                 println!("{output_path:?}");
-                let mut setbuilder = VCFIndexer::new(vcf, &output_path, panel.into_transposed_btreemap(), decompression_threads).unwrap();
+                let mut setbuilder = VCFIndexer::new(vcf, &output_path, panel.into_transposed_btreemap(), fst_cli.decompression_threads).unwrap();
                 unsafe {setbuilder.build_fst().unwrap();}
                 setbuilder.finish_build().unwrap();
             });

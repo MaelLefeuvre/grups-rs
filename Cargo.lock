@@ -460,6 +460,7 @@ dependencies = [
  "rust-htslib",
  "serde",
  "tokio",
+ "vcf-fst",
 ]
 
 [[package]]

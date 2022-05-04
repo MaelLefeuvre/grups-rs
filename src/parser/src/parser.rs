@@ -78,6 +78,10 @@ pub enum Commands {
         common: Common,
         #[clap(flatten)]
         ped: PedigreeSims
+    },
+    FST {
+        #[clap(flatten)]
+        fst: Fst
     }
 }
 
@@ -267,12 +271,51 @@ pub struct PedigreeSims {
     #[clap(short='T', long, required(false), default_value("./data/pedigrees/default.ped"), parse(from_os_str))]
     pub pedigree: std::path::PathBuf,
     
+    // Path to input Panel Definition files.
     #[clap(long, parse(from_os_str))]
     pub panel: Option<std::path::PathBuf>,
 
     /// Number of parallel CPU processes when performing pedigree-simulations.
     /// 
     /// Parallelization is dispatched according to the number of replicates.
+    #[clap(short='@', long, default_value("1"))]
+    pub threads: usize,
+
+    ///Number of additional parallel decompression threads when decompressing (BGZF compressed files only).
+    /// 
+    /// Parallelization is dispatched according to the number of replicates.
+    #[clap(short='#', long, default_value("0"))]
+    pub decompression_threads: usize
+
+}
+
+#[derive(Args, Debug, Serialize)]
+pub struct Fst {
+
+    /// Path to input Panel Definition files.
+    #[clap(long, parse(from_os_str))]
+    pub panel: std::path::PathBuf,
+
+    /// Population Subset
+    /// 
+    /// Subset the index by a given number of (super)-population. (e.g. EUR, AFR). Note that at least one pedigree population and one contaminating population
+    /// are required to obtain valid index files.
+    #[clap(long, multiple_values(true))]
+    pub pop_subset: Option<Vec<String>>,
+
+    /// Output directory
+    #[clap(long, parse(from_os_str))]
+    pub output_dir: std::path::PathBuf,
+
+
+
+    /// Path to input VCF genomes for founder individuals (1000G)
+    #[clap(short='F', long, default_value(r#"./data/founders/1000G-phase3-v5a"#), parse(from_os_str))]
+    pub vcf_dir: std::path::PathBuf,
+
+    /// Number of parallel CPU processes when performing FST-Indexation
+    /// 
+    /// Parallelization is dispatched according to the number of separate vcf(.gz) files.
     #[clap(short='@', long, default_value("1"))]
     pub threads: usize,
 

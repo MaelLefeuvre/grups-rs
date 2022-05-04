@@ -33,8 +33,8 @@ impl VCFPanelReader {
         self.samples[pop].choose(&mut rand::thread_rng())
     }
 
-    pub fn subset_panel(&mut self, subset_pops: &Vec<&str>) {
-        self.samples.retain(|key,_| subset_pops.contains(&key.as_str()));
+    pub fn subset_panel(&mut self, subset_pops: &Vec<String>) {
+        self.samples.retain(|key,_| subset_pops.contains(key));
     }
 
     pub fn into_transposed_btreemap(&self) -> BTreeMap<SampleTag, String> {

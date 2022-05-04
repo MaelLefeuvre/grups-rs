@@ -40,6 +40,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         },
         PedigreeSims {..} => {
             println!("Command pedigree-sims: {:#?}", cli.commands);
+        },
+
+        FST {fst: fst_cli} => {
+            vcf_fst::run(&fst_cli)?
         }
     };
     Ok(())
