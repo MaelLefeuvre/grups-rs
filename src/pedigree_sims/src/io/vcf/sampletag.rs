@@ -1,19 +1,23 @@
 #[derive(Debug, Clone)]
 pub struct SampleTag {
     id : String,
-    idx: usize,
+    idx: Option<usize>,
 }
 
 impl SampleTag {
-    pub fn new(id: &str, idx: usize) -> SampleTag {
+    pub fn new(id: &str, idx: Option<usize>) -> SampleTag {
         SampleTag{id: id.to_string(), idx}
     }
 
     pub fn id(&self) -> &String {
         &self.id
     }
-    pub fn idx(&self) -> &usize {
+    pub fn idx(&self) -> &Option<usize> {
         &self.idx
+    }
+
+    pub fn set_idx(&mut self, idx: usize) {
+        self.idx = Some(idx);
     }
 }
 

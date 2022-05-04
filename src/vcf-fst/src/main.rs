@@ -133,7 +133,7 @@ impl<'a> VCFIndexer<'a> {
         // ----------------------- Convert to struct to keep id.
         let mut struct_samples = Vec::new();
         for (i, sample) in samples.iter().enumerate(){
-            let sample = SampleTag::new(sample, i);
+            let sample = SampleTag::new(sample, Some(i));
             struct_samples.push(sample);
         }
         // ----------------------- Sort samples by ID.
@@ -230,7 +230,7 @@ impl<'a> VCFIndexer<'a> {
             key.push(b' ');
 
             // Extract genotype info for thesample and add it to the key.
-            let geno_idx = sample_tag.idx()*4;                // x4, since each field+separator is four characters long. (e.g.: '0|0 ')
+            let geno_idx = sample_tag.idx().unwrap()*4;                // x4, since each field+separator is four characters long. (e.g.: '0|0 ')
             key.push(self.genotypes_buffer[geno_idx  ]); // haplo1
             key.push(self.genotypes_buffer[geno_idx+2]); // haplo2
 
@@ -256,7 +256,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 
     let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
-    let mut panel = VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path())?;
+    let mut panel = VCFPanelReader::new(panel.as_path())?;
+    panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
 
     // User defined subset-arguments.
     let user_defined_subset: Option<Vec<&str>>  = Some(vec!["EUR", "AFR"]);

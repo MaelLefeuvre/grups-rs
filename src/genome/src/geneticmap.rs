@@ -122,4 +122,16 @@ impl GeneticMap {
         .collect::<Vec<PathBuf>>();
         Ok(maps)
     }
+
+    pub fn compute_recombination_prob(&self, chromosome: u8, previous_position: u32, current_position: u32) -> f64 {
+        let mut interval_prob_recomb = 0.0;
+        for recombination_range in self[&chromosome].find(previous_position, current_position) {
+            let real_start = if previous_position < recombination_range.start {recombination_range.start} else {previous_position};
+            let real_stop  = if current_position  > recombination_range.stop  {recombination_range.stop } else {current_position };
+
+            interval_prob_recomb += recombination_range.val.prob() * (real_stop as f64 - real_start as f64 + 1.0);
+        }
+
+        interval_prob_recomb
+    }
 }

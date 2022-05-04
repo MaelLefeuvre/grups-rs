@@ -64,14 +64,14 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-    pub fn get_alleles(&self, idx: &usize) -> Result<(u8, u8), Box<dyn Error>> {
+    pub fn get_alleles(&self, idx: usize) -> Result<(u8, u8), Box<dyn Error>> {
         let geno_idx=idx*4;
         let haplo1 = self.buf[geno_idx]   - 48;
         let haplo2 = self.buf[geno_idx+2] - 48;
         Ok((haplo1, haplo2))
     }
 
-    pub fn get_alleles2(&self, idx: &usize) -> Result<Option<[u8; 2]>, Box<dyn Error>> {
+    pub fn get_alleles2(&self, idx: usize) -> Result<Option<[u8; 2]>, Box<dyn Error>> {
         let geno_idx=idx*4;
         let haplo1 = self.buf[geno_idx]   - 48;
         let haplo2 = self.buf[geno_idx+2] - 48;
@@ -135,7 +135,7 @@ impl<'a> VCFReader<'a> {
 
             self.fill_genotypes()?;
             for founder in samples.iter_mut() {
-                let alleles = self.get_alleles(founder.get_tag().unwrap().idx())?;
+                let alleles = self.get_alleles(founder.get_tag().unwrap().idx().unwrap())?;
                 founder.add_locus(&chromosome, position, alleles, pop_af.unwrap())?;
             }
         }
@@ -156,7 +156,6 @@ impl<'a> VCFReader<'a> {
 
         let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
             Some("vcf") => Box::new(File::open(path)?),
-            //Some("gz")  => Box::new(noodles_bgzf::Reader::new(File::open(path)?)),
             Some("gz")  => {
                 let reader = File::open(path)?;
                 let builder = ParDecompressBuilder::<Bgzf>::new().maybe_num_threads(threads).maybe_par_from_reader(reader);
@@ -183,10 +182,10 @@ impl<'a> VCFReader<'a> {
         panic!();
     }
 
-    pub fn compute_local_cont_af(&self, contam_ind_ids: &Vec<usize>) -> Result<f64, Box<dyn Error>>{
+    pub fn compute_local_cont_af(&self, contam_ind_ids: &Vec<&SampleTag>) -> Result<f64, Box<dyn Error>>{
         let mut ref_allele_count = 0;
         let mut alt_allele_count = 0;
-        for idx in contam_ind_ids.iter() {
+        for idx in contam_ind_ids.iter().map(|tag| tag.idx().unwrap()) {
             let cont_alleles = self.get_alleles2(idx)?.unwrap();
             for allele in cont_alleles.into_iter() {
                 match allele {
@@ -198,5 +197,6 @@ impl<'a> VCFReader<'a> {
         }
         Ok((alt_allele_count as f64) /(alt_allele_count as f64 + ref_allele_count as f64))
     }
-
 }
+
+use crate::io::vcf::sampletag::SampleTag;

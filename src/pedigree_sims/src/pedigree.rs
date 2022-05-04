@@ -497,7 +497,7 @@ impl Default for Pedigree {
     }
 }
 
-pub fn pedigree_simulations_fst(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_fst_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, contam_rate: f64, contam_ind_ids: &Vec<usize>, seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
+pub fn pedigree_simulations_fst(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_fst_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, contam_rate: f64, contam_ind_ids: &Vec<&SampleTag>, seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
     let mut previous_positions = HashMap::new();
     for comparison in comparisons.get() {
         previous_positions.insert(comparison.get_pair().to_owned(), 0);
@@ -505,58 +505,56 @@ pub fn pedigree_simulations_fst(pedigrees: &mut HashMap<String, Vec<Pedigree>>, 
     let mut rng = rand::thread_rng();
     //let mut i = 0;
     println!("loading fst-set");
-    let fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
+    let mut fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
     'comparison: for comparison in comparisons.get(){
         'coordinate: for coordinate in comparison.positions.iter(){
-
             let (chromosome, position) = (coordinate.chromosome, coordinate.position);
 
+            // Update genotypes and frequencies.
+            fst_reader.clear_buffers();
+            fst_reader.search_coordinate_genotypes(chromosome, position);
+            fst_reader.search_coordinate_frequencies(chromosome, position);
 
-            let genotypes = fst_reader.search_coordinate_genotypes(chromosome, position);
-            let frequencies = fst_reader.search_coordinate_frequencies(chromosome, position);
-
-
-            if genotypes.len() == 0 {
+            if ! fst_reader.has_genotypes() {
                 continue 'coordinate
             }
-            let pop_af = match frequencies.get(pop){
-                Some(af) => af,
-                None => continue 'coordinate
-            };
-            let cont_af = Some(0.0);
 
-            // Check if maf < 0.05
-            ///////////////////////////////////////////////////////////
-            //
+            let pop_af = fst_reader.get_pop_allele_frequency(pop);
+            // Skip line if allele frequency is < maf
+            // [WARN]: Note that {POP}_AF entries in the INFO field relate to the REF allele frequency, not MAF.
+            //         ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
+            match pop_af {
+                Some(af) => if *af < maf || *af > (1.0-maf) {
+                    trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {af:<8.5} --maf: {maf}");
+                    continue 'coordinate
+                },
+                None => panic!("Empty population allele frequency!")
+            }
+
+            let cont_af = Some(fst_reader.compute_local_cont_af(contam_ind_ids)?);
 
             // Compute the interval between current and previous position, search trough the genetic map interval tree,
             // And compute the probability of recombination.
             let comparison_label = comparison.get_pair().to_owned();
             let previous_position = previous_positions[&comparison_label];
-            let mut interval_prob_recomb: f64 = 0.0;
-            for recombination_range in genetic_map[&chromosome].find(previous_position, position) {
-                let real_start = if previous_position < recombination_range.start {recombination_range.start} else {previous_position};
-                let real_stop  = if position          > recombination_range.stop  {recombination_range.stop } else {position         };
-
-                interval_prob_recomb += recombination_range.val.prob() * (real_stop as f64 - real_start as f64 + 1.0);
-            }
+            let interval_prob_recomb: f64 = genetic_map.compute_recombination_prob(chromosome, previous_position, position);
 
             trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
 
 
             // Parse genotype fields and start updating dynamic simulations.
             let pedigree_vec = pedigrees.get_mut(&comparison_label).unwrap();
-            for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
+            'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
                 
                 // Perform SNP downsampling if necessary
                 if rng.gen::<f64>() < snp_downsampling_rate {
-                    continue 'comparison
+                    continue 'pedigree
                 }
 
                 // Update founder alleles. Perform Allele Frequency downsampling if necessary.
                 for mut founder in pedigree.founders_mut() {
                     founder.alleles = match rng.gen::<f64>() < af_downsampling_rate { 
-                    false => Some(genotypes[founder.get_tag().unwrap().id()]),
+                    false => fst_reader.get_alleles(founder.get_tag().unwrap().id()),
                     true  => Some([0, 0]),
                     };
                 }
@@ -576,14 +574,12 @@ pub fn pedigree_simulations_fst(pedigrees: &mut HashMap<String, Vec<Pedigree>>, 
             }
             //Update last typed position for this comparison.
             *previous_positions.get_mut(&comparison_label).unwrap() = position;
-
         }
-
     }
     Ok(())
 }
 
-pub fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_vcf_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, contam_rate: f64, contam_ind_ids: &Vec<usize>, seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
+pub fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>, input_vcf_path: &PathBuf, comparisons: &pwd_from_stdin::comparison::Comparisons, pop: &String, contam_rate: f64, contam_ind_ids: &Vec<&SampleTag>, seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, genetic_map: &GeneticMap, maf: f64, threads: usize) -> Result<(), Box<dyn Error>>{
 
     // Keep track of the last typed SNP's position for each comparison.
     let mut previous_positions = HashMap::new();
@@ -682,30 +678,24 @@ pub fn pedigree_simulations(pedigrees: &mut HashMap<String, Vec<Pedigree>>, inpu
                 // And compute the probability of recombination.
                 let comparison_label = comparison.get_pair().to_owned();
                 let previous_position = previous_positions[&comparison_label];
-                let mut interval_prob_recomb: f64 = 0.0;
-                for recombination_range in genetic_map[&chromosome].find(previous_position, position) {
-                    let real_start = if previous_position < recombination_range.start {recombination_range.start} else {previous_position};
-                    let real_stop  = if position          > recombination_range.stop  {recombination_range.stop } else {position         };
-
-                    interval_prob_recomb += recombination_range.val.prob() * (real_stop as f64 - real_start as f64 + 1.0);
-                }
+                let interval_prob_recomb: f64 = genetic_map.compute_recombination_prob(chromosome, previous_position, position);
 
                 trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
 
 
                 // Parse genotype fields and start updating dynamic simulations.
                 let pedigree_vec = pedigrees.get_mut(&comparison_label).unwrap();
-                for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
+                'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
                 
                     // Perform SNP downsampling if necessary
                     if rng.gen::<f64>() < snp_downsampling_rate {
-                        continue 'comparison
+                        continue 'pedigree
                     }
 
                     // Update founder alleles. Perform Allele Frequency downsampling if necessary.
                     for mut founder in pedigree.founders_mut() {
                         founder.alleles = match rng.gen::<f64>() < af_downsampling_rate { 
-                        false => vcf_reader.get_alleles2(founder.get_tag().unwrap().idx())?,
+                        false => vcf_reader.get_alleles2(founder.get_tag().unwrap().idx().unwrap())?,
                         true  => Some([0, 0]),
                         };
                     }

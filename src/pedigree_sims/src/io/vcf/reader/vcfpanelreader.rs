@@ -21,11 +21,11 @@ pub struct VCFPanelReader{
 
 impl VCFPanelReader {
     // TODO: Convert this into ::from()
-    pub fn new(panel_path: &Path, vcf: &Path) -> std::io::Result<VCFPanelReader> {
+    pub fn new(panel_path: &Path) -> std::io::Result<VCFPanelReader> {
         let source = BufReader::new(File::open(panel_path)?);
-        let reader = VCFReader::new(vcf, 0)?;
-        let samples = Self::parse_header(source, &reader.samples())?;
-        drop(reader);
+        //let reader = VCFReader::new(vcf, 0)?;
+        let samples = Self::parse_header(source)?;
+        //drop(reader);
         Ok(VCFPanelReader{samples})
     }
 
@@ -51,20 +51,34 @@ impl VCFPanelReader {
         self.samples.iter_mut().for_each(|(_, tag_vec)| tag_vec.sort());
     }
 
-    pub fn parse_header(source: BufReader<File>, header: &[String]) -> std::io::Result<HashMap<String, Vec<SampleTag>>> {
+    pub fn parse_header(source: BufReader<File>) -> std::io::Result<HashMap<String, Vec<SampleTag>>> {
         let mut output: HashMap<String, Vec<SampleTag>> = HashMap::new();
 
         for line in source.lines(){
             let line = line?;
             let line: Vec<&str> = line.split('\t').collect();
-            let sample_idx = match header.iter().position(|id| id == line[0]){
-                Some(idx) => idx - 9, // Correct for previous fields.
-                None => {warn!("Sample not found in input vcfs. Skipping:\n{:?}", line); continue}
-            };
+            let sample_idx = None;
             output.entry(line[1].into()).or_insert(Vec::new()).push(SampleTag::new(line[0], sample_idx));
             output.entry(line[2].into()).or_insert(Vec::new()).push(SampleTag::new(line[0], sample_idx));
 
         }
         Ok(output)
+    }
+
+    pub fn assign_vcf_indexes(&mut self, vcf: &Path)  -> std::io::Result<()> {
+
+        let reader = VCFReader::new(vcf, 0)?;
+        let header = &reader.samples();
+
+        for (pop, sample_tags) in self.samples.iter_mut(){
+            for sample_tag in sample_tags.iter_mut() {
+                let sample_idx = match header.iter().position(|id| id == sample_tag.id()){
+                    Some(idx) => idx - 9, // Correct for previous fields.
+                    None => {warn!("Sample not found in input vcfs. Skipping:\n{:?}", pop); continue}
+                };
+                sample_tag.set_idx(sample_idx);
+            }
+        }
+        Ok(())
     }
 }

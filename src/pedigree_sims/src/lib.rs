@@ -56,36 +56,41 @@ pub fn run(
     comparisons       : &Comparisons,
 ) -> Result<(), Box<dyn Error>>
 {
+    // --------------------- Parse input recombination maps.
+    info!("Parsing genetic maps in {}", &ped_cli.recomb_dir.to_str().unwrap_or("None"));
+    let genetic_map = GeneticMap::default().from_dir(&ped_cli.recomb_dir)?;
 
-    // --------------------- Get the list of input vcfs.
-    info!("Fetching input VCF files in {}", &ped_cli.data_dir.to_str().unwrap_or("None"));
-    let input_vcf_paths = io::vcf::get_input_vcfs(&ped_cli.data_dir)?;
     // --------------------- Fetch the input panel.
     let panel = match ped_cli.panel.clone() {
         Some(path) => path,
         None => io::vcf::fetch_input_panel(&ped_cli.data_dir)?,
     };
 
-    // --------------------- Parse input recombination maps.
-    info!("Parsing genetic maps in {}", &ped_cli.recomb_dir.to_str().unwrap_or("None"));
-    let genetic_map = GeneticMap::default().from_dir(&ped_cli.recomb_dir)?;
-
     // --------------------- Parse Input Samples Panel
-    let panel =io::vcf::reader::VCFPanelReader::new(panel.as_path(), input_vcf_paths[0].as_path())?;
+    let mut panel = io::vcf::reader::VCFPanelReader::new(panel.as_path())?;
 
-    // --------------------- Set ThreadPool
-    //let pool = rayon::ThreadPoolBuilder::new()
-    //    .num_threads(ped_cli.threads)
-    //    .build()
-    //    .unwrap();
+    let vcf_requested = false;
+
+    let input_paths = if vcf_requested {
+        // --------------------- Get the list of input vcfs.
+        info!("Fetching input VCF files in {}", &ped_cli.data_dir.to_str().unwrap_or("None"));
+        let input_vcf_paths = io::vcf::get_input_vcfs(&ped_cli.data_dir)?;
+        panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
+        input_vcf_paths
+    }
+    else {
+        let fst_dir = PathBuf::from("./tests/test-data/fst/");
+        let input_fst_paths = io::fst::get_input_fst(&fst_dir)?;
+        input_fst_paths
+    };
+
 
     // --------------------- Get random contaminating individuals. [PROTOTYPE]
     let mut contam_ind_ids = Vec::new();
     for _ in 0..1 {
         let contam_sample_tag = panel.random_sample(&ped_cli.contam_pop[0]).unwrap();
-        contam_ind_ids.push(*contam_sample_tag.idx());
+        contam_ind_ids.push(contam_sample_tag);
     }
-
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
     let template_pedigree= io::pedigree::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
@@ -101,49 +106,53 @@ pub fn run(
         }
     }
 
+    // --------------------- Set ThreadPool
+    //let pool = rayon::ThreadPoolBuilder::new()
+    //    .num_threads(ped_cli.threads)
+    //    .build()
+    //    .unwrap();
+
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
-
-
-    //// -------------- [PROTOTYPE]
-    //let fst_dir = PathBuf::from("./tests/test-data/fst/");
-    //let input_fst_paths = io::fst::get_input_fst(&fst_dir)?;
-    //info!("Starting FST pedigree comparisons.");
-    //for fst in input_fst_paths.iter(){
-    //    let simulations = pedigree::pedigree_simulations_fst(
-    //        &mut pedigrees, 
-    //        fst,
-    //        comparisons,
-    //        &ped_cli.pedigree_pop,
-    //        ped_cli.contamination_rate[0][0] as f64 / 100.0,
-    //        &contam_ind_ids,
-    //        ped_cli.pmd_rate[0][0] as f64 / 100.0,
-    //        ped_cli.af_downsampling_rate,
-    //        ped_cli.snp_downsampling_rate,
-    //        &genetic_map,
-    //        ped_cli.maf,
-    //        ped_cli.decompression_threads
-    //    );
-    //    simulations?;
-    //}
-    //// -------------- [END PROTOTYPE]
-
-    info!("Starting pedigree comparisons.");
-    for vcf in input_vcf_paths.iter() {
-        let simulations = pedigree::pedigree_simulations(
-            &mut pedigrees, 
-            vcf,
-            comparisons,
-            &ped_cli.pedigree_pop,
-            ped_cli.contamination_rate[0][0] as f64 / 100.0,
-            &contam_ind_ids,
-            ped_cli.pmd_rate[0][0] as f64 / 100.0,
-            ped_cli.af_downsampling_rate,
-            ped_cli.snp_downsampling_rate,
-            &genetic_map,
-            ped_cli.maf,
-            ped_cli.decompression_threads
-        );
-        simulations?;
+    if vcf_requested {
+        info!("Starting VCF pedigree comparisons.");
+        for vcf in input_paths.iter() {
+            let simulations = pedigree::pedigree_simulations(
+                &mut pedigrees, 
+                vcf,
+                comparisons,
+                &ped_cli.pedigree_pop,
+                ped_cli.contamination_rate[0][0] as f64 / 100.0,
+                &contam_ind_ids,
+                ped_cli.pmd_rate[0][0] as f64 / 100.0,
+                ped_cli.af_downsampling_rate,
+                ped_cli.snp_downsampling_rate,
+                &genetic_map,
+                ped_cli.maf,
+                ped_cli.decompression_threads
+            );
+            simulations?;
+        }
+    } else {
+           // -------------- [PROTOTYPE]
+        info!("Starting FST pedigree comparisons.");
+        for fst in input_paths.iter(){
+            let simulations = pedigree::pedigree_simulations_fst(
+                &mut pedigrees, 
+                fst,
+                comparisons,
+                &ped_cli.pedigree_pop,
+                ped_cli.contamination_rate[0][0] as f64 / 100.0,
+                &contam_ind_ids,
+                ped_cli.pmd_rate[0][0] as f64 / 100.0,
+                ped_cli.af_downsampling_rate,
+                ped_cli.snp_downsampling_rate,
+                &genetic_map,
+                ped_cli.maf,
+                ped_cli.decompression_threads
+            );
+            simulations?;
+        }
+        // -------------- [END PROTOTYPE]
     }
 
     // --------------------- Print pedigree simulation results.
