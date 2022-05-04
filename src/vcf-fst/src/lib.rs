@@ -301,60 +301,60 @@ pub fn run(
 
 
 
-    // Bincode strategy
-
-    //serialize(&input_vcf_paths, &tpool).unwrap();
-
-    // FST Strategy
-    println!("Generating FST index...");
-    //sort_vcf_map(&input_vcf_paths, &tpool).unwrap();
-    //vcf_fst_index(&input_vcf_paths[0], 4)?;
-    println!("Done!");
-
-    //// Memory Map strategy.
-    //println!("Opening memory map");
-    //let mmap = unsafe { Mmap::map(&File::open("tests/fst/g1k-map.fst").unwrap()).unwrap() };
-    //let map = Map::new(mmap).unwrap();
-
-    //// In RAM Strategy
-    println!("Reading in memory.");
-    let mut file_handle = File::open("tests/test-data/fst/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes-EUR-AFR.fst").unwrap();
-    let mut bytes = vec![];
-    std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
-    //let map = Map::new(bytes).unwrap();
-
-    let set = Set::new(bytes).unwrap();
-
-    let samples = ["HG01067", "NA20885", "HG00267", "HG00236", "NA20356", "NA19346"];
-    let samples =  ["HG00096", "HG00264", "HG01618", "HG01920"]; //EUR + AFR
-
-    for sample in samples.iter() {
-        println!("Searching {sample}");
-        //000061543
-        //000030524
-        let regex = format!("1 000055164 {sample}");
-        //let matcher = Subsequence::new(&regex);
-        let matcher = Str::new(&regex)
-            .starts_with();
-            //.intersection(Subsequence::new(&sample));
-        let stream = set.search(&matcher).into_stream();
-
-        println!("  - Populating vector");
-        //let mut kvs = vec![];
-        let kvs = stream.into_strs().unwrap();
-        //let stream = map.search(&matcher).into_stream();
-        //let kvs = stream.into_str_vec().unwrap();
-        
-        println!("{kvs:?}");
-        //while let Some((k, v)) = stream.next() {
-        //    println!("{:?} {}", k, v);
-        //    let record = (String::from_utf8(k.to_vec()).unwrap(), v);
-        //    println!("{:?}", &record);
-        //    kvs.push(record);
-        //    break
-        //}
-        //println!("{kvs:?}\n");
-    }
-
+//    // Bincode strategy
+//
+//    //serialize(&input_vcf_paths, &tpool).unwrap();
+//
+//    // FST Strategy
+//    println!("Generating FST index...");
+//    //sort_vcf_map(&input_vcf_paths, &tpool).unwrap();
+//    //vcf_fst_index(&input_vcf_paths[0], 4)?;
+//    println!("Done!");
+//
+//    //// Memory Map strategy.
+//    //println!("Opening memory map");
+//    //let mmap = unsafe { Mmap::map(&File::open("tests/fst/g1k-map.fst").unwrap()).unwrap() };
+//    //let map = Map::new(mmap).unwrap();
+//
+//    //// In RAM Strategy
+//    println!("Reading in memory.");
+//    let mut file_handle = File::open("tests/test-data/fst/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes-EUR-AFR.fst").unwrap();
+//    let mut bytes = vec![];
+//    std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
+//    //let map = Map::new(bytes).unwrap();
+//
+//    let set = Set::new(bytes).unwrap();
+//
+//    let samples = ["HG01067", "NA20885", "HG00267", "HG00236", "NA20356", "NA19346"];
+//    let samples =  ["HG00096", "HG00264", "HG01618", "HG01920"]; //EUR + AFR
+//
+//    for sample in samples.iter() {
+//        println!("Searching {sample}");
+//        //000061543
+//        //000030524
+//        let regex = format!("1 000055164 {sample}");
+//        //let matcher = Subsequence::new(&regex);
+//        let matcher = Str::new(&regex)
+//            .starts_with();
+//            //.intersection(Subsequence::new(&sample));
+//        let stream = set.search(&matcher).into_stream();
+//
+//        println!("  - Populating vector");
+//        //let mut kvs = vec![];
+//        let kvs = stream.into_strs().unwrap();
+//        //let stream = map.search(&matcher).into_stream();
+//        //let kvs = stream.into_str_vec().unwrap();
+//        
+//        println!("{kvs:?}");
+//        //while let Some((k, v)) = stream.next() {
+//        //    println!("{:?} {}", k, v);
+//        //    let record = (String::from_utf8(k.to_vec()).unwrap(), v);
+//        //    println!("{:?}", &record);
+//        //    kvs.push(record);
+//        //    break
+//        //}
+//        //println!("{kvs:?}\n");
+//    }
+//
     Ok(())
 }

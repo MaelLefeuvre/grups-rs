@@ -21,9 +21,9 @@
   name = "pedigree_sims"
   path = "src/pedigree_sims/src/main.rs"
 
-[[bin]]
-  name = "vcf-fst"
-  path = "src/vcf-fst/src/main.rs"
+#[[lib]]
+#  name = "vcf-fst"
+#  path = "src/vcf-fst/src/main.rs"
 
 [dependencies]
   rust-htslib    = "0.38.0"
