@@ -39,4 +39,6 @@
   log            = "0.4.16"
   clap           = {version = "3.1.2", features = ["derive"]}
   tokio          = { version = "1.17.0", features = ["full"] }
+  rayon          = "1.5.2"
+
 

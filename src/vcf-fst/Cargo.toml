@@ -12,3 +12,4 @@
   logger         = {path ="../logger"}
   parser         = {path ="../parser"}
   tokio          = { version = "1.17.0", features = ["full"] }
+  rayon          = "1.5.2"

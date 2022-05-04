@@ -12,6 +12,9 @@ use fst::{
 
 use crate::io::vcf::SampleTag;
 
+use log::{info};
+use memmap::Mmap;
+
 pub struct FSTReader {
     genotypes_set: Set<Vec<u8>>,
     frequency_set: Set<Vec<u8>>,
@@ -21,17 +24,37 @@ pub struct FSTReader {
 
 impl FSTReader {
     pub fn new(path: &str) -> Self {
-        let genotypes_set = Self::get_set(&format!("{path}"));
-        let frequency_set = Self::get_set(&format!("{path}.frq"));
+        let genotypes_set = Self::get_set_memory(&format!("{path}"));
+        let frequency_set = Self::get_set_memory(&format!("{path}.frq"));
         Self{genotypes_set, frequency_set, genotypes: HashMap::new(), frequencies: HashMap::new()}
     }
 
-    fn get_set(path: &str) -> Set<Vec<u8>> {
-        println!("{path}");
+    fn get_set_memory(path: &str) -> Set<Vec<u8>> {
+        info!("Loading in memory : {path}");
         let mut file_handle = File::open(path).unwrap();
         let mut bytes = vec![];
         std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
         Set::new(bytes).unwrap()
+    }
+
+    fn get_set_memmap(path: &str) -> Set<Mmap> {
+        info!("Loading mem-map: {path}");
+        let mmap = unsafe { Mmap::map(&File::open(path).unwrap()).unwrap() };
+        Set::new(mmap).unwrap()
+    }
+
+    pub fn contains_chr(&self, chr: u8) -> bool {
+        let regex= format!("{chr} ");
+        let mut node = self.genotypes_set.as_fst().root();
+        for b in regex.as_bytes() {
+            match node.find_input(*b) {
+                None => return false,
+                Some(i) => {
+                    node = self.genotypes_set.as_fst().node(node.transition_addr(i));
+                }
+            }
+        }
+        return true
     }
 
     pub fn search_coordinate_genotypes(&mut self, chr: u8, pos: u32) {

@@ -11,7 +11,7 @@ use fst::automaton::{Automaton, Str, StartsWith};
 
 use std::collections::{BTreeMap, HashMap};
 use std::io::BufRead;
-
+use rayon; 
 use pedigree_sims::io::vcf::{
     self,
     SampleTag,
@@ -245,47 +245,58 @@ impl<'a> VCFIndexer<'a> {
 
 
 fn main() -> Result<(), Box<dyn Error>> {
-
-    
+    // ---------- Command line arguments
+    let cli_threads = 22;
+    let decompression_threads= 0;
     let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/");
-    //let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-50k-filtered/");
-    //let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b-first-5000/");
+    let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
+    let user_defined_subset: Option<Vec<&str>>  = Some(vec!["EUR", "AFR"]);
+    // ------------------------------------
+
     println!("Fetching input VCF files in {}", &data_dir.to_str().unwrap());
     let mut input_vcf_paths = vcf::get_input_vcfs(&data_dir).unwrap();
     input_vcf_paths.sort();
 
 
-    let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
     let mut panel = VCFPanelReader::new(panel.as_path())?;
     panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
 
     // User defined subset-arguments.
-    let user_defined_subset: Option<Vec<&str>>  = Some(vec!["EUR", "AFR"]);
     match &user_defined_subset {
         Some(subset) => panel.subset_panel(&subset.clone()),
         None         => (),
     }
 
+    // --------------------- Set ThreadPool
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(cli_threads)
+        .build()
+        .unwrap();
 
-    for vcf in input_vcf_paths.iter(){
-        // -------------------------- Format output filename
-        let file_stem = vcf.as_path()
-                .file_name()
-                .unwrap()
-                .to_str().unwrap()
-                .replace(".vcf.gz", "")
-                .replace(".vcf", "");
 
-        let pop_tag = match &user_defined_subset {
-            Some(subset) => format!("-{}", subset.join("-")),
-            None => "".to_string(),
-        };
-        let output_path =format!("tests/test-data/fst/{}{}", file_stem, pop_tag);
-        println!("{output_path:?}");
-        //let mut setbuilder = VCFIndexer::new(vcf, &output_path, panel.into_transposed_btreemap(), 0)?;
-        //unsafe {setbuilder.build_fst()?;}
-        //setbuilder.finish_build()?;
-    }
+    pool.scope(|scope|{
+        for vcf in input_vcf_paths.iter(){
+            scope.spawn(|_| {
+                // -------------------------- Format output filename
+                let file_stem = vcf.as_path()
+                    .file_name()
+                    .unwrap()
+                    .to_str().unwrap()
+                    .replace(".vcf.gz", "")
+                    .replace(".vcf", "");
+
+                let pop_tag = match &user_defined_subset {
+                    Some(subset) => format!("-{}", subset.join("-")),
+                    None => "".to_string(),
+                };
+                let output_path =format!("tests/test-data/fst/{}{}", file_stem, pop_tag);
+                println!("{output_path:?}");
+                let mut setbuilder = VCFIndexer::new(vcf, &output_path, panel.into_transposed_btreemap(), decompression_threads).unwrap();
+                unsafe {setbuilder.build_fst().unwrap();}
+                setbuilder.finish_build().unwrap();
+            });
+        }
+    });
 
 
 

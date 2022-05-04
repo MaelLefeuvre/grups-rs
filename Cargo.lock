@@ -456,6 +456,7 @@ dependencies = [
  "parser",
  "pedigree_sims",
  "pwd_from_stdin",
+ "rayon",
  "rust-htslib",
  "serde",
  "tokio",
@@ -962,6 +963,7 @@ dependencies = [
  "genome",
  "gzp",
  "log",
+ "memmap",
  "noodles-bgzf",
  "parser",
  "pwd_from_stdin",
@@ -1553,6 +1555,7 @@ dependencies = [
  "memmap",
  "parser",
  "pedigree_sims",
+ "rayon",
  "tokio",
 ]
 

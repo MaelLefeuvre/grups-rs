@@ -503,12 +503,23 @@ pub fn pedigree_simulations_fst(pedigrees: &mut HashMap<String, Vec<Pedigree>>, 
         previous_positions.insert(comparison.get_pair().to_owned(), 0);
     }
     let mut rng = rand::thread_rng();
-    //let mut i = 0;
-    println!("loading fst-set");
     let mut fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
+    
     'comparison: for comparison in comparisons.get(){
-        'coordinate: for coordinate in comparison.positions.iter(){
+        info!("Performing simulations for : {}", comparison.get_pair());
+        'coordinate: for (i, coordinate) in comparison.positions.iter().enumerate() {
             let (chromosome, position) = (coordinate.chromosome, coordinate.position);
+
+            // Don't even begin if we know this set does not contain this chromosome
+            if ! fst_reader.contains_chr(chromosome){
+                continue 'coordinate
+            }
+            
+            // Print progress in increments of 10%
+            if (i % (comparison.positions.len()/10)) == 0 {
+                let percent = (i as f32 / (comparison.positions.len() as f32).floor()) * 100.0 ;
+                info!("{percent: >5.1}% : [{chromosome: <2} {position: >9}]");
+            }
 
             // Update genotypes and frequencies.
             fst_reader.clear_buffers();
@@ -518,6 +529,8 @@ pub fn pedigree_simulations_fst(pedigrees: &mut HashMap<String, Vec<Pedigree>>, 
             if ! fst_reader.has_genotypes() {
                 continue 'coordinate
             }
+
+
 
             let pop_af = fst_reader.get_pop_allele_frequency(pop);
             // Skip line if allele frequency is < maf
