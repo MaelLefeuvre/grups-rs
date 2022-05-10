@@ -29,6 +29,14 @@ pub fn get_input_vcfs(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
     .collect::<Vec<PathBuf>>();
     vcfs.sort();
     info!("Found input vcf file candidates: {:#?}", vcfs);
+
+    if vcfs.len() < 1 {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Could not find any valid input vcf/vcf.gz files within {}\n
+        Please specify an appropriate directory using `--data-dir`.
+        Note that files are searched by matching files ending with '.vcf', or '.vcf.gz'.", input_dir.to_str().unwrap_or("None"))))
+    }
+
+
     Ok(vcfs)
 }
 
@@ -50,12 +58,16 @@ pub fn fetch_input_panel(input_dir: &PathBuf) -> std::io::Result<PathBuf>{
         )
     .collect::<Vec<PathBuf>>();
 
-    if panel.len() != 1 {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, 
-            format!("Found multiple candidate Panel definition files: {:#?}\n
+    match panel.len() {
+        1 => (),
+        0 => { return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Could not find a candidate panel definition file within {}\n
+                Please specify the relevant file using '--panel.
+                Exiting.", input_dir.to_str().unwrap_or("None"))))
+        },
+        _ =>  { return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Found multiple candidate Panel definition files: {:#?}\n
             Please specify the relevant file using '--panel'.
             Exiting.", panel)
-        ))
+        ))},
     }
 
     info!("Found: {}", panel[0].to_str().unwrap_or("None"));

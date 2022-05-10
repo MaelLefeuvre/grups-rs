@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use clap::{Parser, Subcommand, Args};
+use clap::{Parser, Subcommand, Args, ArgEnum};
 
 
 //use serde_yaml;
@@ -81,7 +81,7 @@ pub enum Commands {
     },
     FST {
         #[clap(flatten)]
-        fst: Fst
+        fst: VCFFst
     }
 }
 
@@ -142,36 +142,37 @@ pub struct Common {
     pub overwrite: bool,
 }
 
+/// Compute the average PairWise Difference (PWD) within a pileup file.
 #[derive(Parser, Debug, Serialize)]
 pub struct PwdFromStdin {
     /// Enable self-comparison mode on individuals.
     /// 
     /// Note that --min-depth>=2 is required when comparing individuals to themselves, since at least two
     /// alleles are required to effectively compute pairwise differences at a given site.
-    #[clap(short('S'), long)]
+    #[clap(short='S', long)]
     pub self_comparison: bool,
     /// Filter out tri-allelic sites when given a list of SNP-coordinates.
     /// 
     /// Note that this arguement requires the use of --targets to provide the program with a list of coordinates.
     /// The given coordinate file must furthermore explicitely provide with the REF/ALT alleles.
-    #[clap(short, long)]
+    #[clap(short='k', long)]
     pub known_variants: bool,
     /// Do not perform comparison, but rather print out the pileup lines where a comparison could be made.
     ///
     /// Note that lines are printed as soon as there is a valid comparison between ANY pair of individuals.
     /// Thus, may not prove very effective when using --self-comparison.
-    #[clap(short, long)]
+    #[clap(short='f', long)]
     pub filter_sites: bool,
     /// Ignore deletions when performing comparison.
     /// 
     /// By default, deletions ('*' character) will count as a selectible nucleotide for comparison.
-    #[clap(short, long)]
+    #[clap(short='i', long)]
     pub ignore_dels: bool,
     /// Print jackknife blocks for each individual
     #[clap(short='J', long)]
     pub print_blocks: bool,
     /// Change the size of our jackknife blocks.
-    #[clap(short, long, required(false), default_value("1000000"))]
+    #[clap(short='b', long, required(false), default_value("1000000"))]
     pub blocksize: u32,
     
     /// Provide with the minimal sequencing depth required to perform comparison.
@@ -184,13 +185,20 @@ pub struct PwdFromStdin {
     ///   - Depth: 2 3 5 2 3 
     #[clap(short='x', long, multiple_values(true), required(false), default_values(&["1","1"]))]
     pub min_depth: Vec <u16>,
+
     /// 0-based column index of the individuals that should be compared
     /// 
     /// Argument may accept slices and/or discrete integers i.e.
     /// '--samples 1-4 7 8' will be parsed as: [1, 2, 3, 4, 7, 8]
     /// Note that slices are inclusive.
-    #[clap(short, long, multiple_values(true), default_values(&["0", "1"]))]
+    #[clap(short='s', long, multiple_values(true), default_values(&["0", "1"]))]
     pub samples: Vec<String>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum Mode {
+    Vcf,
+    Fst,
 }
 
 #[derive(Args, Debug, Serialize)]
@@ -231,15 +239,19 @@ pub struct PedigreeSims {
     /// Data output labels.
     /// 
     /// Format: String String String
-    #[clap(short, long, required(false), multiple_values(true))]
+    #[clap(short='l', long, required(false), multiple_values(true))]
     pub labels: Vec<String>,
 
     /// Path to input VCF genomes for founder individuals (1000G)
-    #[clap(short='F', long, default_value(r#"./data/founders/1000G-phase3-v5a"#), parse(from_os_str))]
+    #[clap(short='F', long, default_value(r#"./data/founders/1000G-phase3-v5a"#), parse(try_from_os_str=valid_input_directory))]
     pub data_dir: std::path::PathBuf,
 
+    #[clap(short='I', long, arg_enum, default_value("vcf"))]
+    pub mode: Mode,
+
+
     /// Path to recombination genetic map data.
-    #[clap(short='G', long, required(false), default_value("./data/recombination/GRCh37"), parse(from_os_str))]
+    #[clap(short='G', long, required(false), default_value("./data/recombination/GRCh37"), parse(try_from_os_str=valid_input_directory))]
     pub recomb_dir: std::path::PathBuf,
 
     /// Number of pedigree replicates to perform
@@ -247,7 +259,7 @@ pub struct PedigreeSims {
     pub reps: u32,
 
     /// Minimum allele frequency within the pedigree superpopulation that is required to include a given SNP within the simulations.
-    #[clap(short, long, default_value("0.00"))]
+    #[clap(short='m', long, default_value("0.00"))]
     pub maf: f64,
 
     /// Superpopulation with which to perform pedigree simulations
@@ -268,11 +280,11 @@ pub struct PedigreeSims {
     pub contam_num_ind: Vec<u32>,
 
     /// Path to input pedigree definition file.
-    #[clap(short='T', long, required(false), default_value("./data/pedigrees/default.ped"), parse(from_os_str))]
+    #[clap(short='T', long, required(false), default_value("./data/pedigrees/default.ped"), parse(try_from_os_str=valid_input_file))]
     pub pedigree: std::path::PathBuf,
     
     // Path to input Panel Definition files.
-    #[clap(long, parse(from_os_str))]
+    #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
     pub panel: Option<std::path::PathBuf>,
 
     /// Number of parallel CPU processes when performing pedigree-simulations.
@@ -290,27 +302,24 @@ pub struct PedigreeSims {
 }
 
 #[derive(Args, Debug, Serialize)]
-pub struct Fst {
-
+pub struct VCFFst {
     /// Path to input Panel Definition files.
-    #[clap(long, parse(from_os_str))]
+    #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
     pub panel: std::path::PathBuf,
 
     /// Population Subset
     /// 
     /// Subset the index by a given number of (super)-population. (e.g. EUR, AFR). Note that at least one pedigree population and one contaminating population
     /// are required to obtain valid index files.
-    #[clap(long, multiple_values(true))]
+    #[clap(short='P', long, multiple_values(true))]
     pub pop_subset: Option<Vec<String>>,
 
     /// Output directory
-    #[clap(long, parse(from_os_str))]
+    #[clap(short='o', long, parse(try_from_os_str=valid_output_dir))]
     pub output_dir: std::path::PathBuf,
 
-
-
     /// Path to input VCF genomes for founder individuals (1000G)
-    #[clap(short='F', long, default_value(r#"./data/founders/1000G-phase3-v5a"#), parse(from_os_str))]
+    #[clap(short='d', long, default_value(r#"./data/founders/1000G-phase3-v5a"#), parse(try_from_os_str=valid_input_directory))]
     pub vcf_dir: std::path::PathBuf,
 
     /// Number of parallel CPU processes when performing FST-Indexation
@@ -324,7 +333,6 @@ pub struct Fst {
     /// Parallelization is dispatched according to the number of replicates.
     #[clap(short='#', long, default_value("0"))]
     pub decompression_threads: usize
-
 }
 
 impl PwdFromStdin {
@@ -338,9 +346,6 @@ impl PwdFromStdin {
         Ok(())
     }
 }
-
-/// Compute the average PairWise Difference (PWD) within a pileup file.
-
 
 /// Command line interface argument parser.
 /// 
@@ -387,6 +392,55 @@ impl Common {
     }
 }
 
+enum FileEntity {
+    File,
+    Directory,
+}
+
+impl std::fmt::Display for FileEntity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::File => write!(f, "File"),
+            Self::Directory => write!(f, "Directory"),
+        }
+    }
+}
+
+fn assert_filesystem_entity_is_valid(s: &std::ffi::OsStr, entity: FileEntity) -> std::io::Result<()> {
+    if ! std::path::Path::new(s).exists() {
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("{entity} does not exist.")))
+    }
+
+    let is_valid = match entity {
+        FileEntity::File => {std::path::Path::new(s).is_file()},
+        FileEntity::Directory => {std::path::Path::new(s).is_dir()}
+    };
+
+    if ! is_valid {
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("Not a {entity}")))
+    }
+
+    Ok(())
+}
+
+fn valid_input_directory(s: &std::ffi::OsStr) -> std::io::Result<PathBuf> {
+    assert_filesystem_entity_is_valid(s, FileEntity::Directory)?;
+    Ok(PathBuf::from(s))
+}
+
+fn valid_input_file(s: &std::ffi::OsStr) -> std::io::Result<PathBuf> {
+    assert_filesystem_entity_is_valid(s, FileEntity::File)?;
+    Ok(PathBuf::from(s))
+}
+
+fn valid_output_dir(s: &std::ffi::OsStr) -> std::io::Result<PathBuf> {
+    if ! std::path::Path::new(s).is_file() {
+        std::fs::create_dir(s)?;
+    }
+    assert_filesystem_entity_is_valid(s, FileEntity::Directory)?;
+    Ok(PathBuf::from(s))
+}
+
 /// Convert a user-defined string "range" into a vector of integers.
 /// "9-14" thus becomes [9, 10, 11, 12, 13, 14]
 /// Note that the range is fully inclusive. 
@@ -413,7 +467,7 @@ where
 ///    >
 /// 
 /// # TODO:
-///   - Please make this more elegant? We could use a flat_map at some point...
+///   - Please make this more elegant? We could use a `flat_map` at some point...
 /// 
 /// # Example
 ///```
@@ -423,7 +477,7 @@ where
 /////assert_eq!(parsed_input, vec![1, 2, 3, 5, 7])
 ///```
 /// 
-pub fn parse_user_ranges<T>(ranges: Vec<String>, arg_name: &str) -> Result<Vec<T>, ParserError>
+pub fn parse_user_ranges<'a, T>(ranges: &[String], arg_name: &'a str) -> Result<Vec<T>, ParserError<'a>>
 where
     T: FromStr + Add<Output = T> + Ord + One,
     <T as FromStr>::Err: ToString,

@@ -3,7 +3,7 @@ use genome::{SNPCoord, Genome};
 use crate::pileup::{Pileup, Line, Nucleotide};
 use std::{
     fmt,
-    collections::HashSet
+    collections::BTreeSet
 };
 use itertools::Itertools;
 
@@ -49,15 +49,15 @@ pub struct Comparison {
     pwd             : u32,
     sum_phred       : u32,
     pub blocks      : JackknifeBlocks,
-    pub positions   : HashSet<SNPCoord>
+    pub positions   : BTreeSet<SNPCoord>
 }
 
 impl Comparison {
     pub fn new(pair: (Individual, Individual), self_comparison: bool, genome: &Genome, blocksize: u32) -> Comparison {
-        Comparison {pair, self_comparison, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize), positions: HashSet::new()}
+        Comparison {pair, self_comparison, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize), positions: BTreeSet::new()}
     }
 
-    // Check if the sequencing of a given overlap is over the minimum required sequencing depth for each individual.
+    // Check if the sequencing depth of a given overlap is over the minimum required sequencing depth for each individual.
     pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
         pileups[self.pair.0.index].depth >= self.pair.0.min_depth && pileups[self.pair.1.index].depth >= self.pair.1.min_depth
     }

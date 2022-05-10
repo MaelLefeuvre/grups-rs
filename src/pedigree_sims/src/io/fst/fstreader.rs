@@ -11,24 +11,26 @@ use fst::{
 };
 
 use crate::io::vcf::SampleTag;
+use crate::io::genotype_reader::GenotypeReader;
 
-use log::{info};
+use log::info;
 use memmap::Mmap;
 
 pub struct FSTReader {
-    genotypes_set: Set<Vec<u8>>,
-    frequency_set: Set<Vec<u8>>,
+    genotypes_set: Set<Mmap>,
+    frequency_set: Set<Mmap>,
     genotypes: HashMap<String, [u8; 2]>,
     frequencies: HashMap<String, f64>,
 }
 
 impl FSTReader {
     pub fn new(path: &str) -> Self {
-        let genotypes_set = Self::get_set_memory(&format!("{path}"));
-        let frequency_set = Self::get_set_memory(&format!("{path}.frq"));
+        let genotypes_set = Self::get_set_memmap(path);
+        let frequency_set = Self::get_set_memmap(&format!("{path}.frq"));
         Self{genotypes_set, frequency_set, genotypes: HashMap::new(), frequencies: HashMap::new()}
     }
 
+    #[allow(dead_code)]
     fn get_set_memory(path: &str) -> Set<Vec<u8>> {
         info!("Loading in memory : {path}");
         let mut file_handle = File::open(path).unwrap();
@@ -54,7 +56,7 @@ impl FSTReader {
                 }
             }
         }
-        return true
+        true
     }
 
     pub fn search_coordinate_genotypes(&mut self, chr: u8, pos: u32) {
@@ -97,22 +99,20 @@ impl FSTReader {
         self.frequencies.clear();
     }
 
-    pub fn get_pop_allele_frequency(&self, pop: &String) -> Option<&f64> {
-        self.frequencies.get(pop)
-    }
-
-    pub fn get_alleles(&self, sample_id: &String ) -> Option<[u8; 2]> {
-        Some(self.genotypes[sample_id].map(|all| all - 48))
-    }
-
     pub fn has_genotypes(&self) -> bool {
        ! self.genotypes.is_empty()
     }
+}
 
-    pub fn compute_local_cont_af(&self, contam_ind_ids: &Vec<&SampleTag>) -> Result<f64, Box<dyn Error>>{
+impl GenotypeReader for FSTReader {
+    fn get_alleles(&self, sample_tag: &SampleTag ) -> Option<[u8; 2]> {
+        Some(self.genotypes[sample_tag.id()].map(|all| all - 48))
+    }
+
+    fn compute_local_cont_af(&self, contam_ind_ids: &[&SampleTag]) -> Result<f64, Box<dyn Error>> {
         let mut ref_allele_count = 0;
         let mut alt_allele_count = 0;
-        for id in contam_ind_ids.iter().map(|tag| tag.id()) {
+        for id in contam_ind_ids.iter() {
             let cont_alleles = self.get_alleles(id).unwrap();
             for allele in cont_alleles.into_iter() {
                 match allele {
@@ -125,4 +125,10 @@ impl FSTReader {
         Ok((alt_allele_count as f64) /(alt_allele_count as f64 + ref_allele_count as f64))
     }
 
+    fn get_pop_allele_frequency(&self, pop: &String) -> Result<f64, Box<dyn Error>> {
+        match self.frequencies.get(pop) {
+            Some(freq) => Ok(*freq),
+            None             => Err(format!("Missing allele frequency in .frq file for pop {} at this coordinate.", pop).into())
+        }
+    }
 }

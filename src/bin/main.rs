@@ -14,7 +14,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     match cli.commands {
         Run {common, pwd, ped} => {
             // ----------------------------- Parse Requested_samples
-            let requested_samples: Vec<usize> = parser::parse_user_ranges(pwd.samples.clone(), "samples")?;
+            let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
             // ----------------------------- Initialize genome.
             info!("Indexing reference genome...");
             let genome = match &common.genome {
@@ -28,7 +28,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         },
         PwdFromStdin {common, pwd} => {
             // ----------------------------- Parse Requested_samples
-            let requested_samples: Vec<usize> = parser::parse_user_ranges(pwd.samples.clone(), "samples")?;
+            let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
             // ----------------------------- Initialize genome.
             info!("Indexing reference genome...");
             let genome = match &common.genome {

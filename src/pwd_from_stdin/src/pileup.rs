@@ -17,9 +17,9 @@ pub struct Nucleotide {
 }
 
 impl Nucleotide {
-    fn new(base: &char, score: &char) -> Nucleotide {
+    fn new(base: char, score: char) -> Nucleotide {
         let phred = Nucleotide::to_phred(score);            
-        Nucleotide {base: *base, phred}
+        Nucleotide {base: base, phred}
     }
 
     /// Convert the BQ score back to the ASCII format
@@ -29,27 +29,27 @@ impl Nucleotide {
 
     /// Convert an ASCII BQ score to phred-33.
     /// Used during construction.
-    fn to_phred(score: &char) -> u8 {
+    fn to_phred(score: char) -> u8 {
         let phred_scale: u8 =33;
-        (*score as u8) - phred_scale
+        (score as u8) - phred_scale
     }
 }
 
 
 
-/// PileupError struct for error propagation and chaining.
-///  - RefSkipError   -> when char ['>', '<'] are found within a pileup string.
-///                      used in `Pileup::new()`
-///  - LengthError    -> Nucleotide and Quality string, should have an equal length
-///                      after filtration -> LengthError is raised if this is not the
-///                      case.
-///  - ParseLIneError -> Not yet Implemented. General error which is raised if a 
-///                      character failed to parse.
+/// `PileupError` struct for error propagation and chaining.
+///  - `RefSkip`       -> when char ['>', '<'] are found within a pileup string.
+///                       used in `Pileup::new()`
+///  - `UnequalLength` -> Nucleotide and Quality string, should have an equal length
+///                       after filtration -> `LengthError` is raised if this is not the
+///                       case.
+///  - `ParseLine`     -> Not yet Implemented. General error which is raised if a 
+///                       character failed to parse.
 #[derive(Debug)]
 pub enum PileupError {
-    RefSkipError,
-    LengthError,
-    ParseLineError,
+    RefSkip,
+    UnequalLength,
+    ParseLine,
 }
 
 impl Error for PileupError {}
@@ -57,9 +57,9 @@ impl Error for PileupError {}
 impl fmt::Display for PileupError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::RefSkipError   => write!(f, "Cannot handle reference skips within pileup. ('>' '<')"),
-            Self::LengthError    => write!(f, "Length of nucleotides and scores differ vector differ."),
-            Self::ParseLineError => write!(f, "Failed to parse pileup line"),
+            Self::RefSkip       => write!(f, "Cannot handle reference skips within pileup. ('>' '<')"),
+            Self::UnequalLength => write!(f, "Length of nucleotides and scores differ vector differ."),
+            Self::ParseLine     => write!(f, "Failed to parse pileup line"),
         }
     }
 }
@@ -70,7 +70,7 @@ impl fmt::Display for PileupError {
 ///                          L-> Vec<Nucleotides> +-> base
 ///                                               L-> score
 /// 
-/// # TODO: migrate nucleotide formating from `Pileup::new()` to Nucleotide::new()
+/// # TODO: migrate nucleotide formating from `Pileup::new()` to `Nucleotide::new()`
 /// this will greatly increase readability and dilute responsibility.
 #[derive(Debug)]
 pub struct Pileup {
@@ -79,7 +79,7 @@ pub struct Pileup {
 }
 
 impl Pileup {
-    pub fn new(depth: u16, bases: String, scores: String, ignore_dels: bool) -> Result<Pileup, Box<dyn Error>> {
+    pub fn new(depth: u16, bases: &str, scores: &str, ignore_dels: bool) -> Result<Pileup, Box<dyn Error>> {
 
         let bases = &bases.to_uppercase();    // Convert antisense to forward
         let bases = &bases.replace(',', "."); //
@@ -96,12 +96,12 @@ impl Pileup {
                 '^'     => {chars.next(); continue},                        //Skip starts
                 '$'     => {continue},                                      //Skip end
                 '*'     => if ignore_dels {continue},                       //Skip deletion if required
-                '>'|'<' => return Err(Box::new(PileupError::RefSkipError)), //Bail if we found a refskip
+                '>'|'<' => return Err(Box::new(PileupError::RefSkip)), //Bail if we found a refskip
                 _       => ()
             }
-            match &scores_vec.next() {
-                Some(score) => nucleotides.push(Nucleotide::new(&n, score)),
-                None => return Err(Box::new(PileupError::LengthError))
+            match scores_vec.next() {
+                Some(score) => nucleotides.push(Nucleotide::new(n, score)),
+                None => return Err(Box::new(PileupError::UnequalLength))
             };
         }
         Ok(Pileup { depth, nucleotides })
@@ -138,6 +138,7 @@ impl Pileup {
     }
 
     /// Return a string of BQ scores in ASCII format. Mainly for Tests and Debug.
+    #[must_use]
     pub fn get_scores_ascii(&self) -> String {
         let mut pileup_nuc = String::from("");
         for nuc in &self.nucleotides {
@@ -209,9 +210,9 @@ impl Line {
         //Loop along individuals
         let mut individuals: Vec<Pileup> = Vec::new();
         for i in (3..split_line.len()).step_by(3) {
-            let depth :    u16 = split_line[i].parse()?;
-            let bases : String = split_line[i+1].parse()?;
-            let scores: String = split_line[i+2].parse()?;
+            let depth : u16  = split_line[i].parse()?;
+            let bases : &str = split_line[i+1];
+            let scores: &str = split_line[i+2];
 
             individuals.push(Pileup::new(depth, bases, scores, ignore_dels)?);
         }
@@ -263,9 +264,9 @@ mod tests {
     use genome::SNPCoord;
 
     fn create_dummy_pileup(line_input: &str, score_input: &str, ignore_dels: bool) -> pileup::Pileup {
-        let line_input : String = line_input.to_string();
-        let scores_input : String = score_input.to_string();
-        return pileup::Pileup::new(line_input.len() as u16, line_input, scores_input, ignore_dels).unwrap();
+        //let line_input : String = line_input.to_string();
+        //let scores_input : String = score_input.to_string();
+        return pileup::Pileup::new(line_input.len() as u16, line_input, score_input, ignore_dels).unwrap();
     }
 
     #[test]

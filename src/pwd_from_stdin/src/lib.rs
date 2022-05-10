@@ -76,7 +76,7 @@ pub fn run<'a>(
     // ----------------------------- Parse requested Chromosomes
     let valid_chromosomes : Vec<u8> = match com_cli.chr.clone() {
         None         => genome.keys().copied().collect(),
-        Some(vector) => parser::parse_user_ranges(vector, "chr")?
+        Some(vector) => parser::parse_user_ranges(&vector, "chr")?
     };
     info!("Valid chromosomes: {:?}", valid_chromosomes);
 

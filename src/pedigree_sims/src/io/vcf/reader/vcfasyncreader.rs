@@ -75,7 +75,7 @@ impl VCFAsyncReader {
     }
 
 
-    pub fn compute_local_cont_af(&self, contam_ind_ids: &Vec<usize>) -> Result<f64, Box<dyn Error>>{
+    pub fn compute_local_cont_af(&self, contam_ind_ids: &[usize]) -> Result<f64, Box<dyn Error>>{
         let mut ref_allele_count = 0;
         let mut alt_allele_count = 0;
         for idx in contam_ind_ids.iter() {

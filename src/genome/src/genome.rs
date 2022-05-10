@@ -16,18 +16,18 @@ use log::{warn, info, debug};
 
 #[derive(Debug)]
 pub enum FastaIndexReaderError {
-    FileNotFoundError(String, String),
-    ParseIntError(String, u8, String),
-    InvalidFileFormatError(String)
+    FileNotFound(String, String),
+    ParseInt(String, u8, String),
+    InvalidFileFormat(String)
 }
 impl Error for FastaIndexReaderError {}
 
 impl std::fmt::Display for FastaIndexReaderError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::FileNotFoundError(path, err)   => write!(f, "{}: {}",path, err),
-            Self::ParseIntError(path, line, err) => write!(f, "{}: Line {} - Invalid line format [{}]", path, line, err),
-            Self::InvalidFileFormatError(ext)  => write!(f, "Invalid fasta file format: expected [.fasta|.fa], got '{}'", ext),
+            Self::FileNotFound(path, err)   => write!(f, "{}: {}",path, err),
+            Self::ParseInt(path, line, err) => write!(f, "{}: Line {} - Invalid line format [{}]", path, line, err),
+            Self::InvalidFileFormat(ext)  => write!(f, "Invalid fasta file format: expected [.fasta|.fa], got '{}'", ext),
         }
     }
 }
@@ -70,16 +70,16 @@ impl Genome {
     /// TODO: - convert 'path' variable to &str
     ///       - Check for .fai.fai extension doubles.
     pub fn from_fasta_index(path: &str) -> Result<Genome,FastaIndexReaderError> {
-        use FastaIndexReaderError::{InvalidFileFormatError, FileNotFoundError, ParseIntError};
+        use FastaIndexReaderError::{InvalidFileFormat, FileNotFound, ParseInt};
         info!("Parsing reference genome: {}", path);
 
         let fai = match Path::new(path).extension() { // Check file extension
-            None                 => return Err(InvalidFileFormatError("None".to_string())),
+            None                 => return Err(InvalidFileFormat("None".to_string())),
             Some(osstr)          => match osstr.to_str(){ 
                 Some("fai")          => path.to_string(),                          
                 Some("fasta" | "fa") => format!("{}{}", path, ".fai"), // Append '.fai' if it is not there
-                Some(other)    => return Err(InvalidFileFormatError(".".to_string()+other)),
-                None                 => return Err(InvalidFileFormatError("None".to_string())),
+                Some(other)    => return Err(InvalidFileFormat(".".to_string()+other)),
+                None                 => return Err(InvalidFileFormat("None".to_string())),
             }        
         };
         debug!("fasta.fai file : {}", fai);
@@ -88,7 +88,7 @@ impl Genome {
         let mut genome = Self::new();
         let file = BufReader::new(match File::open(fai.clone()) {
             Ok(file) => file,
-            Err(err) => return Err(FileNotFoundError(fai, err.to_string())),
+            Err(err) => return Err(FileNotFound(fai, err.to_string())),
         });
     
         let mut skipped_chrs = Vec::new();
@@ -100,7 +100,7 @@ impl Genome {
                     let name      : u8        = result;
                     let length    : u32       = match split_line[1].parse() {
                         Ok(len) => len,
-                        Err(e)  => return Err(ParseIntError(fai, name, e.to_string()))
+                        Err(e)  => return Err(ParseInt(fai, name, e.to_string()))
                     };
                     debug!("Chromosome: {: <3} {: <10} {: <12}", index, name, length);
                     genome.add_chromosome(index, name, length);

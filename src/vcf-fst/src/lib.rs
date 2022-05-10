@@ -1,29 +1,30 @@
-use fst::set::{Stream, StreamBuilder};
-use std::path::{PathBuf, Path};
-use std::error::Error;
+use std::{
+    path::Path,
+    error::Error,
+    fs::File,
+    io::BufRead,
+    collections::BTreeMap,
+};
 
-use std::fs::File;
-use fst::{IntoStreamer, SetBuilder, Set};
-//use fst::Streamer;
-use fst::automaton::{Automaton, Str, StartsWith};
-//use fst::automaton::Subsequence;
-//use memmap::Mmap;
+use fst::{
+    SetBuilder,
+};
 
-use std::collections::{BTreeMap, HashMap};
-use std::io::BufRead;
-use rayon; 
+use parser::{self};
 use pedigree_sims::io::vcf::{
     self,
     SampleTag,
-    reader::{VCFReader, VCFAsyncReader, VCFPanelReader},
+    reader::{VCFReader, VCFPanelReader},
 };
 
+use log::{info};
+use rayon::{self}; 
+
 pub struct VCFIndexer<'a>{
-    reader              : VCFReader<'a>,                      // VCFReader.
-    builder             : SetBuilder<std::io::BufWriter<File>>,   // FST SetBuilder
-    frq_builder        : SetBuilder<std::io::BufWriter<File>>,
-    //samples             : Vec<io::SampleTag>,                   // Sorter vector of sampletags, sorted across Id.
-    samples             : BTreeMap<SampleTag, String>,
+    reader              : VCFReader<'a>,                          // VCFReader.
+    builder             : SetBuilder<std::io::BufWriter<File>>,   // FST SetBuilder for genotypes
+    frq_builder         : SetBuilder<std::io::BufWriter<File>>,   // FST SetBuilder for allele_frequencies.
+    samples             : BTreeMap<SampleTag, String>,            
     counter             : usize,                                  // Line counter.
     coordinate_buffer   : Vec<u8>,                                // Coordinate of the current line
     previous_coordinate : Vec<u8>,                                // Coordinate of the previous line
@@ -126,22 +127,7 @@ impl<'a> VCFIndexer<'a> {
         Ok(())
     }
 
-    fn parse_samples(reader: &VCFAsyncReader) -> Vec<SampleTag> {
-        // Extract and sort samples 
-        let samples = reader.samples();
-        let samples = &samples[9..];
-        // ----------------------- Convert to struct to keep id.
-        let mut struct_samples = Vec::new();
-        for (i, sample) in samples.iter().enumerate(){
-            let sample = SampleTag::new(sample, Some(i));
-            struct_samples.push(sample);
-        }
-        // ----------------------- Sort samples by ID.
-        struct_samples.sort();
-        struct_samples
-    }
-
-     fn fill_current_position_buffer(&mut self) -> Result<(), Box<dyn Error>> {
+    fn fill_current_position_buffer(&mut self) -> Result<(), Box<dyn Error>> {
         // ---------------------------- Get current chromosome and position.
         let chr_bytes = self.reader.source.read_until(b'\t', &mut self.coordinate_buffer)?; // Add chromosome
         self.add_field_separator(b' ')?;
@@ -222,7 +208,7 @@ impl<'a> VCFIndexer<'a> {
     }
 
     unsafe fn parse_keys(&mut self) -> Result<(), Box<dyn Error>> {
-        for (sample_tag, sample_pop) in self.samples.iter() {            
+        for sample_tag in self.samples.keys() {            
 
             // Complete value to insert.
             let mut key = self.coordinate_buffer.clone();
@@ -243,22 +229,15 @@ impl<'a> VCFIndexer<'a> {
 
 
 pub fn run(
-    fst_cli: &parser::Fst,
+    fst_cli: &parser::VCFFst,
 ) -> Result<(), Box<dyn Error>> {
-    // ---------- Command line arguments
-    //let cli_threads = 22;
-    //let decompression_threads= 0;
-    //let data_dir = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/");
-    //let panel = PathBuf::from("tests/test-data/vcf/g1k-phase3-v5b/integrated_call_samples_v3.20130502.ALL.panel");
-    //let user_defined_subset: Option<Vec<&str>>  = Some(vec!["EUR", "AFR"]);
-    // ------------------------------------
 
-    println!("Fetching input VCF files in {}", &fst_cli.vcf_dir.to_str().unwrap());
+    info!("Fetching input VCF files in {}", &fst_cli.vcf_dir.to_str().unwrap());
     let mut input_vcf_paths = vcf::get_input_vcfs(&fst_cli.vcf_dir).unwrap();
     input_vcf_paths.sort();
 
 
-    let mut panel = VCFPanelReader::new(&fst_cli.panel.as_path())?;
+    let mut panel = VCFPanelReader::new(fst_cli.panel.as_path())?;
     panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
 
     // User defined subset-arguments.
@@ -298,63 +277,5 @@ pub fn run(
         }
     });
 
-
-
-
-//    // Bincode strategy
-//
-//    //serialize(&input_vcf_paths, &tpool).unwrap();
-//
-//    // FST Strategy
-//    println!("Generating FST index...");
-//    //sort_vcf_map(&input_vcf_paths, &tpool).unwrap();
-//    //vcf_fst_index(&input_vcf_paths[0], 4)?;
-//    println!("Done!");
-//
-//    //// Memory Map strategy.
-//    //println!("Opening memory map");
-//    //let mmap = unsafe { Mmap::map(&File::open("tests/fst/g1k-map.fst").unwrap()).unwrap() };
-//    //let map = Map::new(mmap).unwrap();
-//
-//    //// In RAM Strategy
-//    println!("Reading in memory.");
-//    let mut file_handle = File::open("tests/test-data/fst/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes-EUR-AFR.fst").unwrap();
-//    let mut bytes = vec![];
-//    std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
-//    //let map = Map::new(bytes).unwrap();
-//
-//    let set = Set::new(bytes).unwrap();
-//
-//    let samples = ["HG01067", "NA20885", "HG00267", "HG00236", "NA20356", "NA19346"];
-//    let samples =  ["HG00096", "HG00264", "HG01618", "HG01920"]; //EUR + AFR
-//
-//    for sample in samples.iter() {
-//        println!("Searching {sample}");
-//        //000061543
-//        //000030524
-//        let regex = format!("1 000055164 {sample}");
-//        //let matcher = Subsequence::new(&regex);
-//        let matcher = Str::new(&regex)
-//            .starts_with();
-//            //.intersection(Subsequence::new(&sample));
-//        let stream = set.search(&matcher).into_stream();
-//
-//        println!("  - Populating vector");
-//        //let mut kvs = vec![];
-//        let kvs = stream.into_strs().unwrap();
-//        //let stream = map.search(&matcher).into_stream();
-//        //let kvs = stream.into_str_vec().unwrap();
-//        
-//        println!("{kvs:?}");
-//        //while let Some((k, v)) = stream.next() {
-//        //    println!("{:?} {}", k, v);
-//        //    let record = (String::from_utf8(k.to_vec()).unwrap(), v);
-//        //    println!("{:?}", &record);
-//        //    kvs.push(record);
-//        //    break
-//        //}
-//        //println!("{kvs:?}\n");
-//    }
-//
     Ok(())
 }

@@ -1,16 +1,18 @@
 use std::{
-    error::Error, collections::HashMap, path::PathBuf,
+    error::Error,
 };
-use log::{info};
+use log::{info, debug};
 //use rayon;
 
 use genome::{
-    Genome,
-    GeneticMap,
+    Genome
 };
-use pwd_from_stdin::comparison::Comparisons;
+
 pub mod io;
 pub mod pedigree;
+
+use pwd_from_stdin::comparison::Comparisons;
+
 
 /// @TODO! 
 ///   - [CRUCIAL] Print simulations results into files.
@@ -56,9 +58,27 @@ pub fn run(
     comparisons       : &Comparisons,
 ) -> Result<(), Box<dyn Error>>
 {
-    // --------------------- Parse input recombination maps.
-    info!("Parsing genetic maps in {}", &ped_cli.recomb_dir.to_str().unwrap_or("None"));
-    let genetic_map = GeneticMap::default().from_dir(&ped_cli.recomb_dir)?;
+    // ----------------------------- Prepare output files
+    // ---- Add final_results files.
+    let mut output_files = pwd_from_stdin::io::get_output_files(
+        &mut _com_cli.get_file_prefix(None).unwrap(),    // extract the user requested file prefix
+        _com_cli.overwrite,                                  // Should we allow file overwriting ?
+        pwd_from_stdin::io::FileKey::Ext,         // What key are we using to hash these files ?
+        &["".to_string()],   // Vector of filename suffixes.
+        &["result"]          // Vector of file extensions.
+    )?;
+
+    // ---- Add blocks files.
+    output_files.extend(
+        pwd_from_stdin::io::get_output_files(
+            &mut _com_cli.get_file_prefix(Some("simulations/")).unwrap(),
+            _com_cli.overwrite,
+            pwd_from_stdin::io::FileKey::Suffix,
+            &comparisons.get_pairs(),
+            &["sims"]
+        )?.into_iter());
+
+    debug!("Output files: {:#?}", output_files);
 
     // --------------------- Fetch the input panel.
     let panel = match ped_cli.panel.clone() {
@@ -69,19 +89,17 @@ pub fn run(
     // --------------------- Parse Input Samples Panel
     let mut panel = io::vcf::reader::VCFPanelReader::new(panel.as_path())?;
 
-    let vcf_requested = false;
-
-    let input_paths = if vcf_requested {
-        // --------------------- Get the list of input vcfs.
-        info!("Fetching input VCF files in {}", &ped_cli.data_dir.to_str().unwrap_or("None"));
-        let input_vcf_paths = io::vcf::get_input_vcfs(&ped_cli.data_dir)?;
-        panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
-        input_vcf_paths
-    }
-    else {
-        let fst_dir = PathBuf::from("./tests/test-data/fst/");
-        let input_fst_paths = io::fst::get_input_fst(&fst_dir)?;
-        input_fst_paths
+    let input_paths = match ped_cli.mode {
+        parser::Mode::Vcf => {
+            // --------------------- Get the list of input vcfs.
+            info!("Fetching input VCF files in {}", &ped_cli.data_dir.to_str().unwrap_or("None"));
+            let input_vcf_paths = io::vcf::get_input_vcfs(&ped_cli.data_dir)?;
+            panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
+            input_vcf_paths
+        },
+        parser::Mode::Fst => {
+            io::fst::get_input_fst(&ped_cli.data_dir)?
+        },
     };
 
 
@@ -93,18 +111,7 @@ pub fn run(
     }
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
-    let template_pedigree= io::pedigree::pedigree_parser(ped_cli.pedigree.as_path(), &genome).unwrap();
-    let mut pedigrees = HashMap::new();
-    for comparison in comparisons.get() {
-        let comparison_label = comparison.get_pair();
-        pedigrees.insert(comparison_label.to_owned(), Vec::new());
-        for _ in 0..ped_cli.reps {
-            let mut new_pedigree = template_pedigree.clone();
-            new_pedigree.set_tags(&panel, &ped_cli.pedigree_pop);
-            new_pedigree.assign_offspring_strands()?;
-            pedigrees.get_mut(&comparison_label).unwrap().push(new_pedigree);
-        }
-    }
+    let mut pedigrees = pedigree::Pedigrees::new(&ped_cli.pedigree, ped_cli.reps, ped_cli.pedigree_pop, comparisons, &panel, &genome, &ped_cli.recomb_dir)?;
 
     // --------------------- Set ThreadPool
     //let pool = rayon::ThreadPoolBuilder::new()
@@ -113,68 +120,50 @@ pub fn run(
     //    .unwrap();
 
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
-    if vcf_requested {
-        info!("Starting VCF pedigree comparisons.");
-        for vcf in input_paths.iter() {
-            let simulations = pedigree::pedigree_simulations(
-                &mut pedigrees, 
-                vcf,
-                comparisons,
-                &ped_cli.pedigree_pop,
-                ped_cli.contamination_rate[0][0] as f64 / 100.0,
-                &contam_ind_ids,
-                ped_cli.pmd_rate[0][0] as f64 / 100.0,
-                ped_cli.af_downsampling_rate,
-                ped_cli.snp_downsampling_rate,
-                &genetic_map,
-                ped_cli.maf,
-                ped_cli.decompression_threads
-            );
-            simulations?;
-        }
-    } else {
-           // -------------- [PROTOTYPE]
-        info!("Starting FST pedigree comparisons.");
-        for fst in input_paths.iter(){
-            let simulations = pedigree::pedigree_simulations_fst(
-                &mut pedigrees, 
-                fst,
-                comparisons,
-                &ped_cli.pedigree_pop,
-                ped_cli.contamination_rate[0][0] as f64 / 100.0,
-                &contam_ind_ids,
-                ped_cli.pmd_rate[0][0] as f64 / 100.0,
-                ped_cli.af_downsampling_rate,
-                ped_cli.snp_downsampling_rate,
-                &genetic_map,
-                ped_cli.maf,
-                ped_cli.decompression_threads
-            );
-            simulations?;
-        }
+    let contam_rate = ped_cli.contamination_rate[0][0] as f64 / 100.0; 
+    let seq_error_rate = ped_cli.pmd_rate[0][0] as f64 / 100.0;
+
+    match ped_cli.mode {
+        parser::Mode::Vcf => {
+            info!("Starting VCF pedigree comparisons.");
+            for vcf in input_paths.iter() {
+                pedigrees.pedigree_simulations_vcf(
+                    vcf,
+                    contam_rate,
+                    &contam_ind_ids,
+                    seq_error_rate,
+                    ped_cli.af_downsampling_rate,
+                    ped_cli.snp_downsampling_rate,
+                    ped_cli.maf,
+                    ped_cli.decompression_threads
+                )?;
+            }
+        },
+        parser::Mode::Fst => {
+            // -------------- [PROTOTYPE]
+            info!("Starting FST pedigree comparisons.");
+            for fst in input_paths.iter(){
+                pedigrees.pedigree_simulations_fst(
+                    fst,
+                    contam_rate,
+                    &contam_ind_ids,
+                    seq_error_rate,
+                    ped_cli.af_downsampling_rate,
+                    ped_cli.snp_downsampling_rate,
+                    ped_cli.maf
+                )?;
+            }
+        },
         // -------------- [END PROTOTYPE]
     }
 
     // --------------------- Print pedigree simulation results.
-    for req_comparison in comparisons.get() {
-        let comparison_label = req_comparison.get_pair();
-        println!("--------------------- {comparison_label}");
-        let pedigree_vec = pedigrees.get_mut(&comparison_label).unwrap();
-        for (i, pedigree) in pedigree_vec.iter().enumerate() {
-            pedigree.print_results(i);
-        }
-    }
+    pedigrees.write_simulations(&output_files)?;
+
 
     // --------------------- Compute most likely relationship for each Comparison
-    println!("----------------------------------------------------");
-    for req_comparison in comparisons.get() {
-        let comparison_label = req_comparison.get_pair();
-        let pedigree_vec = pedigrees.get_mut(&comparison_label).unwrap();
-        pedigree::compute_results(&pedigree_vec, req_comparison);
-    }
-
-
-    println!("Done!");
+    println!("--------------------------------------------------------------");
+    pedigrees.compute_results(&output_files["result"])?;
 
     Ok(())
 }

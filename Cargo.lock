@@ -1552,12 +1552,12 @@ name = "vcf-fst"
 version = "0.1.0"
 dependencies = [
  "fst",
+ "log",
  "logger",
  "memmap",
  "parser",
  "pedigree_sims",
  "rayon",
- "tokio",
 ]
 
 [[package]]

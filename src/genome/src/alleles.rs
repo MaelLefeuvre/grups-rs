@@ -20,18 +20,12 @@ impl Allele {
     pub fn get_af(&self) -> f64 {self.af}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Alleles (Vec<Allele>);
 
 impl Alleles{
     pub fn add_allele(&mut self, allele: Allele){
         self.0.push(allele);
-    }
-}
-
-impl Default for Alleles {
-    fn default() -> Self {
-        Alleles(Vec::new())
     }
 }
 
