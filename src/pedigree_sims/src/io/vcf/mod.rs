@@ -30,7 +30,7 @@ pub fn get_input_vcfs(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
     vcfs.sort();
     info!("Found input vcf file candidates: {:#?}", vcfs);
 
-    if vcfs.len() < 1 {
+    if vcfs.is_empty() {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Could not find any valid input vcf/vcf.gz files within {}\n
         Please specify an appropriate directory using `--data-dir`.
         Note that files are searched by matching files ending with '.vcf', or '.vcf.gz'.", input_dir.to_str().unwrap_or("None"))))

@@ -409,6 +409,17 @@ impl PedComparisons {
     }
 }
 
+pub struct PedigreeParams {
+    snp_downsampling_rate : f64,
+    af_downsampling_rate  : f64,
+    seq_error_rate        : f64,
+    contam_rate           : f64,
+    cont_af               : f64,
+    maf                   : f64,
+    contam_ind_ids        : Vec<SampleTag>,
+}
+
+
 #[derive(Debug, Clone)]
 pub struct Pedigree {
     pub individuals: BTreeMap<String, Rc<RefCell<Individual>>>,
@@ -592,6 +603,7 @@ pub struct Pedigrees<'a> {
     comparisons: &'a Comparisons,
     pedigree_pop: String,
     genetic_map: GeneticMap,
+    previous_positions: HashMap<String, u32>,
     rng: ThreadRng,
 }
 
@@ -618,10 +630,16 @@ impl<'a> Pedigrees<'a> {
         info!("Parsing genetic maps in {}", &recomb_dir.to_str().unwrap_or("None"));
         let genetic_map = GeneticMap::default().from_dir(recomb_dir)?;
 
+        // --------------------- For each comparison, keep a record of the previously typed SNP's position.
+
+        let mut previous_positions = HashMap::new();
+        for comparison in comparisons.get() {
+            previous_positions.insert(comparison.get_pair().to_owned(), 0);
+        }
         // --------------------- Initialize RNG
         let rng = rand::thread_rng();
 
-        Ok(Pedigrees{pedigrees, comparisons, pedigree_pop, genetic_map, rng})
+        Ok(Pedigrees{pedigrees, comparisons, pedigree_pop, previous_positions, genetic_map, rng})
     }
 
 
@@ -656,15 +674,8 @@ impl<'a> Pedigrees<'a> {
 
     #[allow(unused_labels)]
     pub fn pedigree_simulations_fst(&mut self, input_fst_path: &Path, contam_rate: f64, contam_ind_ids: &[&SampleTag], seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, maf: f64) -> Result<(), Box<dyn Error>> {
-        // --------------------- For each comparison, keep a record of the previously typed SNP's position.       // DUPLICATE
-        let mut previous_positions = HashMap::new();                                        // DUPLICATE
-        for comparison in self.comparisons.get() {                                                   // DUPLICATE
-            previous_positions.insert(comparison.get_pair().to_owned(), 0);                                  // DUPLICATE
-        }
-
         // --------------------- Read and store FST index into memory.
         let mut fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
-
         'comparison: for comparison in self.comparisons.get() {
             info!("Performing simulations for : {}", comparison.get_pair());
             'coordinate: for (i, coordinate) in comparison.positions.iter().enumerate() {
@@ -706,7 +717,7 @@ impl<'a> Pedigrees<'a> {
 
                 // --------------------- Compute the probability of recombination using our genetic map.
                 let comparison_label = comparison.get_pair().to_owned();
-                let previous_position = previous_positions[&comparison_label];
+                let previous_position = self.previous_positions[&comparison_label];
                 let interval_prob_recomb: f64 = self.genetic_map.compute_recombination_prob(chromosome, previous_position, position);
                 trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
                 // --------------------- Parse genotype fields and start updating dynamic simulations.
@@ -717,12 +728,6 @@ impl<'a> Pedigrees<'a> {
     }
 
     pub fn pedigree_simulations_vcf(&mut self, input_vcf_path: &Path, contam_rate: f64, contam_ind_ids: &[&SampleTag], seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, maf: f64, threads: usize) -> Result<(), Box<dyn Error>> {
-        // --------------------- For each comparison, keep a record of the previously typed SNP's position.       // DUPLICATE
-        let mut previous_positions = HashMap::new();                                        // DUPLICATE
-        for comparison in self.comparisons.get() {                                                   // DUPLICATE
-            previous_positions.insert(comparison.get_pair().to_owned(), 0);                                  // DUPLICATE
-        }
-
         // --------------------- Read VCF File line by line.
         let mut i = 0;
         let mut vcf_reader = VCFReader::new(input_vcf_path, threads)?;
@@ -780,7 +785,7 @@ impl<'a> Pedigrees<'a> {
                     // Compute the interval between current and previous position, search trough the genetic map interval tree,
                     // And compute the probability of recombination.
                     let comparison_label = comparison.get_pair().to_owned();
-                    let previous_position = previous_positions[&comparison_label];
+                    let previous_position = self.previous_positions[&comparison_label];
                     let interval_prob_recomb: f64 = self.genetic_map.compute_recombination_prob(chromosome, previous_position, position);
                     trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
 

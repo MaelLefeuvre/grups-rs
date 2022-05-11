@@ -17,16 +17,16 @@ use log::info;
 use memmap::Mmap;
 
 pub struct FSTReader {
-    genotypes_set: Set<Mmap>,
-    frequency_set: Set<Mmap>,
+    genotypes_set: Set<Vec<u8>>,
+    frequency_set: Set<Vec<u8>>,
     genotypes: HashMap<String, [u8; 2]>,
     frequencies: HashMap<String, f64>,
 }
 
 impl FSTReader {
     pub fn new(path: &str) -> Self {
-        let genotypes_set = Self::get_set_memmap(path);
-        let frequency_set = Self::get_set_memmap(&format!("{path}.frq"));
+        let genotypes_set = Self::get_set_memory(path);
+        let frequency_set = Self::get_set_memory(&format!("{path}.frq"));
         Self{genotypes_set, frequency_set, genotypes: HashMap::new(), frequencies: HashMap::new()}
     }
 
@@ -39,6 +39,7 @@ impl FSTReader {
         Set::new(bytes).unwrap()
     }
 
+    #[allow(dead_code)]
     fn get_set_memmap(path: &str) -> Set<Mmap> {
         info!("Loading mem-map: {path}");
         let mmap = unsafe { Mmap::map(&File::open(path).unwrap()).unwrap() };
@@ -125,7 +126,7 @@ impl GenotypeReader for FSTReader {
         Ok((alt_allele_count as f64) /(alt_allele_count as f64 + ref_allele_count as f64))
     }
 
-    fn get_pop_allele_frequency(&self, pop: &String) -> Result<f64, Box<dyn Error>> {
+    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, Box<dyn Error>> {
         match self.frequencies.get(pop) {
             Some(freq) => Ok(*freq),
             None             => Err(format!("Missing allele frequency in .frq file for pop {} at this coordinate.", pop).into())

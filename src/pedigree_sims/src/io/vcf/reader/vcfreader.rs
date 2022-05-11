@@ -20,20 +20,14 @@ use gzp::{deflate::Bgzf, par::decompress::{ParDecompressBuilder}};
 const INFO_FIELD_INDEX   : usize = 7;
 const GENOTYPES_START_IDX: usize = 9;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct InfoField (Option<Vec<String>>);
-
-impl Default for InfoField {
-    fn default() -> Self {
-        Self(None)
-    }
-}
 
 impl Deref for InfoField {
     type Target = Vec<String>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0.as_ref().expect("Attempting to access empty InfoField!")
+        self.0.as_ref().expect("Attempting to access empty InfoField!")
     }
 }
 
@@ -59,7 +53,7 @@ impl InfoField {
         vtype == "SNP"
     }
 
-    pub fn get_pop_allele_frequency(&self, pop: &String) -> Result<f64, std::num::ParseFloatError> {
+    pub fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, std::num::ParseFloatError> {
         self.iter()
             .find(|&field| field.starts_with(&format!("{}_AF", pop)))
             .unwrap()
@@ -293,7 +287,7 @@ impl<'a> GenotypeReader for VCFReader<'a> {
         Ok((alt_allele_count as f64) /(alt_allele_count as f64 + ref_allele_count as f64))
     }
 
-    fn get_pop_allele_frequency(&self, pop: &String) -> Result<f64, Box<dyn Error>> {
+    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, Box<dyn Error>> {
         Ok(self.info.get_pop_allele_frequency(pop)?)
     }
 }

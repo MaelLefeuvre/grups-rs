@@ -44,7 +44,7 @@ pub fn get_input_fst(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
         match_input_frq(fst)?;
     }
 
-    if fsts.len() < 1 {
+    if fsts.is_empty() {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Could not find any valid input fst file within {}\n
         Please specify an appropriate directory using `--data-dir`.
         Note that files are searched by matching files ending with '.fst', and '.fst.frq'.", input_dir.to_str().unwrap_or("None"))))

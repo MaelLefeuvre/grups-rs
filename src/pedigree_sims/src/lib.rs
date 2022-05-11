@@ -15,33 +15,33 @@ use pwd_from_stdin::comparison::Comparisons;
 
 
 /// @TODO! 
-///   - [CRUCIAL] Print simulations results into files.
-///   - [CRUCIAL] Pop selected contaminating individuals out of the pedigree founders candidates.
-///   - [CRUCIAL] Add ability to compute error rate from pileup file (see grups_module.pyx:610). 
-///               - comparisons positions should keep a record of phred scales.
-///   - [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
-///   - [CRUCIAL] Find a way to restrict the number of tokio worker-threads!
+///   - [DONE] [CRUCIAL] Print simulations results into files.
+///   -        [CRUCIAL] Pop selected contaminating individuals out of the pedigree founders candidates.
+///   -        [CRUCIAL] Add ability to compute error rate from pileup file (see grups_module.pyx:610). 
+///                     - comparisons positions should keep a record of phred scales.
+///   -        [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
+///   - [DONE] [CRUCIAL] Find a way to restrict the number of tokio worker-threads!
 /// -------------------------------------------------------------------------------------------------------------------
-///   - [FEATURE] Implement ability to add multiple --contam-pop
-///   - [FEATURE] ability to add multiple --contam-num-inds
-///   - [FEATURE] ability to add different contaminating individuals per pair. 
-///   - [FEATURE] Add nSNP downsampling (ds_rate_num_snps)
-///   - [FEATURE] Add range ability for contamination-rate, pmd-rate, depth-rate
-///               + these should be expressed as floats --> itertools::linspace could be a candidate package
-///                 to work-out ranges.
-///               + param_num_rep might not be the most suitable parameter choice ?
-///   - [FEATURE] Add built-in vcf filtration module.
+///   -        [FEATURE] Implement ability to add multiple --contam-pop
+///   -        [FEATURE] ability to add multiple --contam-num-inds
+///   -        [FEATURE] ability to add different contaminating individuals per pair. 
+///   -        [FEATURE] Add nSNP downsampling (ds_rate_num_snps)
+///   -        [FEATURE] Add range ability for contamination-rate, pmd-rate, depth-rate
+///                     + these should be expressed as floats --> itertools::linspace could be a candidate package
+///                       to work-out ranges.
+///                     + param_num_rep might not be the most suitable parameter choice ?
+///   -        [FEATURE] Add built-in vcf filtration module.
 /// -------------------------------------------------------------------------------------------------------------------
-///   - [ SPEED ] Implement per-vcf parallelization (?)
-///               - Will most probably require refactoring from Rc<RefCell<Individual>> to Arc<Mutex<Individual>>.
-///                 => Might prove unproductive, as this could greatly impact memory consumption.
-///                 => Still needs some testing, as VCF I/O remains the biggest performance bottleneck.
-///   - [ SPEED ] Benchmark Finite-State Transducer indexation mode.
+///   -        [ SPEED ] Implement per-vcf parallelization (?)
+///                      - Will most probably require refactoring from Rc<RefCell<Individual>> to Arc<Mutex<Individual>>.
+///                      => Might prove unproductive, as this could greatly impact memory consumption.
+///                      => Still needs some testing, as VCF I/O remains the biggest performance bottleneck.
+///   - [DONE] [ SPEED ] Benchmark Finite-State Transducer indexation mode.
 /// -------------------------------------------------------------------------------------------------------------------
-///   - [  QoL  ] If multiple parallelization options, separate into --threads and --decompression-threads for more 
-///               flexibility.
-///   - [  QoL  ] Finish implementing CLI Args (de)serialization.
-///   - [  QoL  ] Add .vcf and GZip compressed support for vcf. (async I/O support for vcf, please...)
+///   - [DONE] [  QoL  ] If multiple parallelization options, separate into --threads and --decompression-threads for more 
+///                      flexibility.
+///   -        [  QoL  ] Finish implementing CLI Args (de)serialization.
+///   - [DONE] [  QoL  ] Add .vcf and GZip compressed support for vcf. (async I/O support for vcf, please...)
 /// -------------------------------------------------------------------------------------------------------------------
 ///
 /// @ TODO! META
