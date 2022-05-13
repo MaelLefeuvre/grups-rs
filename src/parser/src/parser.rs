@@ -1,3 +1,4 @@
+use std::num::ParseFloatError;
 use std::path::PathBuf;
 use clap::{Parser, Subcommand, Args, ArgEnum};
 
@@ -14,7 +15,8 @@ use num::One;
 
 #[derive(Debug)]
 pub enum ParserError<'a> {
-    ParseIntError(&'a str, String),
+    ParseError(&'a str, String),
+    RangeError(&'a str),
     InsufficientDepthError,
     MissingPileupInput
 }
@@ -23,7 +25,8 @@ impl<'a> std::error::Error for ParserError<'a> {}
 impl<'a> std::fmt::Display for ParserError<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::ParseIntError(arg, err) => write!(f, "Invalid slice or integer format for --{}. [{}]", arg, err),
+            Self::ParseError(arg, err) => write!(f, "Invalid slice or value format for --{}. [{}]", arg, err),
+            Self::RangeError(msg)  => write!(f, "{}", msg),
             Self::InsufficientDepthError  => write!(f,"--min_depth must be greater than 1 when performing self-comparison "),
             Self::MissingPileupInput      => write!(f,"Neither --pileup, nor the stdin buffer are being sollicited."),
         }
@@ -214,15 +217,15 @@ pub struct PedigreeSims {
     /// Contamination rates (or rate ranges) for each desired scenario. 
     /// 
     /// Format: FLOAT,FLOAT or FLOAT,FLOAT/FLOAT,FLOAT ... or FLOAT-FLOAT,FLOAT-FLOAT/FLOAT-FLOAT,FLOAT-FLOAT ...
-    #[clap(short='Q', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_user_range))]
-    pub contamination_rate: Vec<Vec<u8>>,
+    #[clap(short='Q', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_pedigree_param))]
+    pub contamination_rate: Vec<Vec<f64>>,
 
     /// Sequencing error rates  (or rate ranges) for each desired scenario.
     /// 
     /// Format: FLOAT,FLOAT or FLOAT,FLOAT/FLOAT,FLOAT ... or FLOAT-FLOAT,FLOAT-FLOAT/FLOAT-FLOAT,FLOAT-FLOAT ...
     /// Default_values: ['FromPileup', 'FromPileup']
-    #[clap(short='U', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_user_range))]
-    pub pmd_rate : Vec<Vec<u8>>,
+    #[clap(short='U', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_pedigree_param))]
+    pub pmd_rate : Vec<Vec<f64>>,
 
     /// Mean sequencing depths (or depth ranges) for each desired scenario. 
     /// 
@@ -455,6 +458,23 @@ where
     }
 }
 
+fn parse_pedigree_param<'a>(s: &str) -> Result<Vec<f64>, ParserError<'a>> {
+    let vec: Result<Vec<f64>, ParseFloatError> = s.split('-')
+        .map(|substr| substr.parse::<f64>())
+        .collect();
+
+    let vec = match vec {
+        Ok(vec) => vec,
+        Err(_) => return Err(ParserError::RangeError("ParseFloatError")),
+    };
+    if vec.len() < 1 || vec.len() > 2 {
+        return Err(ParserError::RangeError("Found multiple dashes"))
+    }
+
+    let vec = vec.iter().map(|val| *val / 100.0).collect(); // Divide percent to ratio.
+    Ok(vec)
+}
+
 /// Convert a vector of Strings with user-input ranges to a single vector of integers.
 ///  - Input will most likely stem from the command line parser, where users are not expected
 ///    to write every single value they would like to input.
@@ -463,7 +483,7 @@ where
 /// 
 ///  - Return value: Result <
 ///        - Vector of generic integers, boxed within a Result.
-///        - ParseIntError
+///        - ParseError
 ///    >
 /// 
 /// # TODO:
@@ -490,7 +510,7 @@ where
     //         flatten the structure immediately. use .flat_map() 
     let mut parsed_ranges: Vec<T> = match parsed_ranges {
         Ok(vec) => vec.into_iter().flatten().collect(),
-        Err(err) => return Err(ParserError::ParseIntError(arg_name, err.to_string())),
+        Err(err) => return Err(ParserError::ParseError(arg_name, err.to_string())),
     };
 
     parsed_ranges.sort();

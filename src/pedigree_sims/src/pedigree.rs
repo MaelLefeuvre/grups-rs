@@ -1,10 +1,19 @@
 use std::{collections::{BTreeMap, HashSet, HashMap}, path::{PathBuf, Path}, error::Error, ops::{Deref, DerefMut}};
 
-use crate::io::{vcf::{
-    SampleTag,
-    reader::VCFReader,
-    reader::VCFPanelReader
-}, self, genotype_reader::GenotypeReader};
+use crate::{
+    io::{
+        self,
+        genotype_reader::GenotypeReader,
+        vcf::{
+            SampleTag,
+            reader::{VCFReader, VCFPanelReader},
+        }, 
+    }, 
+    pedparam::{
+        PedigreeParams,
+        ParamRateGenerator,
+    }
+};
 
 use genome::{
     SNPCoord,
@@ -50,6 +59,10 @@ impl Individual {
 
     pub fn set_alleles(&mut self, alleles: [u8; 2]) {
         self.alleles = Some(alleles);
+    }
+
+    pub fn get_alleles(&self) -> Result<[u8; 2], Box<dyn Error>> {
+        self.alleles.ok_or("Attempting to access empty alleles.".into())
     }
 
     pub fn alleles_tuple(&self) -> (u8, u8) {
@@ -300,13 +313,14 @@ impl PedComparison {
         (Rc::clone(pair.0), Rc::clone(pair.1))
     }
 
-    pub fn compare_alleles(&mut self, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64) {
+    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: f64, seq_error_rate: [f64; 2]) -> Result<(), Box<dyn Error>> {
         self.add_overlap();
-        let random_sample0 = Self::simulate_observed_reads(1, contam_rate, contam_pop_af, seq_error_rate, self.pair.0.borrow().alleles_tuple());
-        let random_sample1 = Self::simulate_observed_reads(1, contam_rate, contam_pop_af, seq_error_rate, self.pair.1.borrow().alleles_tuple());
+        let random_sample0 = Self::simulate_observed_reads(1, contam_rate[0], contam_pop_af, seq_error_rate[0], self.pair.0.borrow().get_alleles()?);
+        let random_sample1 = Self::simulate_observed_reads(1, contam_rate[1], contam_pop_af, seq_error_rate[1], self.pair.1.borrow().get_alleles()?);
         if random_sample0 != random_sample1 {
             self.add_pwd();
         }
+        Ok(())
     }
 
     pub fn compare_genome(&self) -> (u32, u32) {
@@ -334,8 +348,8 @@ impl PedComparison {
         (overlap, pwd)
     }
 
-    fn simulate_observed_reads(n: u8, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: (u8, u8)) -> Vec<u8> {
-        let mut reads = Vec::new();
+    fn simulate_observed_reads(n: u8, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Vec<u8> {
+        let mut reads = Vec::with_capacity(n as usize);
         let mut rng = rand::thread_rng();
 
         // Simulate contamination.
@@ -345,7 +359,7 @@ impl PedComparison {
                     true  => 1,  // Becomes the alternative reference allele, if contam_rate * contam_pop_af
                     false => 0,  // otherwise, pick the reference allele.
                 }
-                false => *[alleles.0, alleles.1].choose(&mut rng).unwrap(),
+                false => *alleles.choose(&mut rng).unwrap(),
             };
 
             // Simulate sequencing error rate.
@@ -409,27 +423,58 @@ impl PedComparisons {
     }
 }
 
-pub struct PedigreeParams {
-    snp_downsampling_rate : f64,
-    af_downsampling_rate  : f64,
-    seq_error_rate        : f64,
-    contam_rate           : f64,
-    cont_af               : f64,
-    maf                   : f64,
-    contam_ind_ids        : Vec<SampleTag>,
-}
-
-
 #[derive(Debug, Clone)]
 pub struct Pedigree {
     pub individuals: BTreeMap<String, Rc<RefCell<Individual>>>,
     comparisons: PedComparisons,
-    pop : Option<String>, // EUR, AFR, etc.
+    params: Option<PedigreeParams>,
+    pop : Option<String>,
 }
 
 impl Pedigree {
     pub fn new() -> Pedigree {
-        Pedigree { individuals: BTreeMap::new(), comparisons: PedComparisons::new(), pop: None}
+        Pedigree { individuals: BTreeMap::new(), comparisons: PedComparisons::new(), params: None, pop: None}
+    }
+
+    pub fn compare_alleles(&mut self, cont_af:f64) -> Result<(), Box<dyn Error>> {
+        // --------------------- Compare genomes.
+        let contam_rate = self.get_params()?.contam_rate;
+        let seq_error_rate = self.get_params()?.seq_error_rate;
+        for comparison in &mut self.comparisons.iter_mut() {
+            comparison.compare_alleles(contam_rate, cont_af, seq_error_rate)?;
+        }
+        Ok(())
+    }
+
+    pub fn update_founder_alleles(&mut self, reader: &dyn GenotypeReader, rng: &mut ThreadRng) -> Result<(), Box<dyn Error>> {
+        let af_downsampling_rate = self.get_params()?.af_downsampling_rate;
+        for mut founder in self.founders_mut() {
+            founder.alleles = match rng.gen::<f64>() < af_downsampling_rate { 
+                false => reader.get_alleles(founder.get_tag().unwrap()),
+                true  => Some([0, 0]),
+            };
+        }
+        Ok(())
+    }
+
+    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize) -> Result<(), Box<dyn Error>> {
+        for mut offspring in self.offsprings_mut() {
+            offspring.assign_alleles(interval_prob_recomb, pedigree_index)?;
+        }
+        Ok(())
+    }
+
+
+
+    pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: [f64; 2], contam_rate: [f64; 2]) {
+        //println!("error_rate: {seq_error_rate} | contam_rate: {contam_rate}");
+        self.params = Some(
+            PedigreeParams::new(snp_downsampling_rate, af_downsampling_rate, seq_error_rate, contam_rate)
+        );
+    }
+
+    pub fn get_params(&self) -> Result<&PedigreeParams, &str> {
+        self.params.as_ref().ok_or("Attempt to access empty pedigree params.")
     }
 
     pub fn assign_offspring_strands(&mut self) -> Result<(), String> {
@@ -607,19 +652,18 @@ pub struct Pedigrees<'a> {
     rng: ThreadRng,
 }
 
+/// @TODO! : Right now we're reading the pedigree definition file for each replicate. Which is highly inefficient.
+///          This is because simply using clone() on a pedigree_template will merely clone() the Rc<RefCell>.
+///          ==> This is NOT what we want. What we want is to create new instances of Rc<RefCell> from these values.
 impl<'a> Pedigrees<'a> {
     pub fn new(pedigree_path: &Path, reps: u32, pedigree_pop: String, comparisons: &'a Comparisons, panel: &VCFPanelReader, genome: &Genome, recomb_dir: &PathBuf) -> Result<Self, Box<dyn Error>> {
-
-        // Create template pedigree from definition file.
-        let template_pedigree= io::pedigree::pedigree_parser(pedigree_path, genome).unwrap();
-
         // Generate pedigree replicates for each pwd_from_stdin::Comparison.
         let mut pedigrees = HashMap::new();
         for comparison in comparisons.get() {
             let comparison_label = comparison.get_pair();
             pedigrees.insert(comparison_label.to_owned(), PedigreeReps::with_capacity(reps as usize));
             for _ in 0..reps {
-                let mut new_pedigree = template_pedigree.clone();
+                let mut new_pedigree = io::pedigree::pedigree_parser(pedigree_path, genome).unwrap();
                 new_pedigree.set_tags(panel, &pedigree_pop);
                 new_pedigree.assign_offspring_strands()?;
                 pedigrees.get_mut(&comparison_label).unwrap().push(new_pedigree);
@@ -642,30 +686,62 @@ impl<'a> Pedigrees<'a> {
         Ok(Pedigrees{pedigrees, comparisons, pedigree_pop, previous_positions, genetic_map, rng})
     }
 
+    pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: &Vec<Vec<f64>>, contam_rate: &Vec<Vec<f64>>) -> Result<(), String>{
 
-    fn update_pedigrees(&mut self, reader: &dyn GenotypeReader, comparison_label: &String, snp_downsampling_rate: f64, af_downsampling_rate: f64, interval_prob_recomb: f64, contam_rate: f64, cont_af: f64, seq_error_rate: f64) -> Result<(), Box<dyn Error>>{
+        //let samples_indices = self.comparisons.get_pairs_indices();
+        for comparison in self.comparisons.get().iter() {
+            let pair_indices = comparison.get_pair_indices();
+            let pair_label = comparison.get_pair();
+            let pedigree_reps = self.pedigrees.get_mut(&pair_label).ok_or(format!("Cannot access pair {pair_label}"))?;
+
+            let mut seq_error_rate_gen = ParamRateGenerator::from_user_input(seq_error_rate, pair_indices);
+            let mut contam_rate_gen = ParamRateGenerator::from_user_input(contam_rate, pair_indices);
+
+            pedigree_reps.iter_mut()
+            .for_each(|ped| {
+                ped.set_params(snp_downsampling_rate, af_downsampling_rate, seq_error_rate_gen.gen_random_values(), contam_rate_gen.gen_random_values())
+            });
+        }
+        Ok(())
+        //for (pedigree_reps, indices) in self.pedigrees.values_mut().zip(samples_indices) {
+//
+        //    let seq_error_rates = pedparam::rate_generator_from_user_input(seq_error_rate, indices);
+        //    let contam_rates = pedparam::rate_generator_from_user_input(contam_rate, indices);
+//
+        //    pedigree_reps.iter_mut()
+        //        .for_each(|ped| {
+        //            ped.set_params(snp_downsampling_rate, af_downsampling_rate, seq_error_rates, contam_rates)
+        //        });
+        //    //println!("seq_error_rate_idx: {seq_error_rate_idx} | contam_rate_idx: {contam_rate_idx}");
+        //}
+    }
+
+    fn update_pedigrees(&mut self, reader: &dyn GenotypeReader, chromosome:u8, position: u32, comparison_label: &String, contam_ind_ids: &[&SampleTag]) -> Result<(), Box<dyn Error>>{
+
+        // Compute the interval between current and previous position, search trough the genetic map interval tree,
+        // And compute the probability of recombination.
+        let previous_position    : u32 = self.previous_positions[comparison_label];
+        let interval_prob_recomb : f64 = self.genetic_map.compute_recombination_prob(chromosome, previous_position, position);
+        //trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
+
         let pedigree_vec = self.pedigrees.get_mut(comparison_label).unwrap();
         'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
+
             // --------------------- Perform SNP downsampling if necessary
-            if self.rng.gen::<f64>() < snp_downsampling_rate {continue 'pedigree}
+            if self.rng.gen::<f64>() < pedigree.get_params()?.snp_downsampling_rate {continue 'pedigree}
 
             // --------------------- Update founder alleles. Perform Allele Frequency downsampling if necessary.
-            for mut founder in pedigree.founders_mut() {
-                founder.alleles = match self.rng.gen::<f64>() < af_downsampling_rate { 
-                    false => reader.get_alleles(founder.get_tag().unwrap()),
-                    true  => Some([0, 0]),
-                };
-            }
+            pedigree.update_founder_alleles(reader, &mut self.rng)?;
 
             // --------------------- Compute offspring genomes
-            for mut offspring in pedigree.offsprings_mut() {
-                offspring.assign_alleles(interval_prob_recomb, i)?;
-            }
+            pedigree.compute_offspring_alleles(interval_prob_recomb, i)?;
+
+            
+            // -------------------- Get contaminating population allele frequency
+            let cont_af = Some(reader.compute_local_cont_af(contam_ind_ids)?).ok_or("Failed to retrieve contamination allele frequency")?;
 
             // --------------------- Compare genomes.
-            for comparison in &mut pedigree.comparisons.iter_mut() {
-                comparison.compare_alleles(contam_rate, cont_af, seq_error_rate);
-            }
+            pedigree.compare_alleles(cont_af)?;
             // --------------------- Clear genotypes before the next line!
             pedigree.clear_alleles();
         }
@@ -673,7 +749,7 @@ impl<'a> Pedigrees<'a> {
     }
 
     #[allow(unused_labels)]
-    pub fn pedigree_simulations_fst(&mut self, input_fst_path: &Path, contam_rate: f64, contam_ind_ids: &[&SampleTag], seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, maf: f64) -> Result<(), Box<dyn Error>> {
+    pub fn pedigree_simulations_fst(&mut self, input_fst_path: &Path, contam_ind_ids: &[&SampleTag], maf: f64) -> Result<(), Box<dyn Error>> {
         // --------------------- Read and store FST index into memory.
         let mut fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
         'comparison: for comparison in self.comparisons.get() {
@@ -689,9 +765,7 @@ impl<'a> Pedigrees<'a> {
                 }
 
                 // --------------------- Don't even begin if we know this set does not contain this chromosome
-                if ! fst_reader.contains_chr(chromosome){
-                    continue 'coordinate
-                }
+                if ! fst_reader.contains_chr(chromosome){ continue 'coordinate }
 
                 // --------------------- Search through the FST index for the genotypes and pop frequencies at this coordinate.
                 fst_reader.clear_buffers();
@@ -711,23 +785,14 @@ impl<'a> Pedigrees<'a> {
                     continue 'coordinate
                 }
 
-                // -------------------- Get contaminating population allele frequency
-                let cont_af = Some(fst_reader.compute_local_cont_af(contam_ind_ids)?);
-
-
-                // --------------------- Compute the probability of recombination using our genetic map.
-                let comparison_label = comparison.get_pair().to_owned();
-                let previous_position = self.previous_positions[&comparison_label];
-                let interval_prob_recomb: f64 = self.genetic_map.compute_recombination_prob(chromosome, previous_position, position);
-                trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
                 // --------------------- Parse genotype fields and start updating dynamic simulations.
-                self.update_pedigrees(&fst_reader, &comparison_label, snp_downsampling_rate, af_downsampling_rate, interval_prob_recomb, contam_rate, cont_af.unwrap(), seq_error_rate)?;
+                self.update_pedigrees(&fst_reader, chromosome, position, &comparison.get_pair(), contam_ind_ids)?;
             }
         }
         Ok(())
     }
 
-    pub fn pedigree_simulations_vcf(&mut self, input_vcf_path: &Path, contam_rate: f64, contam_ind_ids: &[&SampleTag], seq_error_rate: f64, af_downsampling_rate: f64, snp_downsampling_rate: f64, maf: f64, threads: usize) -> Result<(), Box<dyn Error>> {
+    pub fn pedigree_simulations_vcf(&mut self, input_vcf_path: &Path, contam_ind_ids: &[&SampleTag], maf: f64, threads: usize) -> Result<(), Box<dyn Error>> {
         // --------------------- Read VCF File line by line.
         let mut i = 0;
         let mut vcf_reader = VCFReader::new(input_vcf_path, threads)?;
@@ -741,8 +806,6 @@ impl<'a> Pedigrees<'a> {
             i+=1;
 
             // --------------------- Loop across comparisons. 
-            let mut pop_af : Option<f64> = None;
-            let mut cont_af: Option<f64> = None;
             //let mut genotypes_filled: bool = false;
             'comparison: for comparison in self.comparisons.get(){
                 // --------------------- Skip if the current position is not a valid candidate.
@@ -760,37 +823,23 @@ impl<'a> Pedigrees<'a> {
                         }
 
                         // Extract population allele frequency.
-                        pop_af = Some(vcf_reader.get_pop_allele_frequency(&self.pedigree_pop)?);
+                        let pop_af = vcf_reader.get_pop_allele_frequency(&self.pedigree_pop)?;
 
                         // Skip line if allele frequency is < maf
                         // [WARN]: Note that {POP}_AF entries in the INFO field relate to the REF allele frequency, not MAF.
                         //         ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
-                        match pop_af {
-                            Some(af) => if af < maf || af > (1.0-maf) {
-                                trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {af:<8.5} --maf: {maf}");
+                        if pop_af < maf || pop_af > (1.0-maf) {
+                                trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
                                 vcf_reader.next_line()?;
                                 continue 'line
-                            },
-                            None => panic!("Empty population allele frequency!")
                         }
 
                         // Parse genotypes. 
                         vcf_reader.fill_genotypes()?;
-                        //genotypes_filled = true;
-    
-                        // Compute contaminating pop allele frequency
-                        cont_af = Some(vcf_reader.compute_local_cont_af(contam_ind_ids)?);
                     }
 
-                    // Compute the interval between current and previous position, search trough the genetic map interval tree,
-                    // And compute the probability of recombination.
-                    let comparison_label = comparison.get_pair().to_owned();
-                    let previous_position = self.previous_positions[&comparison_label];
-                    let interval_prob_recomb: f64 = self.genetic_map.compute_recombination_prob(chromosome, previous_position, position);
-                    trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
-
                     // Parse genotype fields and start updating dynamic simulations.
-                    self.update_pedigrees(&vcf_reader, &comparison_label, snp_downsampling_rate, af_downsampling_rate, interval_prob_recomb, contam_rate, cont_af.unwrap(), seq_error_rate)?;          
+                    self.update_pedigrees(&vcf_reader, chromosome, position, &comparison.get_pair().to_owned(),contam_ind_ids)?;          
                 }
             }
             // Reset line if we never parsed genotypes.
@@ -929,7 +978,4 @@ mod tests {
         assert_eq!(offspr.currently_recombining, [true, true]);
 
     }
-
-
-
 }

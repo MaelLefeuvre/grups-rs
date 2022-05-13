@@ -71,8 +71,8 @@ impl Chromosome {
 
         let alleles: (Alleles, Alleles) = gamete.into_iter()
             .map(|locus| {
-                let (pos, alleles, af) = (locus.get_pos(), locus.get_alleles(), locus.get_af());
-                (Allele::new(pos, alleles.0, af), Allele::new(pos, alleles.1, af))
+                let (pos, alleles, af) = (locus.get_pos(), locus.alleles(), locus.get_af());
+                (Allele::new(pos, alleles[0], af), Allele::new(pos, alleles[1], af))
             })
             .unzip();
 
@@ -103,7 +103,7 @@ impl Ord for Chromosome {
 impl Extend<Locus> for Chromosome {
     fn extend<T: IntoIterator<Item=Locus>>(&mut self, alleles: T) {
         for locus in alleles {
-            self.add_locus(locus.get_pos(), locus.get_alleles(), locus.get_af());
+            self.add_locus(locus.get_pos(), locus.alleles_tuple(), locus.get_af());
         }
     }
 }

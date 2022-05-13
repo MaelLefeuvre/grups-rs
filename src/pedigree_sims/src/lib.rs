@@ -1,7 +1,7 @@
 use std::{
     error::Error,
 };
-use log::{info, debug};
+use log::{info, debug, warn};
 //use rayon;
 
 use genome::{
@@ -10,7 +10,7 @@ use genome::{
 
 pub mod io;
 pub mod pedigree;
-
+pub mod pedparam;
 use pwd_from_stdin::comparison::Comparisons;
 
 
@@ -25,11 +25,8 @@ use pwd_from_stdin::comparison::Comparisons;
 //   +        [FEATURE] Implement ability to add multiple --contam-pop
 //   +        [FEATURE] ability to add multiple --contam-num-inds
 //   +        [FEATURE] ability to add different contaminating individuals per pair. 
-//   +        [FEATURE] Add nSNP downsampling (ds_rate_num_snps)
-//   +        [FEATURE] Add range ability for contamination-rate, pmd-rate, depth-rate
-//                     + these should be expressed as floats --> itertools::linspace could be a candidate package
-//                       to work-out ranges.
-//                     + param_num_rep might not be the most suitable parameter choice ?
+//   + [DONE] [FEATURE] Add nSNP downsampling (ds_rate_num_snps)
+//   + [DONE] [FEATURE] Add range ability for contamination-rate, pmd-rate, depth-rate
 //   +        [FEATURE] Add built-in vcf filtration module.
 // -------------------------------------------------------------------------------------------------------------------
 //   +        [ SPEED ] Implement per-vcf parallelization (?)
@@ -58,6 +55,16 @@ pub fn run(
     comparisons       : &Comparisons,
 ) -> Result<(), Box<dyn Error>>
 {
+
+    // ----------------------------- Sanity checks 
+    if ped_cli.contamination_rate.len() < comparisons.get().len() {
+        warn!("Number of contamination rates is lower than the number of comparisons. Values of --contamination-rate will wrap around.")
+    }
+
+    if ped_cli.pmd_rate.len() < comparisons.get().len() {
+        warn!("Number of sequencing error rates is lower than the number of comparisons. Values of --contamination-rate will wrap around.")
+    }
+
     // ----------------------------- Prepare output files
     // ---- Add final_results files.
     let mut output_files = pwd_from_stdin::io::get_output_files(
@@ -113,27 +120,18 @@ pub fn run(
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
     let mut pedigrees = pedigree::Pedigrees::new(&ped_cli.pedigree, ped_cli.reps, ped_cli.pedigree_pop, comparisons, &panel, &genome, &ped_cli.recomb_dir)?;
 
-    // --------------------- Set ThreadPool
-    //let pool = rayon::ThreadPoolBuilder::new()
-    //    .num_threads(ped_cli.threads)
-    //    .build()
-    //    .unwrap();
+    // --------------------- Assign simulation parameters for each pedigree.
+    pedigrees.set_params(ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.pmd_rate, &ped_cli.contamination_rate)?;
+
 
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
-    let contam_rate = ped_cli.contamination_rate[0][0] as f64 / 100.0; 
-    let seq_error_rate = ped_cli.pmd_rate[0][0] as f64 / 100.0;
-
     match ped_cli.mode {
         parser::Mode::Vcf => {
             info!("Starting VCF pedigree comparisons.");
             for vcf in input_paths.iter() {
                 pedigrees.pedigree_simulations_vcf(
                     vcf,
-                    contam_rate,
                     &contam_ind_ids,
-                    seq_error_rate,
-                    ped_cli.af_downsampling_rate,
-                    ped_cli.snp_downsampling_rate,
                     ped_cli.maf,
                     ped_cli.decompression_threads
                 )?;
@@ -145,11 +143,7 @@ pub fn run(
             for fst in input_paths.iter(){
                 pedigrees.pedigree_simulations_fst(
                     fst,
-                    contam_rate,
                     &contam_ind_ids,
-                    seq_error_rate,
-                    ped_cli.af_downsampling_rate,
-                    ped_cli.snp_downsampling_rate,
                     ped_cli.maf
                 )?;
             }

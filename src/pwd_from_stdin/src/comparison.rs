@@ -57,6 +57,10 @@ impl Comparison {
         Comparison {pair, self_comparison, pwd:0, sum_phred:0, blocks: JackknifeBlocks::new(genome, blocksize), positions: BTreeSet::new()}
     }
 
+    pub fn get_pair_indices(&self) -> [usize; 2] {
+        [self.pair.0.index, self.pair.1.index]
+    }
+
     // Check if the sequencing depth of a given overlap is over the minimum required sequencing depth for each individual.
     pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
         pileups[self.pair.0.index].depth >= self.pair.0.min_depth && pileups[self.pair.1.index].depth >= self.pair.1.min_depth
@@ -153,6 +157,10 @@ impl Comparisons {
     ///How many pairs are we comparing? 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn get_pairs_indices(&self) -> Vec<[usize; 2]> {
+        Vec::from_iter(self.0.iter().map(|comparison| comparison.get_pair_indices()))
     }
 
     // Clippy is complaining when i'm not implementing this public method :)

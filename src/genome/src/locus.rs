@@ -1,22 +1,22 @@
 #[derive(Debug, Clone)]
 pub struct Locus {
     pos: u32,
-    alleles: (u8, u8),
+    alleles: [u8; 2],
     af: f64,
 }
 
 impl Locus {
 
     pub fn new(pos: u32, alleles: (u8, u8), af: f64) -> Self {
-        Self{pos, alleles, af}
+        Self{pos, alleles: [alleles.0, alleles.1], af}
     }
 
     pub fn get_pos(&self) -> u32 {
         self.pos
     }
 
-    pub fn get_alleles(&self) -> (u8, u8) {
-        self.alleles
+    pub fn alleles_tuple(&self) -> (u8, u8) {
+        (self.alleles[0], self.alleles[1])
     }
 
     pub fn get_af(&self) -> f64 {
@@ -24,11 +24,10 @@ impl Locus {
     }
 
     pub fn crossover(&mut self) {
-        self.alleles = (self.alleles.1, self.alleles.0)
-
+        self.alleles.reverse();
     }
 
-    pub fn alleles(&self) -> (u8, u8) {
+    pub fn alleles(&self) -> [u8; 2] {
         self.alleles
     }
 }
