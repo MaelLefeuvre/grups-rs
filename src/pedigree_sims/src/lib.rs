@@ -11,20 +11,21 @@ use genome::{
 pub mod io;
 pub mod pedigree;
 pub mod pedparam;
+pub mod contaminant;
 use pwd_from_stdin::comparison::Comparisons;
 
 
 // @TODO 
 //   + [DONE] [CRUCIAL] Print simulations results into files.
-//   +        [CRUCIAL] Pop selected contaminating individuals out of the pedigree founders candidates.
+//   + [DONE] [CRUCIAL] Pop selected contaminating individuals out of the pedigree founders candidates.
 //   +        [CRUCIAL] Add ability to compute error rate from pileup file (see grups_module.pyx:610). 
 //   +                 - comparisons positions should keep a record of phred scales.
-//   +        [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
+//   + [DONE] [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
 //   + [DONE] [CRUCIAL] Find a way to restrict the number of tokio worker-threads!
 // -------------------------------------------------------------------------------------------------------------------
-//   +        [FEATURE] Implement ability to add multiple --contam-pop
-//   +        [FEATURE] ability to add multiple --contam-num-inds
-//   +        [FEATURE] ability to add different contaminating individuals per pair. 
+//   + [DONE] [FEATURE] Implement ability to add multiple --contam-pop
+//   + [DONE] [FEATURE] ability to add multiple --contam-num-inds
+//   + [DONE] [FEATURE] ability to add different contaminating individuals per pair. 
 //   + [DONE] [FEATURE] Add nSNP downsampling (ds_rate_num_snps)
 //   + [DONE] [FEATURE] Add range ability for contamination-rate, pmd-rate, depth-rate
 //   +        [FEATURE] Add built-in vcf filtration module.
@@ -109,20 +110,12 @@ pub fn run(
         },
     };
 
-
-    // --------------------- Get random contaminating individuals. [PROTOTYPE]
-    let mut contam_ind_ids = Vec::new();
-    for _ in 0..1 {
-        let contam_sample_tag = panel.random_sample(&ped_cli.contam_pop[0]).unwrap();
-        contam_ind_ids.push(contam_sample_tag);
-    }
-
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
-    let mut pedigrees = pedigree::Pedigrees::new(&ped_cli.pedigree, ped_cli.reps, ped_cli.pedigree_pop, comparisons, &panel, &genome, &ped_cli.recomb_dir)?;
+    let mut pedigrees = pedigree::Pedigrees::initialize(ped_cli.pedigree_pop, comparisons, &ped_cli.recomb_dir)?;
+    pedigrees.populate(&panel, ped_cli.reps, &genome, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
 
     // --------------------- Assign simulation parameters for each pedigree.
     pedigrees.set_params(ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.pmd_rate, &ped_cli.contamination_rate)?;
-
 
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
     match ped_cli.mode {
@@ -131,7 +124,6 @@ pub fn run(
             for vcf in input_paths.iter() {
                 pedigrees.pedigree_simulations_vcf(
                     vcf,
-                    &contam_ind_ids,
                     ped_cli.maf,
                     ped_cli.decompression_threads
                 )?;
@@ -143,7 +135,6 @@ pub fn run(
             for fst in input_paths.iter(){
                 pedigrees.pedigree_simulations_fst(
                     fst,
-                    &contam_ind_ids,
                     ped_cli.maf
                 )?;
             }

@@ -10,7 +10,7 @@ use fst::{
     automaton::{Automaton, Str},
 };
 
-use crate::io::vcf::SampleTag;
+use crate::{io::vcf::SampleTag, contaminant::Contaminant};
 use crate::io::genotype_reader::GenotypeReader;
 
 use log::info;
@@ -110,10 +110,10 @@ impl GenotypeReader for FSTReader {
         Some(self.genotypes[sample_tag.id()].map(|all| all - 48))
     }
 
-    fn compute_local_cont_af(&self, contam_ind_ids: &[&SampleTag]) -> Result<f64, Box<dyn Error>> {
+    fn compute_local_cont_af(&self, contaminant: Option<&Contaminant>) -> Result<f64, Box<dyn Error>> {
         let mut ref_allele_count = 0;
         let mut alt_allele_count = 0;
-        for id in contam_ind_ids.iter() {
+        for id in contaminant.unwrap().as_flat_list() {
             let cont_alleles = self.get_alleles(id).unwrap();
             for allele in cont_alleles.into_iter() {
                 match allele {

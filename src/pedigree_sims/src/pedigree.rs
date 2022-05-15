@@ -1,5 +1,7 @@
 use std::{collections::{BTreeMap, HashSet, HashMap}, path::{PathBuf, Path}, error::Error, ops::{Deref, DerefMut}};
 
+use crate::contaminant::Contaminant;
+
 use crate::{
     io::{
         self,
@@ -26,7 +28,7 @@ use pwd_from_stdin::{self, comparison::Comparisons};
 
 use rand::{Rng, prelude::ThreadRng};
 use rand::seq::SliceRandom;
-use log::{info, trace, warn};
+use log::{info, trace, warn, debug};
 
 
 
@@ -313,10 +315,10 @@ impl PedComparison {
         (Rc::clone(pair.0), Rc::clone(pair.1))
     }
 
-    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: f64, seq_error_rate: [f64; 2]) -> Result<(), Box<dyn Error>> {
+    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2]) -> Result<(), Box<dyn Error>> {
         self.add_overlap();
-        let random_sample0 = Self::simulate_observed_reads(1, contam_rate[0], contam_pop_af, seq_error_rate[0], self.pair.0.borrow().get_alleles()?);
-        let random_sample1 = Self::simulate_observed_reads(1, contam_rate[1], contam_pop_af, seq_error_rate[1], self.pair.1.borrow().get_alleles()?);
+        let random_sample0 = Self::simulate_observed_reads(1, contam_rate[0], contam_pop_af[0], seq_error_rate[0], self.pair.0.borrow().get_alleles()?);
+        let random_sample1 = Self::simulate_observed_reads(1, contam_rate[1], contam_pop_af[1], seq_error_rate[1], self.pair.1.borrow().get_alleles()?);
         if random_sample0 != random_sample1 {
             self.add_pwd();
         }
@@ -436,7 +438,7 @@ impl Pedigree {
         Pedigree { individuals: BTreeMap::new(), comparisons: PedComparisons::new(), params: None, pop: None}
     }
 
-    pub fn compare_alleles(&mut self, cont_af:f64) -> Result<(), Box<dyn Error>> {
+    pub fn compare_alleles(&mut self, cont_af: [f64; 2]) -> Result<(), Box<dyn Error>> {
         // --------------------- Compare genomes.
         let contam_rate = self.get_params()?.contam_rate;
         let seq_error_rate = self.get_params()?.seq_error_rate;
@@ -552,10 +554,13 @@ impl Pedigree {
     }
 
 
-    pub fn set_tags(&mut self, panel: &VCFPanelReader, pop: &String ) {
+    pub fn set_tags(&mut self, panel: &VCFPanelReader, pop: &String, contaminants: Option<&Contaminant>) {
         self.pop = Some(pop.to_owned());
+
+        let contam_tags = contaminants.map(|cont| cont.as_flat_list());
+
         for mut founder in self.founders_mut() {
-            founder.set_tag(panel.random_sample(pop).unwrap().clone());
+            founder.set_tag(panel.random_sample(pop, contam_tags.as_ref()).unwrap().clone());
         }
     }
 
@@ -601,11 +606,30 @@ impl Default for Pedigree {
     }
 }
 
-pub struct PedigreeReps(Vec<Pedigree>);
+pub struct PedigreeReps{
+    inner: Vec<Pedigree>,
+    contaminants: Option<Contaminant> 
+}
 
-impl PedigreeReps{
+impl PedigreeReps {
     pub fn with_capacity(n: usize) -> Self {
-        Self(Vec::with_capacity(n))
+        Self{inner: Vec::with_capacity(n), contaminants: None}
+    }
+    
+    pub fn set_contaminants(&mut self, samples_contam_tags: &Vec<Vec<SampleTag>>, pair_indices: [usize; 2]) {
+        let tags_0 = samples_contam_tags[pair_indices[0] % samples_contam_tags.len()].clone(); // Wrap if contam_set.len() < comparison.len()
+        let tags_1 = samples_contam_tags[pair_indices[1] % samples_contam_tags.len()].clone();
+        self.contaminants = Some(Contaminant::new([tags_0, tags_1]))
+    }
+
+    pub fn populate(&mut self, pedigree_path: &Path, pop: &String, panel: &VCFPanelReader, genome: &Genome) -> Result<(), Box<dyn Error>> {
+        for _ in 0..self.inner.capacity() {
+            let mut pedigree = io::pedigree::pedigree_parser(pedigree_path, genome).unwrap();
+            pedigree.set_tags(panel, pop, self.contaminants.as_ref());
+            pedigree.assign_offspring_strands()?;
+            self.inner.push(pedigree);
+        }
+        Ok(())
     }
 
     pub fn compute_sum_simulated_pwds(&self) -> HashMap<String, f64> {
@@ -622,19 +646,19 @@ impl PedigreeReps{
 impl Deref for PedigreeReps {
     type Target = Vec<Pedigree>;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.inner
     }
 }
 
 impl DerefMut for PedigreeReps {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.inner
     }
 }
 
 impl std::fmt::Display for PedigreeReps {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.0.iter().enumerate().fold(Ok(()), |_, (idx, pedigree)| {
+        self.inner.iter().enumerate().fold(Ok(()), |_, (idx, pedigree)| {
             pedigree.comparisons.iter().fold(Ok(()), |result, comparison| {
                 result.and_then(|_| writeln!(f, "{idx} {}", comparison))
             })
@@ -656,19 +680,27 @@ pub struct Pedigrees<'a> {
 ///          This is because simply using clone() on a pedigree_template will merely clone() the Rc<RefCell>.
 ///          ==> This is NOT what we want. What we want is to create new instances of Rc<RefCell> from these values.
 impl<'a> Pedigrees<'a> {
-    pub fn new(pedigree_path: &Path, reps: u32, pedigree_pop: String, comparisons: &'a Comparisons, panel: &VCFPanelReader, genome: &Genome, recomb_dir: &PathBuf) -> Result<Self, Box<dyn Error>> {
-        // Generate pedigree replicates for each pwd_from_stdin::Comparison.
-        let mut pedigrees = HashMap::new();
-        for comparison in comparisons.get() {
+
+    pub fn populate(&mut self, panel: &VCFPanelReader, reps: u32, genome: &Genome, pedigree_path: &Path, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
+        let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind);
+
+        for comparison in self.comparisons.get() {
             let comparison_label = comparison.get_pair();
-            pedigrees.insert(comparison_label.to_owned(), PedigreeReps::with_capacity(reps as usize));
-            for _ in 0..reps {
-                let mut new_pedigree = io::pedigree::pedigree_parser(pedigree_path, genome).unwrap();
-                new_pedigree.set_tags(panel, &pedigree_pop);
-                new_pedigree.assign_offspring_strands()?;
-                pedigrees.get_mut(&comparison_label).unwrap().push(new_pedigree);
-            }
+            let pair_indices = comparison.get_pair_indices();
+
+            let mut pedigree_reps = PedigreeReps::with_capacity(reps as usize);
+            pedigree_reps.set_contaminants(&samples_contam_tags, pair_indices);
+            debug!("Contaminant set for {comparison_label}: {:#?}", pedigree_reps.contaminants);
+            pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel, genome)?;
+            self.pedigrees.insert(comparison_label.to_owned(), pedigree_reps);
         }
+        Ok(())
+    }
+
+    pub fn initialize(pedigree_pop: String, comparisons: &'a Comparisons, recomb_dir: &PathBuf) -> Result<Self, Box<dyn Error>> {
+        // Generate pedigree replicates for each pwd_from_stdin::Comparison.
+        let pedigrees = HashMap::new();
+
 
         // --------------------- Parse input recombination maps.
         info!("Parsing genetic maps in {}", &recomb_dir.to_str().unwrap_or("None"));
@@ -684,6 +716,18 @@ impl<'a> Pedigrees<'a> {
         let rng = rand::thread_rng();
 
         Ok(Pedigrees{pedigrees, comparisons, pedigree_pop, previous_positions, genetic_map, rng})
+    }
+
+    pub fn set_contam_inds(&mut self, panel: &VCFPanelReader, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>, ) {
+
+        let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind);
+
+        //let mut contam_set: HashMap<String, [Vec<SampleTag>; 2]> = HashMap::new();
+        for comparison in self.comparisons.get().iter() {
+            let pair_indices = comparison.get_pair_indices();
+            let pair_label = comparison.get_pair();
+            self.pedigrees.get_mut(&pair_label).unwrap().set_contaminants(&samples_contam_tags, pair_indices);
+        }
     }
 
     pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: &Vec<Vec<f64>>, contam_rate: &Vec<Vec<f64>>) -> Result<(), String>{
@@ -703,20 +747,9 @@ impl<'a> Pedigrees<'a> {
             });
         }
         Ok(())
-        //for (pedigree_reps, indices) in self.pedigrees.values_mut().zip(samples_indices) {
-//
-        //    let seq_error_rates = pedparam::rate_generator_from_user_input(seq_error_rate, indices);
-        //    let contam_rates = pedparam::rate_generator_from_user_input(contam_rate, indices);
-//
-        //    pedigree_reps.iter_mut()
-        //        .for_each(|ped| {
-        //            ped.set_params(snp_downsampling_rate, af_downsampling_rate, seq_error_rates, contam_rates)
-        //        });
-        //    //println!("seq_error_rate_idx: {seq_error_rate_idx} | contam_rate_idx: {contam_rate_idx}");
-        //}
     }
 
-    fn update_pedigrees(&mut self, reader: &dyn GenotypeReader, chromosome:u8, position: u32, comparison_label: &String, contam_ind_ids: &[&SampleTag]) -> Result<(), Box<dyn Error>>{
+    fn update_pedigrees(&mut self, reader: &dyn GenotypeReader, chromosome:u8, position: u32, comparison_label: &String) -> Result<(), Box<dyn Error>>{
 
         // Compute the interval between current and previous position, search trough the genetic map interval tree,
         // And compute the probability of recombination.
@@ -724,9 +757,14 @@ impl<'a> Pedigrees<'a> {
         let interval_prob_recomb : f64 = self.genetic_map.compute_recombination_prob(chromosome, previous_position, position);
         //trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
 
-        let pedigree_vec = self.pedigrees.get_mut(comparison_label).unwrap();
-        'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
 
+        let pedigree_vec = self.pedigrees.get_mut(comparison_label).unwrap();
+
+        // -------------------- Get contaminating population allele frequency
+        //let cont_af = Some(reader.compute_local_cont_af(pedigree_vec.contaminants.as_ref())?).ok_or("Failed to retrieve contamination allele frequency")?;
+        let cont_af = pedigree_vec.contaminants.as_ref().ok_or("Empty contaminants.")?.compute_local_cont_af(reader)?;
+
+        'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
             // --------------------- Perform SNP downsampling if necessary
             if self.rng.gen::<f64>() < pedigree.get_params()?.snp_downsampling_rate {continue 'pedigree}
 
@@ -735,10 +773,6 @@ impl<'a> Pedigrees<'a> {
 
             // --------------------- Compute offspring genomes
             pedigree.compute_offspring_alleles(interval_prob_recomb, i)?;
-
-            
-            // -------------------- Get contaminating population allele frequency
-            let cont_af = Some(reader.compute_local_cont_af(contam_ind_ids)?).ok_or("Failed to retrieve contamination allele frequency")?;
 
             // --------------------- Compare genomes.
             pedigree.compare_alleles(cont_af)?;
@@ -749,7 +783,7 @@ impl<'a> Pedigrees<'a> {
     }
 
     #[allow(unused_labels)]
-    pub fn pedigree_simulations_fst(&mut self, input_fst_path: &Path, contam_ind_ids: &[&SampleTag], maf: f64) -> Result<(), Box<dyn Error>> {
+    pub fn pedigree_simulations_fst(&mut self, input_fst_path: &Path, maf: f64) -> Result<(), Box<dyn Error>> {
         // --------------------- Read and store FST index into memory.
         let mut fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
         'comparison: for comparison in self.comparisons.get() {
@@ -786,13 +820,13 @@ impl<'a> Pedigrees<'a> {
                 }
 
                 // --------------------- Parse genotype fields and start updating dynamic simulations.
-                self.update_pedigrees(&fst_reader, chromosome, position, &comparison.get_pair(), contam_ind_ids)?;
+                self.update_pedigrees(&fst_reader, chromosome, position, &comparison.get_pair())?;
             }
         }
         Ok(())
     }
 
-    pub fn pedigree_simulations_vcf(&mut self, input_vcf_path: &Path, contam_ind_ids: &[&SampleTag], maf: f64, threads: usize) -> Result<(), Box<dyn Error>> {
+    pub fn pedigree_simulations_vcf(&mut self, input_vcf_path: &Path, maf: f64, threads: usize) -> Result<(), Box<dyn Error>> {
         // --------------------- Read VCF File line by line.
         let mut i = 0;
         let mut vcf_reader = VCFReader::new(input_vcf_path, threads)?;
@@ -839,7 +873,7 @@ impl<'a> Pedigrees<'a> {
                     }
 
                     // Parse genotype fields and start updating dynamic simulations.
-                    self.update_pedigrees(&vcf_reader, chromosome, position, &comparison.get_pair().to_owned(),contam_ind_ids)?;          
+                    self.update_pedigrees(&vcf_reader, chromosome, position, &comparison.get_pair().to_owned())?;          
                 }
             }
             // Reset line if we never parsed genotypes.

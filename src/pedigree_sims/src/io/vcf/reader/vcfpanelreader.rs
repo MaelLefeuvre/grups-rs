@@ -5,7 +5,7 @@ use std::{
     fs::File,
 };
 
-use crate::io::vcf::reader::vcfreader::VCFReader;
+use crate::{io::vcf::reader::vcfreader::VCFReader};
 use crate::io::vcf::sampletag::SampleTag;
 
 use log::{warn};
@@ -29,8 +29,33 @@ impl VCFPanelReader {
         Ok(VCFPanelReader{samples})
     }
 
-    pub fn random_sample(&self, pop: &String) -> Option<&SampleTag> {
-        self.samples[pop].choose(&mut rand::thread_rng())
+    pub fn fetch_contaminants(&self, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Vec<Vec<SampleTag>> {
+        let mut samples_contam_tags: Vec<Vec<SampleTag>> = Vec::new();
+
+        for num in contam_num_ind {
+            let mut contam_ind_tags : Vec<SampleTag> = Vec::new();
+            let contam_pop = &contam_pop[*num % std::cmp::min(contam_num_ind.len(), contam_pop.len())]; // Wrap if contam_pop.len() < contam_num_ind.len() OR if contam_pop.len() > contam_num_ind.len()
+
+            for _ in 0..*num {
+                let contam_sample_tag = self.random_sample(contam_pop, None).unwrap().clone();
+                contam_ind_tags.push(contam_sample_tag);
+            }
+            samples_contam_tags.push(contam_ind_tags);
+        }
+        samples_contam_tags
+    }
+
+    pub fn random_sample(&self, pop: &String, exclude: Option<&Vec<&SampleTag>>) -> Option<&SampleTag> {
+        let candidate = match exclude {
+            Some(tag_vec) => {
+                self.samples[pop].iter()
+                    .filter(|sample| ! tag_vec.contains(&sample))
+                    .collect::<Vec<&SampleTag>>()
+                    .choose(&mut rand::thread_rng()).map(|tag| *tag)
+            }
+            None => self.samples[pop].choose(&mut rand::thread_rng())
+        };
+        candidate
     }
 
     pub fn subset_panel(&mut self, subset_pops: &[String]) {

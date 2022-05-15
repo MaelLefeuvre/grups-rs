@@ -272,15 +272,15 @@ pub struct PedigreeSims {
     /// Superpopulation with which to contaminate pedigree simulations.
     /// 
     /// Format: STR, STR
-    #[clap(short='C', long, multiple_values(true), max_values(2), default_values(&["AFR","AFR"]))]
+    #[clap(short='C', long, multiple_values(true), default_values(&["AFR", "AFR"]))]
     pub contam_pop: Vec<String>,
 
     ///Number of random individual genomes with which to contaminate pedigree simulations.
     /// 
     /// Format: INT, INT 
     /// Default: Contaminate with population allele frequencies.
-    #[clap(short='N', long, multiple_values(true), max_values(2), default_values(&["1","1"]))]
-    pub contam_num_ind: Vec<u32>,
+    #[clap(short='N', long, multiple_values(true), default_values(&["1", "1"]))]
+    pub contam_num_ind: Vec<usize>,
 
     /// Path to input pedigree definition file.
     #[clap(short='T', long, required(false), default_value("./data/pedigrees/default.ped"), parse(try_from_os_str=valid_input_file))]

@@ -12,7 +12,7 @@ use crate::{
     io::{
         genotype_reader::GenotypeReader,
         vcf::sampletag::SampleTag,
-    },
+    }, contaminant::Contaminant,
     
 };
 use gzp::{deflate::Bgzf, par::decompress::{ParDecompressBuilder}};
@@ -271,10 +271,10 @@ impl<'a> GenotypeReader for VCFReader<'a> {
         Some([haplo1, haplo2])
     }
 
-    fn compute_local_cont_af(&self, contam_ind_ids: &[&SampleTag]) -> Result<f64, Box<dyn Error>> {
+    fn compute_local_cont_af(&self, contaminants: Option<&Contaminant>) -> Result<f64, Box<dyn Error>> {
         let mut ref_allele_count = 0;
         let mut alt_allele_count = 0;
-        for idx in contam_ind_ids.iter() {
+        for idx in contaminants.unwrap().as_flat_list() {
             let cont_alleles = self.get_alleles(idx).unwrap();
             for allele in cont_alleles.into_iter() {
                 match allele {
