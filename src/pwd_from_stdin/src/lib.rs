@@ -1,11 +1,11 @@
 pub mod pileup;
-pub mod comparison;
+pub mod comparisons;
 pub mod io;
 
 //extern crate logger;
 //use parser;
 
-use comparison::*;
+use comparisons::*;
 use genome::{
     SNPCoord,
     Genome,
@@ -118,10 +118,10 @@ pub fn run<'a>(
         }
 
         // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        
-        for comparison in comparisons.get_mut() {
+        for comparison in comparisons.iter_mut() {
             if comparison.satisfiable_depth(&line.individuals) {
                 if ! pwd_cli.filter_sites {
-                    comparison.compare(&line);
+                    comparison.compare(&line)?;
                 } else {
                     println!("{}", entry.as_ref().unwrap());
                 }
@@ -137,12 +137,12 @@ pub fn run<'a>(
         let header = format!("{: <20} - Overlap - Sum PWD - Avg. Pwd - Avg. Phred", "Name");
         println!("{}", header);
         pwd_writer.write_iter(&vec![header])?;       // Print PWD results to file.
-        pwd_writer.write_iter(comparisons.get())?;   // 
+        pwd_writer.write_iter(comparisons.iter())?;   // 
 
         println!("{}", comparisons);                 // Print PWD results to console
 
         if pwd_cli.print_blocks {
-            for comparison in comparisons.get() {
+            for comparison in comparisons.iter() {
                 let pair = comparison.get_pair();
                 let mut block_writer = Writer::new(Some(output_files[&pair].clone()))?;
                 block_writer.write_iter(vec![&comparison.blocks])?;

@@ -55,7 +55,7 @@ fn main() {
     // ----------------------------- Run CLI Parser 
     let cli = parser::Cli::parse();
     // ----------------------------- Init logger.
-    logger::init_logger(&(cli.verbose+(!cli.quiet as u8)));
+    logger::Logger::init(cli.verbose+(!cli.quiet as u8));
     // ----------------------------- Serialize command line arguments
     cli.serialize();
     

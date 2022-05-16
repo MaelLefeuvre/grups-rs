@@ -5,7 +5,7 @@ use std::{
 };
 
 use genome::Genome;
-use crate::pedigree::Pedigree;
+use crate::pedigrees::Pedigree;
 
 pub fn pedigree_parser<'a> (path: &'a Path, genome: &'a Genome) -> std::io::Result<Pedigree> {
     #[derive(Debug)]

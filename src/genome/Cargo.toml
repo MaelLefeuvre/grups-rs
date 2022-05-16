@@ -11,5 +11,9 @@ edition = "2021"
   rand         = "0.8.5"
   log          = "0.4.16"
 
+[dev-dependencies]
+  float-cmp    = "0.9.0"
+
+
 
 

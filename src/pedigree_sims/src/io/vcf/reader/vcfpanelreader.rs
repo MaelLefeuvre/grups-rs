@@ -23,9 +23,7 @@ impl VCFPanelReader {
     // TODO: Convert this into ::from()
     pub fn new(panel_path: &Path) -> std::io::Result<VCFPanelReader> {
         let source = BufReader::new(File::open(panel_path)?);
-        //let reader = VCFReader::new(vcf, 0)?;
         let samples = Self::parse_header(source)?;
-        //drop(reader);
         Ok(VCFPanelReader{samples})
     }
 

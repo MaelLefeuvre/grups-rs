@@ -2,18 +2,16 @@ use std::{
     io::{BufRead, BufReader, Read},
     path::Path,
     fs::File,
-    error::Error, cell::RefMut,
-    collections::HashSet, ops::Deref,
+    error::Error,
+     ops::Deref,
 };
 
-use genome::SNPCoord;
+
 use crate::{
-    pedigree::Individual,
     io::{
         genotype_reader::GenotypeReader,
         vcf::sampletag::SampleTag,
-    }, contaminant::Contaminant,
-    
+    },
 };
 use gzp::{deflate::Bgzf, par::decompress::{ParDecompressBuilder}};
 
@@ -105,14 +103,6 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-    pub fn skip_line(&mut self) -> std::io::Result<()>{
-        self.next_eol()?;
-        self.clear_buffer();
-        self.info.clear();
-        self.genotypes_filled = false;
-        Ok(())
-    }
-
     pub fn is_multiallelic(&self) -> bool {
         self.info.is_multiallelic()
     }
@@ -157,77 +147,12 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-    pub fn get_alleles_tup(&self, idx: usize) -> Result<(u8, u8), Box<dyn Error>> {
-        let geno_idx=idx*4;
-        let haplo1 = self.buf[geno_idx]   - 48;
-        let haplo2 = self.buf[geno_idx+2] - 48;
-        Ok((haplo1, haplo2))
-    }
-
     pub fn clear_buffer(&mut self) {
         self.buf.clear();
     }
 
     pub fn has_data_left(&mut self) -> std::io::Result<bool> {
         self.source.fill_buf().map(|b| ! b.is_empty())
-    }
-
-    pub fn parse_samples(&mut self, mut samples: Vec<RefMut<'_, Individual>>, valid_positions: &HashSet<SNPCoord>, pop: &str) -> Result<(), Box<dyn Error>> {
-        let mut i = 0;
-        while self.has_data_left()? {
-
-
-            let chromosome : u8  = self.next_field()?.parse()?; // 1
-            let position   : u32 = self.next_field()?.parse()?; // 2
-            
-            if i % 50_000 == 0 {
-                println!("{i: >9} {chromosome: >2} {position: >9}");
-            }
-            i+=1;
-
-            if ! valid_positions.contains(&SNPCoord{chromosome, position, reference: None, alternate: None}){
-                self.skip_line()?;
-                continue
-            }
-
-            self.skip(5)?;                                      // 6 
-            let info = self.next_field()?.split(';').collect::<Vec<&str>>();
-
-            if info.iter().any(|&field| field == "MULTI_ALLELIC") {
-                self.skip_line()?;
-                continue
-            }
-            
-            let vtype = info.iter()
-                .find(|&&field| field.starts_with("VT=")).unwrap()
-                .split('=')
-                .collect::<Vec<&str>>()[1];
-
-            let pop_af = match vtype {
-                "SNP" => {
-                    let af = info.iter()
-                    .find(|&&field| field.starts_with(&format!("{pop}_AF")))
-                    .unwrap()
-                    .split('=')
-                    .collect::<Vec<&str>>()[1]
-                    .parse::<f64>().unwrap();
-                    Some(af)
-                },
-                _ => None
-            };
-
-            self.fill_genotypes()?;
-            for founder in samples.iter_mut() {
-                let alleles = self.get_alleles_tup(founder.get_tag().unwrap().idx().unwrap())?;
-                founder.add_locus(&chromosome, position, alleles, pop_af.unwrap())?;
-            }
-        }
-
-        for sample in samples{
-            format!("{}: {}", sample.label, sample.genome[&1].snp_len());
-        }
-
-        Ok(())
     }
 
     pub fn samples(&self) -> Vec<String> {
@@ -269,22 +194,6 @@ impl<'a> GenotypeReader for VCFReader<'a> {
         let haplo1 = self.buf[geno_idx]   - 48;
         let haplo2 = self.buf[geno_idx+2] - 48;
         Some([haplo1, haplo2])
-    }
-
-    fn compute_local_cont_af(&self, contaminants: Option<&Contaminant>) -> Result<f64, Box<dyn Error>> {
-        let mut ref_allele_count = 0;
-        let mut alt_allele_count = 0;
-        for idx in contaminants.unwrap().as_flat_list() {
-            let cont_alleles = self.get_alleles(idx).unwrap();
-            for allele in cont_alleles.into_iter() {
-                match allele {
-                    0 => ref_allele_count +=1,
-                    1 => alt_allele_count +=1,
-                    _ => panic!("Contaminating individual is multiallelic.")
-                }
-            }
-        }
-        Ok((alt_allele_count as f64) /(alt_allele_count as f64 + ref_allele_count as f64))
     }
 
     fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, Box<dyn Error>> {

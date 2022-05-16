@@ -2,17 +2,15 @@ use std::{
     error::Error,
 };
 use log::{info, debug, warn};
-//use rayon;
 
 use genome::{
     Genome
 };
 
 pub mod io;
-pub mod pedigree;
-pub mod pedparam;
-pub mod contaminant;
-use pwd_from_stdin::comparison::Comparisons;
+pub mod pedigrees;
+
+use pwd_from_stdin::comparisons::Comparisons;
 
 
 // @TODO 
@@ -58,11 +56,11 @@ pub fn run(
 {
 
     // ----------------------------- Sanity checks 
-    if ped_cli.contamination_rate.len() < comparisons.get().len() {
+    if ped_cli.contamination_rate.len() < comparisons.len() {
         warn!("Number of contamination rates is lower than the number of comparisons. Values of --contamination-rate will wrap around.")
     }
 
-    if ped_cli.pmd_rate.len() < comparisons.get().len() {
+    if ped_cli.pmd_rate.len() < comparisons.len() {
         warn!("Number of sequencing error rates is lower than the number of comparisons. Values of --contamination-rate will wrap around.")
     }
 
@@ -111,7 +109,7 @@ pub fn run(
     };
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
-    let mut pedigrees = pedigree::Pedigrees::initialize(ped_cli.pedigree_pop, comparisons, &ped_cli.recomb_dir)?;
+    let mut pedigrees = pedigrees::Pedigrees::initialize(ped_cli.pedigree_pop, comparisons, &ped_cli.recomb_dir)?;
     pedigrees.populate(&panel, ped_cli.reps, &genome, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
 
     // --------------------- Assign simulation parameters for each pedigree.

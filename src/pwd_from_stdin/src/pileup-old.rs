@@ -1,5 +1,5 @@
 use genome::SNPCoord;
-use crate::comparison::Individual;
+use crate::comparisons::Individual;
 use std::iter::Peekable;
 use std::error::Error;
 use rand::seq::SliceRandom;
@@ -193,6 +193,7 @@ impl Pileup {
 ///        instead of collecting everything and parsing individually
 ///        => Except for 'reference' we should return a ParseError i
 ///           f we encounter None at any point
+/// 
 #[derive(Debug)]
 pub struct Line {
     pub coordinate : SNPCoord,
@@ -247,11 +248,11 @@ impl Line {
 
     /// Apply random sampling on a a pair of individuals for pairwise-comparison.
     /// One nucleotide sampled per-ind, without replacement.
-    pub fn random_sample_pair(&self, pair: &(Individual, Individual)) -> Vec<&Nucleotide> {
+    pub fn random_sample_pair(&self, pair: &[Individual; 2]) -> Vec<&Nucleotide> {
         let mut rng = &mut rand::thread_rng();
         vec![
-            self.individuals[pair.0.index].nucleotides.choose(&mut rng).unwrap(),
-            self.individuals[pair.1.index].nucleotides.choose(&mut rng).unwrap(),
+            self.individuals[pair[0].index].nucleotides.choose(&mut rng).unwrap(),
+            self.individuals[pair[1].index].nucleotides.choose(&mut rng).unwrap(),
         ]
 
     }
@@ -264,8 +265,6 @@ mod tests {
     use genome::SNPCoord;
 
     fn create_dummy_pileup(line_input: &str, score_input: &str, ignore_dels: bool) -> pileup::Pileup {
-        //let line_input : String = line_input.to_string();
-        //let scores_input : String = score_input.to_string();
         return pileup::Pileup::new(line_input.len() as u16, line_input, score_input, ignore_dels).unwrap();
     }
 

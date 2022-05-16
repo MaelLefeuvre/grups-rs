@@ -8,8 +8,6 @@ use std::{
 };
 
 use crate::{
-    geneticmap::GeneticMap,
-    gamete::Gamete,
     chromosome::Chromosome,
 };
 use log::{warn, info, debug};
@@ -52,7 +50,6 @@ impl DerefMut for Genome {
 }
 
 impl Genome {
-
     pub fn new() -> Genome {
         Genome(BTreeMap::new())
     }    
@@ -122,23 +119,6 @@ impl Genome {
     pub fn get_chr_mut(&mut self, name: &u8) -> Option<&mut Chromosome> {
         self.0.get_mut(name)
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.values().all(|chr| chr.is_empty())
-    }
-
-
-    pub fn meiosis(&mut self, genetic_map: &GeneticMap) -> Gamete {
-        let mut gamete = Gamete::default();
-        for chr in self.0.values_mut() {
-            if ! chr.is_empty(){
-                let chromatid = chr.meiosis(genetic_map);
-                gamete.add_chromatid(chr.name, chromatid);
-            }
-        }
-        gamete
-    }
-
 }
 
 /// Simply returns a default genome index in case the user did not provide a specific .fasta.fai file. 
