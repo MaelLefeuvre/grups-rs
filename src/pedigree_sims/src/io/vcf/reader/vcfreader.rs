@@ -12,8 +12,7 @@ use crate::{
     io::{
         genotype_reader::GenotypeReader,
         vcf::sampletag::SampleTag,
-    }, contaminant::Contaminant,
-    
+    },
 };
 use gzp::{deflate::Bgzf, par::decompress::{ParDecompressBuilder}};
 
@@ -269,22 +268,6 @@ impl<'a> GenotypeReader for VCFReader<'a> {
         let haplo1 = self.buf[geno_idx]   - 48;
         let haplo2 = self.buf[geno_idx+2] - 48;
         Some([haplo1, haplo2])
-    }
-
-    fn compute_local_cont_af(&self, contaminants: Option<&Contaminant>) -> Result<f64, Box<dyn Error>> {
-        let mut ref_allele_count = 0;
-        let mut alt_allele_count = 0;
-        for idx in contaminants.unwrap().as_flat_list() {
-            let cont_alleles = self.get_alleles(idx).unwrap();
-            for allele in cont_alleles.into_iter() {
-                match allele {
-                    0 => ref_allele_count +=1,
-                    1 => alt_allele_count +=1,
-                    _ => panic!("Contaminating individual is multiallelic.")
-                }
-            }
-        }
-        Ok((alt_allele_count as f64) /(alt_allele_count as f64 + ref_allele_count as f64))
     }
 
     fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, Box<dyn Error>> {

@@ -784,22 +784,40 @@ impl<'a> Pedigrees<'a> {
 
     #[allow(unused_labels)]
     pub fn pedigree_simulations_fst(&mut self, input_fst_path: &Path, maf: f64) -> Result<(), Box<dyn Error>> {
+        use std::ops::Bound::*;
         // --------------------- Read and store FST index into memory.
         let mut fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
+
+        // Get a list of which chromosomes are found within the FST index.
+        let contained_chromosomes = fst_reader.find_chromosomes();
+
+
         'comparison: for comparison in self.comparisons.get() {
             info!("Performing simulations for : {}", comparison.get_pair());
-            'coordinate: for (i, coordinate) in comparison.positions.iter().enumerate() {
+
+            // Extract positions matching the FST index chromosome(s)
+            // NOTE: Here we're using range(). But what we'd ideally like is drain_filter() . [Nightly only ]
+            let start = SNPCoord{chromosome: *contained_chromosomes.iter().min().unwrap(), position: std::u32::MIN, reference: None, alternate: None};
+            let stop =  SNPCoord{chromosome: *contained_chromosomes.iter().max().unwrap(), position: std::u32::MAX, reference: None, alternate: None};
+            let relevant_positions = comparison.positions.range((Included(&start), Included(&stop)));
+
+            // Get the number of typed positions for these chromosomes (this .clone() is quite expensive for just a fancy progress estimation...)
+            let n = relevant_positions.clone().count();
+
+            // Loop along positions.
+            'coordinate: for (i, coordinate) in relevant_positions.enumerate() {
+
 
                 let (chromosome, position) = (coordinate.chromosome, coordinate.position);
 
                 // --------------------- Print progress in increments of 10%
-                if (i % (comparison.positions.len()/10)) == 0 {
-                    let percent = (i as f32 / (comparison.positions.len() as f32).floor()) * 100.0 ;
+                if (i % (n/10)) == 0 {
+                    let percent = (i as f32 / (n as f32).floor()) * 100.0 ;
                     info!("{percent: >5.1}% : [{chromosome: <2} {position: >9}]");
                 }
 
                 // --------------------- Don't even begin if we know this set does not contain this chromosome
-                if ! fst_reader.contains_chr(chromosome){ continue 'coordinate }
+                //if ! fst_reader.contains_chr(chromosome){ continue 'coordinate }
 
                 // --------------------- Search through the FST index for the genotypes and pop frequencies at this coordinate.
                 fst_reader.clear_buffers();
@@ -808,7 +826,7 @@ impl<'a> Pedigrees<'a> {
 
                 // --------------------- If genotypes is empty, then this position is missing within the index... Skip ahead.
                 if ! fst_reader.has_genotypes() {
-                    warn!("Missing coordinate in fst index: [{chromosome: <2} {position: >9}]");
+                    //warn!("Missing coordinate in fst index: [{chromosome: <2} {position: >9}]");
                     continue 'coordinate
                 }
 
