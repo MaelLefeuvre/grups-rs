@@ -1,6 +1,7 @@
 use genome::JackknifeBlocks;
 use genome::{SNPCoord, Genome};
 use crate::pileup::{Pileup, Line, Nucleotide};
+use std::error::Error;
 use std::{
     fmt,
     collections::BTreeSet
@@ -68,21 +69,23 @@ impl Comparison {
 
     // Compare our two individuals at the given SNPposition ; increment the appropriate counters after the comparison 
     // has been made.
-    pub fn compare(&mut self, line: &Line) {
+    pub fn compare(&mut self, line: &Line) -> Result<(), Box<dyn Error>> {
         self.positions.insert(line.coordinate.clone());
-        let random_nucl: Vec<&Nucleotide> = if self.self_comparison {  // Self comparison => Combination without replacement. 
+        let random_nucl: Vec<&Nucleotide> = if self.self_comparison {   // Self comparison => Combination without replacement. 
             line.random_sample_self(&self.pair.0.index)                 //   - possible combinations: n!/(n-2)!
-        } else {                                                       // Std comparison  => Permutation.
-            line.random_sample_pair(&self.pair)                        //  - possible combinations: n_1 * n_2
+        } else {                                                        // Std comparison  => Permutation.
+            line.random_sample_pair(&self.pair)                         //  - possible combinations: n_1 * n_2
         };
         self.add_phred(&random_nucl);
 
-        let current_block = self.blocks.find_block(&line.coordinate);
+        let current_block = self.blocks.find_block(&line.coordinate)
+            .ok_or(format!("Cannot find corresponding Jackknife Block for {}", line.coordinate))?;
         current_block.add_count();
         if Self::check_pwd(&random_nucl) {
             self.pwd +=1;
             current_block.add_pwd();
         }
+        Ok(())
     }
 
     // Increment our `sum_phred` counter. The incremented value is computed as the average of the two sampled nucleotides.

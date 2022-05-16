@@ -121,7 +121,7 @@ pub fn run<'a>(
         for comparison in comparisons.get_mut() {
             if comparison.satisfiable_depth(&line.individuals) {
                 if ! pwd_cli.filter_sites {
-                    comparison.compare(&line);
+                    comparison.compare(&line)?;
                 } else {
                     println!("{}", entry.as_ref().unwrap());
                 }

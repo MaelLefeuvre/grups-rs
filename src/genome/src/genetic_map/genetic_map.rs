@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap},
-    hash::{Hash, Hasher},
-    ops::{Deref, DerefMut, Range},
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     error::Error,
     io::{BufReader, BufRead},
@@ -10,53 +9,7 @@ use std::{
 
 use rust_lapper::{Interval, Lapper};
 
-#[derive(Debug, Clone)]
-pub struct RecombinationRange {
-    range: Range<u32>,
-    prob : f64,
-}
-
-impl RecombinationRange {
-    pub fn new(start: u32, end: u32, rate: f64) -> RecombinationRange {
-        let prob: f64 = rate / 100.0 / 1_000_000.0 ;  // rate/cM/Mb.
-        RecombinationRange{range: Range{start, end}, prob}
-    }
-
-    pub fn prob(&self) -> &f64 {
-        &self.prob
-    }
-
-    pub fn rate(&self) -> f64 {
-        self.prob * 100.0 * 1_000_000.0
-    }
-}
-
-impl PartialEq<RecombinationRange> for RecombinationRange {
-    fn eq(&self, other: &Self) -> bool { 
-        self.range == other.range
-    }
-}
-
-impl PartialEq<Range<u32>> for RecombinationRange {
-    fn eq(&self, other: &Range<u32>) -> bool {
-        self.range == *other
-    }
-}
-
-impl Eq for RecombinationRange {}
-
-impl Hash for RecombinationRange {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.range.hash(state);
-    }
-}
-
-impl std::borrow::Borrow<Range<u32>> for RecombinationRange {
-    fn borrow(&self) -> &Range<u32> {
-        self.range.borrow()
-    }
-}
-
+use super::recomb_range::RecombinationRange;
 
 
 #[derive(Default)]
@@ -109,7 +62,6 @@ impl GeneticMap {
     }
 
     fn fetch_genetic_maps(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
-
         let paths = std::fs::read_dir(input_dir)?;
         let maps = paths.filter_map(Result::ok)
             .filter_map(|d| d.path()
@@ -134,4 +86,9 @@ impl GeneticMap {
 
         interval_prob_recomb
     }
+}
+
+#[cfg(test)]
+mod tests {
+
 }

@@ -1,4 +1,4 @@
-use std::{collections::{BTreeMap, HashSet, HashMap}, path::{PathBuf, Path}, error::Error, ops::{Deref, DerefMut}};
+use std::{collections::{BTreeMap, HashMap}, path::{PathBuf, Path}, error::Error, ops::{Deref, DerefMut}};
 
 use crate::contaminant::Contaminant;
 
@@ -19,7 +19,6 @@ use crate::{
 
 use genome::{
     SNPCoord,
-    Chromosome,
     Genome,
     GeneticMap,
 };
@@ -49,188 +48,6 @@ pub struct Individual {
     strands    : Option<[usize; 2]>,
     currently_recombining: [bool; 2],
     pub alleles: Option<[u8; 2]>,
-}
-
-type ParentsRef<'a> = [&'a Rc<RefCell<Individual>>; 2];
-
-impl Individual {
-    pub fn new(label: String, parents: Option<ParentsRef>, genome: Genome) -> Individual {
-        let parents = parents.map(Self::format_parents);
-        Individual {tag: None, label, parents, genome, strands: None, currently_recombining: [false, false], alleles: None}
-    }
-
-    pub fn set_alleles(&mut self, alleles: [u8; 2]) {
-        self.alleles = Some(alleles);
-    }
-
-    pub fn get_alleles(&self) -> Result<[u8; 2], Box<dyn Error>> {
-        self.alleles.ok_or("Attempting to access empty alleles.".into())
-    }
-
-    pub fn alleles_tuple(&self) -> (u8, u8) {
-        match self.alleles {
-            None => panic!("Missing alleles."),
-            Some(alleles) => (alleles[0], alleles[1])
-        }
-    }
-
-    pub fn meiosis(&self, selected_strand: usize, offspring_currently_recombining: bool) -> u8 {
-        let selected_strand = match offspring_currently_recombining {
-            false => selected_strand,
-            true => (selected_strand + 1) % 2
-        };
-        match self.alleles {
-            None          => panic!("Trying to perform meiosis within an empty genome!"),
-            Some(alleles) => alleles[selected_strand],
-        }
-    }
-
-
-    pub fn assign_strands(&mut self) -> Result<bool, String> {
-        if self.parents == None {
-            return Err("Assigning strands is meaningless, as this individual has no parents.".to_owned())
-        }
-        if self.strands != None {
-            return Ok(false)
-        }
-        let mut rng = rand::thread_rng();
-        self.strands = Some([rng.gen_range(0, 2), rng.gen_range(0, 2)]);
-        Ok(true)
-    }
-
-
-    pub fn get_tag(&self) -> Option<&SampleTag> {
-        self.tag.as_ref()
-    }
-
-    pub fn add_locus(&mut self, chromosome: &u8, pos: u32, alleles: (u8, u8), af: f64) -> Result<(), &str> {
-        self.genome.get_chr_mut(chromosome).ok_or("Missing chromosome.")?.add_locus(pos, alleles, af);
-        Ok(())
-    }
-
-    pub fn get_parents(&self) -> Option<(Ref<Individual>, Ref<Individual>)> {
-        self.parents.as_ref().map(|parents| (RefCell::borrow(&parents[0]), RefCell::borrow(&parents[1])))
-    }
-
-    pub fn get_parents_mut(&self) -> Option<[RefMut<Individual>; 2]> {
-        self.parents.as_ref().map(|parents| [RefCell::borrow_mut(&parents[0]), RefCell::borrow_mut(&parents[1])])
-    }
-
-    pub fn set_parents(&mut self, parents: ParentsRef) {
-        self.parents = Some(Self::format_parents(parents));
-    }
-
-    pub fn is_founder(&self) -> bool {
-        self.parents == None
-    }
-
-    pub fn set_tag(&mut self, tag: SampleTag){
-        self.tag = Some(tag);
-    }
-
-    fn format_parents(parents:  [&Rc<RefCell<Individual>>; 2]) -> Parents {
-        Parents::new([Rc::clone(parents[0]), Rc::clone(parents[1])])
-    }
-
-    pub fn has_empty_genome(&self) -> bool {
-        self.genome.is_empty()
-    }
-
-    pub fn clear_alleles(&mut self){
-        self.alleles = None
-    }
-    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize) -> Result<bool, Box<dyn Error>> {
-        if self.alleles != None {
-            return Ok(false)
-        }
-
-        match &self.parents {
-            None => panic!("Cannot generate genome, as parents are missing."),
-            Some(parents) => {
-                let mut rng = rand::thread_rng();
-                for (i, parent) in parents.iter().enumerate() {
-
-                    //Assign parent genome if not previously generated.
-                    if parent.borrow().alleles == None {
-                        parent.borrow_mut().assign_alleles(recombination_prob, i).unwrap();
-                    }
-
-                    // Check if recombination occured for each parent and update counters if so.
-                    if rng.gen::<f64>() < recombination_prob {
-                        trace!("Cross-over occured in ped: {:<5} - ind: {}", ped_idx, self.label);
-                        self.currently_recombining[i] = ! self.currently_recombining[i];
-                    }
-                }
-
-                // Assign alleles.
-                self.alleles = match self.strands {
-                    None => return Err(format!("Cannot assign alleles when self.strands is empty. [{}]", self).into()),
-                    Some([s1, s2]) => {
-                        let haplo_0 = parents[0].borrow_mut().meiosis(s1, self.currently_recombining[0]);
-                        let haplo_1 = parents[1].borrow_mut().meiosis(s2, self.currently_recombining[1]);
-                        Some([haplo_0, haplo_1])
-                    }
-                };
-                
-            }
-        }
-        Ok(true)
-    }
-
-
-    pub fn generate_genome(&mut self, genetic_map: &GeneticMap) -> Result<bool, Box<dyn Error>>{
-        if ! self.has_empty_genome() {
-            trace!("{} Genome already generated.", self.label);
-            return Ok(false)
-        }
-
-        trace!("Generating {} genome.", self.label);
-        match &self.parents {
-            None => panic!("Cannot generate genome, as parents are missing."),
-            Some(parents) => {
-                for parent in parents.iter() {
-                    if parent.borrow().has_empty_genome() {
-                        trace!(" -> Parent {} has empty genome. Generating...", parent.borrow().label);
-                        parent.borrow_mut().generate_genome(genetic_map).unwrap();
-                    }
-                    else {
-                        trace!("-> Parent {} has genome.", parent.borrow().label);
-                    }
-                }
-                let gamete_1 = parents[0].borrow_mut().genome.meiosis(genetic_map);
-                let gamete_2 = parents[1].borrow_mut().genome.meiosis(genetic_map);
-
-                self.genome = gamete_1.fertilize(&gamete_2);
-            },
-        };
-        Ok(true)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct Parents([Rc<RefCell<Individual>>; 2]);
-
-impl Parents{
-    pub fn new(parents: [Rc<RefCell<Individual>>; 2]) -> Parents {
-        Parents(parents)
-    }
-}
-
-impl Deref for Parents {
-    type Target = [Rc<RefCell<Individual>>; 2];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for Parents {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{} <-> {}", 
-            RefCell::borrow(&self[0]).label,
-            RefCell::borrow(&self[1]).label
-        )
-    }
 }
 
 impl std::fmt::Display for Individual {
@@ -279,6 +96,136 @@ impl PartialOrd for Individual {
     }
 }
 
+type ParentsRef<'a> = [&'a Rc<RefCell<Individual>>; 2];
+
+impl Individual {
+    pub fn new(label: String, parents: Option<ParentsRef>, genome: Genome) -> Individual {
+        let parents = parents.map(Self::format_parents);
+        Individual {tag: None, label, parents, genome, strands: None, currently_recombining: [false, false], alleles: None}
+    }
+
+    pub fn set_alleles(&mut self, alleles: [u8; 2]) {
+        self.alleles = Some(alleles);
+    }
+
+    pub fn get_alleles(&self) -> Result<[u8; 2], Box<dyn Error>> {
+        self.alleles.ok_or("Attempting to access empty alleles.".into())
+    }
+
+    pub fn meiosis(&self, selected_strand: usize, offspring_currently_recombining: bool) -> u8 {
+        let selected_strand = match offspring_currently_recombining {
+            false => selected_strand,
+            true => (selected_strand + 1) % 2
+        };
+        match self.alleles {
+            None          => panic!("Trying to perform meiosis within an empty genome!"),
+            Some(alleles) => alleles[selected_strand],
+        }
+    }
+
+    pub fn assign_strands(&mut self) -> Result<bool, String> {
+        if self.parents == None {
+            return Err("Assigning strands is meaningless, as this individual has no parents.".to_owned())
+        }
+        if self.strands != None {
+            return Ok(false)
+        }
+        let mut rng = rand::thread_rng();
+        self.strands = Some([rng.gen_range(0, 2), rng.gen_range(0, 2)]);
+        Ok(true)
+    }
+
+    pub fn get_tag(&self) -> Option<&SampleTag> {
+        self.tag.as_ref()
+    }
+
+    pub fn set_parents(&mut self, parents: ParentsRef) {
+        self.parents = Some(Self::format_parents(parents));
+    }
+
+    pub fn is_founder(&self) -> bool {
+        self.parents == None
+    }
+
+    pub fn set_tag(&mut self, tag: SampleTag){
+        self.tag = Some(tag);
+    }
+
+    fn format_parents(parents:  [&Rc<RefCell<Individual>>; 2]) -> Parents {
+        Parents::new([Rc::clone(parents[0]), Rc::clone(parents[1])])
+    }
+
+    pub fn clear_alleles(&mut self){
+        self.alleles = None
+    }
+    
+    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize) -> Result<bool, Box<dyn Error>> {
+        if self.alleles != None {
+            return Ok(false)
+        }
+
+        match &self.parents {
+            None => panic!("Cannot generate genome, as parents are missing."),
+            Some(parents) => {
+                let mut rng = rand::thread_rng();
+                for (i, parent) in parents.iter().enumerate() {
+
+                    //Assign parent genome if not previously generated.
+                    if parent.borrow().alleles == None {
+                        parent.borrow_mut().assign_alleles(recombination_prob, i).unwrap();
+                    }
+
+                    // Check if recombination occured for each parent and update counters if so.
+                    if rng.gen::<f64>() < recombination_prob {
+                        trace!("Cross-over occured in ped: {:<5} - ind: {}", ped_idx, self.label);
+                        self.currently_recombining[i] = ! self.currently_recombining[i];
+                    }
+                }
+
+                // Assign alleles.
+                self.alleles = match self.strands {
+                    None => return Err(format!("Cannot assign alleles when self.strands is empty. [{}]", self).into()),
+                    Some([s1, s2]) => {
+                        let haplo_0 = parents[0].borrow_mut().meiosis(s1, self.currently_recombining[0]);
+                        let haplo_1 = parents[1].borrow_mut().meiosis(s2, self.currently_recombining[1]);
+                        Some([haplo_0, haplo_1])
+                    }
+                };
+                
+            }
+        }
+        Ok(true)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct Parents([Rc<RefCell<Individual>>; 2]);
+
+impl Parents{
+    pub fn new(parents: [Rc<RefCell<Individual>>; 2]) -> Parents {
+        Parents(parents)
+    }
+}
+
+impl Deref for Parents {
+    type Target = [Rc<RefCell<Individual>>; 2];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for Parents {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{} <-> {}", 
+            RefCell::borrow(&self[0]).label,
+            RefCell::borrow(&self[1]).label
+        )
+    }
+}
+
+
+
 #[derive(Debug, Clone)]
 pub struct PedComparison {
     label            : String,
@@ -305,11 +252,6 @@ impl PedComparison {
     pub fn get_avg_pwd(&self) -> f64 {
         self.pwd as f64 / self.overlap as f64
     }
-
-    pub fn set_pair(&mut self, pair: (&Rc<RefCell<Individual>>, &Rc<RefCell<Individual>>)){
-        self.pair = Self::format_pair(pair);
-    }
-
     
     fn format_pair(pair: (&Rc<RefCell<Individual>>, &Rc<RefCell<Individual>>)) -> (Rc<RefCell<Individual>>, Rc<RefCell<Individual>>) {
         (Rc::clone(pair.0), Rc::clone(pair.1))
@@ -323,31 +265,6 @@ impl PedComparison {
             self.add_pwd();
         }
         Ok(())
-    }
-
-    pub fn compare_genome(&self) -> (u32, u32) {
-        let (mut genomewide_overlap, mut genomewide_pwd): (u32,u32)  = (0,0);
-        for (chromosome1, chromosome2) in self.pair.0.borrow().genome.values().zip(self.pair.1.borrow().genome.values()){
-            if ! chromosome1.is_empty() && ! chromosome2.is_empty() {
-                let (chr_overlap, chr_pwd) = Self::compare_chromosome(chromosome1, chromosome2);
-                genomewide_overlap += chr_overlap;
-                genomewide_pwd     += chr_pwd;
-            }
-        }
-        (genomewide_pwd, genomewide_overlap)
-    }
-
-    fn compare_chromosome(chromosome1: &Chromosome, chromosome2: &Chromosome) -> (u32, u32) {
-        let (mut overlap, mut pwd): (u32,u32)  = (0,0);
-        for loci in chromosome1.loci().zip(chromosome2.loci()){
-            overlap+=1;
-            let random_sample1 = Self::simulate_observed_reads(1, 0.0, 0.0, 0.0, loci.0.alleles());
-            let random_sample2 = Self::simulate_observed_reads(1, 0.0, 0.0, 0.0, loci.1.alleles());
-            if random_sample1 != random_sample2 {
-                pwd+=1;
-            }
-        }
-        (overlap, pwd)
     }
 
     fn simulate_observed_reads(n: u8, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Vec<u8> {
@@ -564,34 +481,6 @@ impl Pedigree {
         }
     }
 
-    pub fn populate_founders_vcf(&mut self, input_vcf_paths: &Vec<PathBuf>, valid_positions: &HashSet<SNPCoord>) -> Result<(), Box<dyn Error>> {
-        for vcf in input_vcf_paths {
-            info!("Parsing vcf file: {}", vcf.to_str().unwrap_or("None"));
-            let mut vcf_reader = VCFReader::new(vcf.as_path(), 0)?;
-            let pop_tag = &self.pop.as_ref().unwrap().clone();
-            vcf_reader.parse_samples(self.founders_mut(), valid_positions, pop_tag)?;
-
-        }
-        Ok(())
-    }
-    
-    pub fn reproduce(&mut self, genetic_map: &GeneticMap){
-        for mut offspring in self.offsprings_mut() {
-            if offspring.has_empty_genome(){
-                trace!("{} has empty genome.", offspring.label);
-                offspring.generate_genome(genetic_map).unwrap();
-            }
-        }
-    }
-
-    pub fn compare_genomes(&self) {
-        for comparison in self.comparisons.iter() {
-            let (pwd, overlap) = comparison.compare_genome();
-            let avg_pwd = pwd as f64 / overlap as f64;
-            println!("{: <20} : {: >9} - {: >9} - {: <9}", comparison.label, pwd, overlap, avg_pwd);
-        }
-    }
-
     pub fn clear_alleles(&mut self){
         for ind in self.individuals.values_mut(){
             ind.borrow_mut().clear_alleles()
@@ -681,21 +570,7 @@ pub struct Pedigrees<'a> {
 ///          ==> This is NOT what we want. What we want is to create new instances of Rc<RefCell> from these values.
 impl<'a> Pedigrees<'a> {
 
-    pub fn populate(&mut self, panel: &VCFPanelReader, reps: u32, genome: &Genome, pedigree_path: &Path, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
-        let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind);
 
-        for comparison in self.comparisons.get() {
-            let comparison_label = comparison.get_pair();
-            let pair_indices = comparison.get_pair_indices();
-
-            let mut pedigree_reps = PedigreeReps::with_capacity(reps as usize);
-            pedigree_reps.set_contaminants(&samples_contam_tags, pair_indices);
-            debug!("Contaminant set for {comparison_label}: {:#?}", pedigree_reps.contaminants);
-            pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel, genome)?;
-            self.pedigrees.insert(comparison_label.to_owned(), pedigree_reps);
-        }
-        Ok(())
-    }
 
     pub fn initialize(pedigree_pop: String, comparisons: &'a Comparisons, recomb_dir: &PathBuf) -> Result<Self, Box<dyn Error>> {
         // Generate pedigree replicates for each pwd_from_stdin::Comparison.
@@ -718,16 +593,20 @@ impl<'a> Pedigrees<'a> {
         Ok(Pedigrees{pedigrees, comparisons, pedigree_pop, previous_positions, genetic_map, rng})
     }
 
-    pub fn set_contam_inds(&mut self, panel: &VCFPanelReader, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>, ) {
-
+    pub fn populate(&mut self, panel: &VCFPanelReader, reps: u32, genome: &Genome, pedigree_path: &Path, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
         let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind);
 
-        //let mut contam_set: HashMap<String, [Vec<SampleTag>; 2]> = HashMap::new();
-        for comparison in self.comparisons.get().iter() {
+        for comparison in self.comparisons.get() {
+            let comparison_label = comparison.get_pair();
             let pair_indices = comparison.get_pair_indices();
-            let pair_label = comparison.get_pair();
-            self.pedigrees.get_mut(&pair_label).unwrap().set_contaminants(&samples_contam_tags, pair_indices);
+
+            let mut pedigree_reps = PedigreeReps::with_capacity(reps as usize);
+            pedigree_reps.set_contaminants(&samples_contam_tags, pair_indices);
+            debug!("Contaminant set for {comparison_label}: {:#?}", pedigree_reps.contaminants);
+            pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel, genome)?;
+            self.pedigrees.insert(comparison_label.to_owned(), pedigree_reps);
         }
+        Ok(())
     }
 
     pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: &Vec<Vec<f64>>, contam_rate: &Vec<Vec<f64>>) -> Result<(), String>{
@@ -826,7 +705,7 @@ impl<'a> Pedigrees<'a> {
 
                 // --------------------- If genotypes is empty, then this position is missing within the index... Skip ahead.
                 if ! fst_reader.has_genotypes() {
-                    //warn!("Missing coordinate in fst index: [{chromosome: <2} {position: >9}]");
+                    warn!("Missing coordinate in fst index: [{chromosome: <2} {position: >9}]");
                     continue 'coordinate
                 }
 
