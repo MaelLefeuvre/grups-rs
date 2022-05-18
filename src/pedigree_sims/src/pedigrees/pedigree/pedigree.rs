@@ -101,7 +101,7 @@ impl Pedigree {
                 Some([parent1, parent2])
             },
         };
-        let ind = Rc::new(RefCell::new(Individual::new(label.to_owned(), parents, genome)));
+        let ind = Rc::new(RefCell::new(Individual::new(&label, parents, genome)));
         self.individuals.insert(label.to_owned(), ind);
         Ok(())
     }
