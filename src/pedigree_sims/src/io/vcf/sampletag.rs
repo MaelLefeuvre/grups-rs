@@ -27,6 +27,12 @@ impl PartialEq for SampleTag {
     }
 }
 
+impl PartialEq<&str> for SampleTag {
+    fn eq(&self, string: &&str) -> bool {
+        self.id.as_str() == *string
+    }
+}
+
 impl Eq for SampleTag {}
 
 impl std::cmp::Ord for SampleTag {

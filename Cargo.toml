@@ -17,9 +17,9 @@
 #  name = "pwd_from_stdin"
 #  path = "src/pwd_from_stdin/bin/main.rs"
 
-[[bin]]
-  name = "pedigree_sims"
-  path = "src/pedigree_sims/src/main.rs"
+#[[bin]]
+#  name = "pedigree_sims"
+#  path = "src/pedigree_sims/src/main.rs"
 
 #[[lib]]
 #  name = "vcf-fst"
@@ -42,4 +42,5 @@
   tokio          = { version = "1.17.0", features = ["full"] }
   rayon          = "1.5.2"
 
-
+[dev-dependencies]
+  tempfile        = "3.3.0"

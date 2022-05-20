@@ -13,7 +13,6 @@ use crate::io::{
     vcf::reader::VCFPanelReader,
 };
 
-use genome::Genome;
 
 
 use rand::{Rng, prelude::ThreadRng};
@@ -91,7 +90,7 @@ impl Pedigree {
         Ok(())
     }
 
-    pub fn add_individual(&mut self, label: &str, parents: Option<(&String, &String)>, genome: Genome) -> std::io::Result<()>{
+    pub fn add_individual(&mut self, label: &str, parents: Option<(&String, &String)>) -> std::io::Result<()>{
         use std::io::ErrorKind::InvalidInput;
         let parents = match parents {
             None => None,
@@ -101,7 +100,7 @@ impl Pedigree {
                 Some([parent1, parent2])
             },
         };
-        let ind = Rc::new(RefCell::new(Individual::new(&label, parents, genome)));
+        let ind = Rc::new(RefCell::new(Individual::new(&label, parents)));
         self.individuals.insert(label.to_owned(), ind);
         Ok(())
     }
@@ -110,7 +109,7 @@ impl Pedigree {
         use std::io::ErrorKind::InvalidInput;
         let pair0 = self.individuals.get(pair.0).ok_or(InvalidInput)?;
         let pair1 = self.individuals.get(pair.1).ok_or(InvalidInput)?;
-        self.comparisons.push(PedComparison::new(label.to_owned(), (pair0, pair1), pair0==pair1));
+        self.comparisons.push(PedComparison::new(label, [pair0, pair1], pair0==pair1));
         Ok(())
     }
 
@@ -164,10 +163,15 @@ impl Pedigree {
     pub fn set_tags(&mut self, panel: &VCFPanelReader, pop: &String, contaminants: Option<&Contaminant>) {
         self.pop = Some(pop.to_owned());
 
-        let contam_tags = contaminants.map(|cont| cont.as_flat_list());
+        // Contaminating individual are excluded from pedigree individuals.
+        let mut exclude_tags = contaminants.map(|cont| cont.as_flat_list()).unwrap();
+
 
         for mut founder in self.founders_mut() {
-            founder.set_tag(panel.random_sample(pop, contam_tags.as_ref()).unwrap().clone());
+            let random_tag = panel.random_sample(pop, Some(&exclude_tags)).unwrap();
+            founder.set_tag(random_tag.clone());
+            exclude_tags.push(random_tag); // Exclude this pedigree individual for other iterations.
+
         }
     }
 
@@ -191,9 +195,9 @@ mod tests {
 
     fn test_pedigree() -> std::io::Result<Pedigree> {
         let mut pedigree = Pedigree::new();
-        pedigree.add_individual("father", None, Genome::default())?;
-        pedigree.add_individual("mother", None, Genome::default())?;
-        pedigree.add_individual("offspr", Some((&"father".to_string(), &"mother".to_string())), Genome::default())?;
+        pedigree.add_individual("father", None)?;
+        pedigree.add_individual("mother", None)?;
+        pedigree.add_individual("offspr", Some((&"father".to_string(), &"mother".to_string())))?;
 
         let mut father = pedigree.get_mutind(&"father".to_string()).expect("Cannot extract father");
         father.set_alleles([0, 1]);

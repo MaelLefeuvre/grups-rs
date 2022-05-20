@@ -1,0 +1,40 @@
+# example pedigree definition input file
+# suggestion: pairwise comparisons labels and individual IDs should be simple and not contain spaces or special characters)
+
+# first define individuals in pedigree (each with unique ID)
+INDIVIDUALS
+father
+mother
+child1
+child2
+wife
+gchild
+cousin
+husband
+inbred
+stepmom
+halfsib
+
+
+# next define offspring relationships
+RELATIONSHIPS
+child1=repro(father,mother)
+child2=repro(father,mother)
+gchild=repro(child1,wife)
+cousin=repro(child2,husband)
+inbred=repro(child1,child2)
+halfsib=repro(child1,stepmom)
+
+
+# finally, define pairwise comparisons for which to calculate/output genetic distances and later perform plotting
+COMPARISONS
+Inbred_self=compare(inbred,inbred)        # IDENTICAL RELATIONSHIP (inbred offspring of siblings)
+Twins_or_self=compare(father,father)      # IDENTICAL RELATIONSHIP
+Parent_child=compare(father,child1)       # PARENT-CHILD RELATIONSHIP
+Siblings=compare(child1,child2)           # SIBLING RELATIONSHIP
+GPGC=compare(mother,cousin)               # GRANDPARENT-GRANDCHILD RELATIONSHIP
+Avuncular=compare(child2,gchild)          # AVUNCULAR RELATIONSHIP
+Half-siblings=compare(gchild,halfsib)     # HALF-SIBLING RELATIONSHIP
+Cousins=compare(cousin,gchild)            # COUSIN RELATIONSHIP
+Unrelated=compare(father,mother)          # UNRELATED RELATIONSHIP
+

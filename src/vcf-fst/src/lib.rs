@@ -39,7 +39,7 @@ impl<'a> VCFIndexer<'a> {
         let gen_writer  = std::io::BufWriter::new(File::create(format!("{output_file}.fst"))?);
         let builder =  SetBuilder::new(gen_writer)?;
 
-        let frq_writer  = std::io::BufWriter::new(File::create(format!("{output_file}.frq.fst"))?);
+        let frq_writer  = std::io::BufWriter::new(File::create(format!("{output_file}.fst.frq"))?);
         let frq_builder =  SetBuilder::new(frq_writer)?;
 
         // ----------------------- Initialize Reader.
@@ -220,7 +220,6 @@ impl<'a> VCFIndexer<'a> {
             key.push(self.genotypes_buffer[geno_idx  ]); // haplo1
             key.push(self.genotypes_buffer[geno_idx+2]); // haplo2
 
-            //println!("{}", std::str::from_utf8(&key)?);
             self.genotype_keys.push(key);
         }
         Ok(())
@@ -236,8 +235,13 @@ pub fn run(
     let mut input_vcf_paths = vcf::get_input_vcfs(&fst_cli.vcf_dir).unwrap();
     input_vcf_paths.sort();
 
+    // --------------------- Fetch the input panel.
+    let input_panel_path = match fst_cli.panel.clone() {
+        Some(path) => path,
+        None => vcf::fetch_input_panel(&fst_cli.vcf_dir)?,
+    };
 
-    let mut panel = VCFPanelReader::new(fst_cli.panel.as_path())?;
+    let mut panel = VCFPanelReader::new(&input_panel_path)?;
     panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
 
     // User defined subset-arguments.
@@ -277,5 +281,10 @@ pub fn run(
         }
     });
 
+
+    let output_panel_path = format!("{}/{}",
+        fst_cli.output_dir.to_str().unwrap(),
+        input_panel_path.file_name().unwrap().to_str().unwrap());
+    panel.copy_from_source(Path::new(&output_panel_path)).unwrap();
     Ok(())
 }

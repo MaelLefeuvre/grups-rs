@@ -19,7 +19,6 @@ impl Parents{
 
 impl Deref for Parents {
     type Target = [Rc<RefCell<Individual>>; 2];
-
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -31,5 +30,22 @@ impl std::fmt::Display for Parents {
             RefCell::borrow(&self[0]).label,
             RefCell::borrow(&self[1]).label
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pedigrees::pedigree::tests::common;
+    #[test]
+    fn display(){
+        let parents_labels = ["father", "mother"];
+        let father = Rc::new(RefCell::new(common::mock_founder(parents_labels[0])));
+        let mother = Rc::new(RefCell::new(common::mock_founder(parents_labels[1])));
+        let parents = Parents::new([father, mother]);
+        let display = format!("{}", parents);
+
+        assert!(display.contains("father"));
+        assert!(display.contains("mother"));
     }
 }

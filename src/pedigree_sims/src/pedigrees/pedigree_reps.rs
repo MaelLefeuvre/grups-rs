@@ -13,11 +13,6 @@ use crate::io::vcf::{
     reader::VCFPanelReader,
 };
 
-use genome::{
-    Genome,
-};
-
-
 pub struct PedigreeReps{
     inner: Vec<Pedigree>,
     pub contaminants: Option<Contaminant> 
@@ -34,9 +29,9 @@ impl PedigreeReps {
         self.contaminants = Some(Contaminant::new([tags_0, tags_1]))
     }
 
-    pub fn populate(&mut self, pedigree_path: &Path, pop: &String, panel: &VCFPanelReader, genome: &Genome) -> Result<(), Box<dyn Error>> {
+    pub fn populate(&mut self, pedigree_path: &Path, pop: &String, panel: &VCFPanelReader) -> Result<(), Box<dyn Error>> {
         for _ in 0..self.inner.capacity() {
-            let mut pedigree = pedigree::io::pedigree_parser(pedigree_path, genome).unwrap();
+            let mut pedigree = pedigree::io::pedigree_parser(pedigree_path).unwrap();
             pedigree.set_tags(panel, pop, self.contaminants.as_ref());
             pedigree.assign_offspring_strands()?;
             self.inner.push(pedigree);

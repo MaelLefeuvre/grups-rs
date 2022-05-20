@@ -9,8 +9,6 @@ use std::{
 use super::Parents;
 use crate::io::vcf::SampleTag;
 
-use genome::Genome;
-
 use rand::{Rng};
 use log::{trace};
 
@@ -20,7 +18,6 @@ pub struct Individual {
     pub tag    : Option<SampleTag>,   // NA005842
     pub label  : String,              // son, mother, stepmom, etc...
     parents    : Option<Parents>,
-    pub genome : Genome,
     pub strands    : Option<[usize; 2]>,
     pub currently_recombining: [bool; 2],
     pub alleles: Option<[u8; 2]>,
@@ -79,9 +76,9 @@ impl PartialOrd for Individual {
 type ParentsRef<'a> = [&'a Rc<RefCell<Individual>>; 2];
 
 impl Individual {
-    pub fn new(label: &str, parents: Option<ParentsRef>, genome: Genome) -> Individual {
+    pub fn new(label: &str, parents: Option<ParentsRef>) -> Individual {
         let parents = parents.map(Self::format_parents);
-        Individual {tag: None, label: label.to_string(), parents, genome, strands: None, currently_recombining: [false, false], alleles: None}
+        Individual {tag: None, label: label.to_string(), parents, strands: None, currently_recombining: [false, false], alleles: None}
     }
 
     #[cfg(test)]
@@ -181,21 +178,7 @@ impl Individual {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn mock_founder(label: &str) -> Individual {
-        let genome = Genome::default();
-        Individual::new(label, None, genome)
-    } 
-
-    fn mock_offspring(label: &str, parents_labels: Option<[&str; 2]>) -> Individual {
-        let parents_labels = parents_labels.unwrap_or(["father", "mother"]);
-
-        let genome = Genome::default();
-        let father = Rc::new(RefCell::new(mock_founder(parents_labels[0])));
-        let mother = Rc::new(RefCell::new(mock_founder(parents_labels[1])));
-        let parents = Some([&father, &mother]);
-        Individual::new(label, parents, genome)
-    }
+    use crate::pedigrees::pedigree::tests::common;
 
 
     fn perform_allele_asignment(offspring: &mut Individual, parents_alleles: [[u8;2];2], recombination_prob: f64) {
@@ -206,7 +189,7 @@ mod tests {
     }
 
     fn run_all_allele_assignment_cases(recombination_prob: f64) {
-        let mut offspring = mock_offspring("offspring", None);
+        let mut offspring = common::mock_offspring("offspring", None);
         let valid_alleles = vec![[0,0], [0,1], [1,0], [1,1]];
         let mut valid_strands = vec![[0,0], [0,1], [1,0], [1,1]];
 
@@ -233,7 +216,7 @@ mod tests {
 
      #[test]
     fn alleles_getter_filled(){
-        let mut ind = mock_founder("offspring");
+        let mut ind = common::mock_founder("offspring");
         let alt_ref = [0,1];
         for i in alt_ref {
             for j in alt_ref {
@@ -246,7 +229,7 @@ mod tests {
 
     #[test]
     fn alleles_getter_empty(){
-        let ind = mock_founder("offspring");
+        let ind = common::mock_founder("offspring");
         let alleles = ind.get_alleles();
         assert!(alleles.is_err());
     }
@@ -254,7 +237,7 @@ mod tests {
     #[test]
     fn meiosis_not_recombining() {
         let offspring_currently_recombining = false; 
-        let mut ind = mock_founder("offspring");
+        let mut ind = common::mock_founder("offspring");
         let alt_ref = [0,1];
         for i in alt_ref {
             for j in alt_ref {
@@ -274,7 +257,7 @@ mod tests {
     #[test]
     fn meiosis_recombining() {
         let offspring_currently_recombining = true; 
-        let mut ind = mock_founder("parent");
+        let mut ind = common::mock_founder("parent");
         let alt_ref = [0,1];
         for i in alt_ref {
             for j in alt_ref {
@@ -295,7 +278,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn meiosis_empty_alleles() {
-        let ind = mock_founder("parent");
+        let ind = common::mock_founder("parent");
         ind.meiosis(0, false);
     }
 
@@ -303,7 +286,7 @@ mod tests {
     #[test]
     fn strand_setter_offspring() {
         let valid_strands = vec![[0,0], [0,1], [1,0], [1,1]];
-        let mut ind = mock_offspring("offspring", None);
+        let mut ind = common::mock_offspring("offspring", None);
 
         for _ in 0..1000 {
             ind.assign_strands().unwrap();
@@ -314,14 +297,14 @@ mod tests {
 
     #[test]
     fn strand_setter_founder() {
-        let mut ind = mock_founder("parent");
+        let mut ind = common::mock_founder("parent");
         let result = ind.assign_strands();
         assert!(result.is_err())
     }
 
     #[test]
     fn get_set_sampletag() {
-        let mut ind = mock_founder("parent");
+        let mut ind = common::mock_founder("parent");
         let tag = SampleTag::new("HG00096", Some(0));
         ind.set_tag(tag.to_owned());
         assert_eq!(ind.get_tag(), Some(&tag));
@@ -330,26 +313,26 @@ mod tests {
 
     #[test]
     fn get_empty_tag(){
-       let ind = mock_founder("parent");
+       let ind = common::mock_founder("parent");
        let result = ind.get_tag();
        assert!(result.is_none());
     }
 
     #[test]
     fn founder_is_founder() {
-        let ind = mock_founder("parent");
+        let ind = common::mock_founder("parent");
         assert!(ind.is_founder());
     }
 
     #[test]
     fn offpsring_is_not_founder() {
-        let ind = mock_offspring("offspring", None);
+        let ind = common::mock_offspring("offspring", None);
         assert!(!ind.is_founder());
     }
 
     #[test]
     fn clear_alleles() {
-        let mut ind = mock_founder("parent");
+        let mut ind = common::mock_founder("parent");
         ind.set_alleles([0,1]);
         assert!(ind.alleles.is_some());
         ind.clear_alleles();
@@ -361,7 +344,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn alleles_assignment_founder() {
-        let mut ind = mock_founder("parent");
+        let mut ind = common::mock_founder("parent");
         let _result = ind.assign_alleles(0.0, 0);
         //assert!(result.is_err());
     }
@@ -369,7 +352,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn alleles_assignments_unnassigned_parent_alleles(){
-        let mut ind = mock_offspring("offspring", None);
+        let mut ind = common::mock_offspring("offspring", None);
         let _result = ind.assign_alleles(0.0, 0);
     }
 
@@ -384,7 +367,7 @@ mod tests {
 
     #[test]
     fn allele_assignment_updates_recombination_status(){
-        let mut offspring = mock_offspring("offspring", None);
+        let mut offspring = common::mock_offspring("offspring", None);
         offspring.strands = Some([0,0]);
         let parents_alleles = [[0,1], [0,1]];
         let recombination_prob = 1.0;
@@ -398,15 +381,15 @@ mod tests {
 
     #[test]
     fn ind_equality() {
-        let  ind1 = mock_founder("parent");
-        let  ind2 = mock_founder("parent");
+        let  ind1 = common::mock_founder("parent");
+        let  ind2 = common::mock_founder("parent");
         assert_eq!(ind1, ind2)
     }
 
     #[test]
     fn ind_inequality() {
-        let  ind1 = mock_founder("ind1");
-        let  ind2 = mock_founder("ind2");
+        let  ind1 = common::mock_founder("ind1");
+        let  ind2 = common::mock_founder("ind2");
         assert_ne!(ind1, ind2)
     }
 
@@ -415,7 +398,7 @@ mod tests {
         let mut ind_set = std::collections::HashSet::new();
         let n_iters: u32 = 10_000;
         for i in 0..n_iters {
-            let  new_ind = mock_founder(&i.to_string());
+            let  new_ind = common::mock_founder(&i.to_string());
             assert!(ind_set.insert(new_ind.clone()));
             assert!(ind_set.get(&new_ind).is_some());
         }
@@ -423,8 +406,8 @@ mod tests {
 
     #[test]
     fn ordering() {
-        let  ind_a = mock_founder("A");
-        let  ind_b = mock_founder("B");
+        let  ind_a = common::mock_founder("A");
+        let  ind_b = common::mock_founder("B");
         assert!(ind_a <  ind_b);
         assert!(ind_b <= ind_b);
 
@@ -442,7 +425,7 @@ mod tests {
     #[test]
     fn display() {
         let (offspring_label, father_label, mother_label) = ("ind1", "ind2", "ind3");
-        let mut offspring = mock_offspring(offspring_label, Some([father_label, mother_label]));
+        let mut offspring = common::mock_offspring(offspring_label, Some([father_label, mother_label]));
         
         let display = format!("{offspring}");
         assert!(display.contains(offspring_label));

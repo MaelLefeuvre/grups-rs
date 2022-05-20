@@ -16,7 +16,6 @@ use crate::{
 
 use genome::{
     SNPCoord,
-    Genome,
     GeneticMap,
 };
 
@@ -64,7 +63,7 @@ impl<'a> Pedigrees<'a> {
         Ok(Pedigrees{pedigrees, comparisons, pedigree_pop, previous_positions, genetic_map, rng})
     }
 
-    pub fn populate(&mut self, panel: &VCFPanelReader, reps: u32, genome: &Genome, pedigree_path: &Path, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
+    pub fn populate(&mut self, panel: &VCFPanelReader, reps: u32, pedigree_path: &Path, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
         let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind);
 
         for comparison in self.comparisons.iter() {
@@ -74,7 +73,7 @@ impl<'a> Pedigrees<'a> {
             let mut pedigree_reps = PedigreeReps::with_capacity(reps as usize);
             pedigree_reps.set_contaminants(&samples_contam_tags, pair_indices);
             debug!("Contaminant set for {comparison_label}: {:#?}", pedigree_reps.contaminants);
-            pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel, genome)?;
+            pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel)?;
             self.pedigrees.insert(comparison_label.to_owned(), pedigree_reps);
         }
         Ok(())
@@ -111,7 +110,6 @@ impl<'a> Pedigrees<'a> {
         let pedigree_vec = self.pedigrees.get_mut(comparison_label).unwrap();
 
         // -------------------- Get contaminating population allele frequency
-        //let cont_af = Some(reader.compute_local_cont_af(pedigree_vec.contaminants.as_ref())?).ok_or("Failed to retrieve contamination allele frequency")?;
         let cont_af = pedigree_vec.contaminants.as_ref().ok_or("Empty contaminants.")?.compute_local_cont_af(reader)?;
 
         'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
@@ -161,7 +159,7 @@ impl<'a> Pedigrees<'a> {
                 let (chromosome, position) = (coordinate.chromosome, coordinate.position);
 
                 // --------------------- Print progress in increments of 10%
-                if (i % (n/10)) == 0 {
+                if (i % ((n/10)+1)) == 0 {
                     let percent = (i as f32 / (n as f32).floor()) * 100.0 ;
                     info!("{percent: >5.1}% : [{chromosome: <2} {position: >9}]");
                 }
@@ -292,7 +290,7 @@ impl<'a> Pedigrees<'a> {
             let min_z_score = if min_z_score == f64::MAX {f64::NAN} else {min_z_score};
             let pair_name = comparison.get_pair();
 
-            let simulation_result = format!("{pair_name: <20} {most_likely_rel: <20} {observed_avg_pwd: >8.6} {most_likely_avg_pwd: >8.6} {min_z_score: <8.6}");
+            let simulation_result = format!("{pair_name: <20} - {most_likely_rel: <20} - {observed_avg_pwd: >8.6} - {most_likely_avg_pwd: >8.6} - {min_z_score: <8.6}");
             println!("{simulation_result}");
             simulations_results.push(simulation_result);
         }

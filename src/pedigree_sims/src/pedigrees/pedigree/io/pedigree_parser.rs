@@ -4,10 +4,9 @@ use std::{
     fs::File,
 };
 
-use genome::Genome;
 use crate::pedigrees::Pedigree;
 
-pub fn pedigree_parser<'a> (path: &'a Path, genome: &'a Genome) -> std::io::Result<Pedigree> {
+pub fn pedigree_parser<'a> (path: &'a Path) -> std::io::Result<Pedigree> {
     #[derive(Debug)]
     enum ParseMode {Individuals, Relationships, Comparisons}
     let mut parse_mode = None;
@@ -32,7 +31,7 @@ pub fn pedigree_parser<'a> (path: &'a Path, genome: &'a Genome) -> std::io::Resu
         match parse_mode {
             Some(ParseMode::Individuals)   => {
                 let label = line[0].to_string();
-                pedigree.add_individual(&label, None, genome.clone())?;
+                pedigree.add_individual(&label, None)?;
             },
             Some(ParseMode::Relationships) => {
                 let (offspring, parent1, parent2) = parse_pedline(line, "=repro(")?;

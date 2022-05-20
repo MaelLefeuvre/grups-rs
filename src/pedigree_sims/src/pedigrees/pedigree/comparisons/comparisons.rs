@@ -18,7 +18,6 @@ impl DerefMut for PedComparisons {
     }
 }
 
-
 impl std::fmt::Display for PedComparisons {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.0.iter().fold(Ok(()), |result, comparison| {

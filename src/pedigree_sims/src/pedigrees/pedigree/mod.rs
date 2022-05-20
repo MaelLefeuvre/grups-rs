@@ -16,3 +16,6 @@ use comparisons::PedComparison;
 
 pub mod pedigree_params;
 use pedigree_params::PedigreeParams;
+
+#[cfg(test)]
+mod tests;

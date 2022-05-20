@@ -1,4 +1,4 @@
 /target
-test-data/
+manual-test-data/
 /grups-output
 lcov.info

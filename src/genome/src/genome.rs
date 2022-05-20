@@ -1,6 +1,6 @@
 use std::{
     collections::BTreeMap,
-    ops::{Deref, DerefMut}, 
+    ops::{Deref}, 
     error::Error,
     path::Path,
     io::{BufRead, BufReader},
@@ -43,19 +43,12 @@ impl Deref for Genome {
     }
 }
 
-impl DerefMut for Genome {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 impl Genome {
     pub fn new() -> Genome {
         Genome(BTreeMap::new())
     }    
-
     pub fn from(chromosomes: &[Chromosome]) -> Genome {
-        let mut genome = Genome(BTreeMap::new());
+        let mut genome = Genome::new();
         for chr in chromosomes {
             genome.add_chromosome(chr.index, chr.name, chr.length);
         }
@@ -114,10 +107,6 @@ impl Genome {
 
     pub fn add_chromosome(&mut self, index: usize, name: u8, length: u32) -> bool {
         self.0.insert(name, Chromosome::new(index, name, length)).is_none()
-    }
-
-    pub fn get_chr_mut(&mut self, name: &u8) -> Option<&mut Chromosome> {
-        self.0.get_mut(name)
     }
 }
 

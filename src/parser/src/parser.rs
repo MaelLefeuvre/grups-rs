@@ -34,6 +34,7 @@ impl<'a> std::fmt::Display for ParserError<'a> {
 }
 
 #[derive(Parser, Debug, Serialize)]
+/// GRUPS: Get Relatedness Using Pedigree Simulations 
 pub struct Cli {
     ///Set the verbosity level (-v -vv -vvv -vvvv)
     /// 
@@ -61,7 +62,7 @@ impl<'a> Cli{
 
 #[derive(Subcommand, Debug, Serialize)]
 pub enum Commands {
-    Run {
+    PedigreeSims {
         #[clap(flatten)]
         common: Common,
         #[clap(flatten)]
@@ -76,19 +77,20 @@ pub enum Commands {
         #[clap(flatten)]
         pwd: PwdFromStdin
     },
-    PedigreeSims {
-        #[clap(flatten)]
-        common: Common,
-        #[clap(flatten)]
-        ped: PedigreeSims
-    },
+    // PedigreeSims {
+    //     #[clap(flatten)]
+    //     common: Common,
+    //     #[clap(flatten)]
+    //     ped: PedigreeSims
+    // },
     FST {
         #[clap(flatten)]
         fst: VCFFst
     }
 }
 
-#[derive(Parser, Debug, Serialize)]
+
+#[derive(Parser, Debug, Serialize, Default)]
 pub struct Common {
     /// Minimal required Base Quality (BQ) to perform comparison.
     /// 
@@ -116,7 +118,7 @@ pub struct Common {
     /// 
     /// Note that in the absence of a '--pileup' argument, the program will except a data stream from the standard input. i.e
     /// 'samtools mpileup -B -q30 -Q30 ./samples/* | pwd_from_stdin [...]
-    #[clap(short, long, required(false))]
+    #[clap(long, required(false))]
     pub pileup: Option<String>,
     /// Restrict comparison to a given set of chromosomes.
     /// 
@@ -137,16 +139,18 @@ pub struct Common {
     ///   - name : ART04  ART16  ART20  Ind5  Ind6
     #[clap(short='n', long, multiple_values(true))]
     pub sample_names: Vec<String>,
-    // Output directory where results will be written.
+
+    /// Output directory where results will be written.
     #[clap(short, long, default_value("grups-output"))]
     pub output_dir: String,
-    //Overwrite existing output files.
+
+    /// Overwrite existing output files.
     #[clap(short='w', long)]
     pub overwrite: bool,
 }
 
 /// Compute the average PairWise Difference (PWD) within a pileup file.
-#[derive(Parser, Debug, Serialize)]
+#[derive(Parser, Debug, Serialize, Default)]
 pub struct PwdFromStdin {
     /// Enable self-comparison mode on individuals.
     /// 
@@ -174,7 +178,7 @@ pub struct PwdFromStdin {
     /// Print jackknife blocks for each individual
     #[clap(short='J', long)]
     pub print_blocks: bool,
-    /// Change the size of our jackknife blocks.
+    /// Change the window size of each jackknife block.
     #[clap(short='b', long, required(false), default_value("1000000"))]
     pub blocksize: u32,
     
@@ -204,7 +208,12 @@ pub enum Mode {
     Fst,
 }
 
-#[derive(Args, Debug, Serialize)]
+impl Default for Mode {
+    fn default() -> Self {Mode::Vcf}
+}
+
+/// Run pwd-from-stdin and perform pedigree simulations in one go.
+#[derive(Parser, Debug, Serialize, Default)]
 pub struct PedigreeSims {
     /// Proportion of SNPs to keep at true frequency
     #[clap(short='d', long, default_value("0.0"))]
@@ -214,47 +223,42 @@ pub struct PedigreeSims {
     #[clap(short='D', long, default_value("0.0"))]
     pub snp_downsampling_rate: f64,
 
-    /// Contamination rates (or rate ranges) for each desired scenario. 
+    /// Contamination rates (or rate ranges) for each pileup individual. 
     /// 
-    /// Format: FLOAT,FLOAT or FLOAT,FLOAT/FLOAT,FLOAT ... or FLOAT-FLOAT,FLOAT-FLOAT/FLOAT-FLOAT,FLOAT-FLOAT ...
+    /// Format: Format: <FLOAT> <FLOAT> ... or <FLOAT-FLOAT> <FLOAT-FLOAT> ... 
     #[clap(short='Q', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_pedigree_param))]
     pub contamination_rate: Vec<Vec<f64>>,
 
-    /// Sequencing error rates  (or rate ranges) for each desired scenario.
+    /// Sequencing error rates (or rate ranges) for each pileup individual.
     /// 
-    /// Format: FLOAT,FLOAT or FLOAT,FLOAT/FLOAT,FLOAT ... or FLOAT-FLOAT,FLOAT-FLOAT/FLOAT-FLOAT,FLOAT-FLOAT ...
-    /// Default_values: ['FromPileup', 'FromPileup']
+    /// Format: <FLOAT> <FLOAT> ...
+    /// Argument may accept ranges i.e. '--pmd_rate 1.0-5.5' implies a sequencing error rate that is between 1% and 5.5%
     #[clap(short='U', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_pedigree_param))]
     pub pmd_rate : Vec<Vec<f64>>,
 
-    /// Mean sequencing depths (or depth ranges) for each desired scenario. 
-    /// 
-    /// Format         : FLOAT,FLOAT or FLOAT,FLOAT/FLOAT,FLOAT ... or FLOAT-FLOAT,FLOAT-FLOAT/FLOAT-FLOAT,FLOAT-FLOAT ..."
-    /// Default values : 'FromPileup'
-    #[clap(short='X', long, multiple_values(true), parse(try_from_str=parse_user_range))]
-    pub depth_rate: Option<Vec<Vec<u8>>>,
+    // /// Number of replicates to perform when randomly drawing values from specified ranges for parameters c_rate, mean_cov, q_rate.
+    // /// 
+    // /// Format: INT or INT INT INT ... 
+    // #[clap(short='r', long, required(false), multiple_values(true), default_values(&["1"]))]
+    // pub param_num_rep: Vec<u32>,
 
-    /// Number of replicates to perform when randomly drawing values from specified ranges for parameters c_rate, mean_cov, q_rate.
-    /// 
-    /// Format: INT or INT INT INT ... 
-    #[clap(short='r', long, required(false), multiple_values(true), default_values(&["1"]))]
-    pub param_num_rep: Vec<u32>,
-    /// Data output labels.
-    /// 
-    /// Format: String String String
-    #[clap(short='l', long, required(false), multiple_values(true))]
-    pub labels: Vec<String>,
+    // /// Data output labels.
+    // /// 
+    // /// Format: String String String
+    // #[clap(short='l', long, required(false), multiple_values(true))]
+    // pub labels: Vec<String>,
 
     /// Path to input VCF genomes for founder individuals (1000G)
-    #[clap(short='F', long, default_value(r#"./data/founders/1000G-phase3-v5a"#), parse(try_from_os_str=valid_input_directory))]
+    #[clap(short='F', long, parse(try_from_os_str=valid_input_directory))] // default_value(r#"./data/founders/1000G-phase3-v5a"#),
     pub data_dir: std::path::PathBuf,
 
+    /// Define the expected data input type for pedigree simulations.
     #[clap(short='I', long, arg_enum, default_value("vcf"))]
     pub mode: Mode,
 
 
     /// Path to recombination genetic map data.
-    #[clap(short='G', long, required(false), default_value("./data/recombination/GRCh37"), parse(try_from_os_str=valid_input_directory))]
+    #[clap(short='G', long, required(false), parse(try_from_os_str=valid_input_directory))] // default_value("./data/recombination/GRCh37"),
     pub recomb_dir: std::path::PathBuf,
 
     /// Number of pedigree replicates to perform
@@ -271,44 +275,45 @@ pub struct PedigreeSims {
 
     /// Superpopulation with which to contaminate pedigree simulations.
     /// 
-    /// Format: STR, STR
+    /// Format: <POP> <POP> ...
     #[clap(short='C', long, multiple_values(true), default_values(&["AFR"]))]
     pub contam_pop: Vec<String>,
 
     ///Number of random individual genomes with which to contaminate pedigree simulations.
     /// 
-    /// Format: INT, INT 
-    /// Default: Contaminate with population allele frequencies.
+    /// Format: <INT> <INT> ...
+    /// Default: Contaminate all pedigree individuals with a single contaminating individual.
     #[clap(short='N', long, multiple_values(true), default_values(&["1"]))]
     pub contam_num_ind: Vec<usize>,
 
     /// Path to input pedigree definition file.
-    #[clap(short='T', long, required(false), default_value("./data/pedigrees/default.ped"), parse(try_from_os_str=valid_input_file))]
+    #[clap(short='T', long, required(false), parse(try_from_os_str=valid_input_file))] // default_value(r#"./data/pedigrees/default.ped"#),
     pub pedigree: std::path::PathBuf,
     
     // Path to input Panel Definition files.
     #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
     pub panel: Option<std::path::PathBuf>,
 
-    /// Number of parallel CPU processes when performing pedigree-simulations.
-    /// 
-    /// Parallelization is dispatched according to the number of replicates.
-    #[clap(short='@', long, default_value("1"))]
-    pub threads: usize,
+    // /// Number of parallel CPU processes when performing pedigree-simulations.
+    // /// 
+    // /// Parallelization is dispatched according to the number of replicates.
+    // #[clap(short='@', long, default_value("1"))]
+    // pub threads: usize,
 
-    ///Number of additional parallel decompression threads when decompressing (BGZF compressed files only).
+    ///Number of additional parallel decompression threads.
     /// 
-    /// Parallelization is dispatched according to the number of replicates.
+    /// Can increase performance when working with BGZF compressed vcf files.
     #[clap(short='#', long, default_value("0"))]
     pub decompression_threads: usize
 
 }
 
-#[derive(Args, Debug, Serialize)]
+/// Convert VCF files into FST-indexes (Finite State Transcucer).
+#[derive(Args, Debug, Serialize, Default)]
 pub struct VCFFst {
     /// Path to input Panel Definition files.
     #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
-    pub panel: std::path::PathBuf,
+    pub panel: Option<std::path::PathBuf>,
 
     /// Population Subset
     /// 
@@ -322,7 +327,7 @@ pub struct VCFFst {
     pub output_dir: std::path::PathBuf,
 
     /// Path to input VCF genomes for founder individuals (1000G)
-    #[clap(short='d', long, default_value(r#"./data/founders/1000G-phase3-v5a"#), parse(try_from_os_str=valid_input_directory))]
+    #[clap(short='d', long, parse(try_from_os_str=valid_input_directory))] // default_value(r#"./data/founders/1000G-phase3-v5a"#),
     pub vcf_dir: std::path::PathBuf,
 
     /// Number of parallel CPU processes when performing FST-Indexation
@@ -437,7 +442,7 @@ fn valid_input_file(s: &std::ffi::OsStr) -> std::io::Result<PathBuf> {
 }
 
 fn valid_output_dir(s: &std::ffi::OsStr) -> std::io::Result<PathBuf> {
-    if ! std::path::Path::new(s).is_file() {
+    if ! std::path::Path::new(s).exists() {
         std::fs::create_dir(s)?;
     }
     assert_filesystem_entity_is_valid(s, FileEntity::Directory)?;

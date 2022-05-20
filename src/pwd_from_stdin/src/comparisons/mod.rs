@@ -6,6 +6,7 @@ mod comparison;
 mod comparisons;
 pub use comparisons::Comparisons;
 
+#[cfg(test)]
 mod tests;
 
 const UNDEFINED_LABEL_PREFIX: &str = "Ind";

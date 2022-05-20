@@ -21,6 +21,7 @@ edition = "2021"
   memmap         = "0.7.0"
   noodles-bgzf   = {version = "0.11.0", features = ["async"]}
   tokio          = { version = "1.17.0", features = ["full"] }
+  itertools      = "0.8.0"
 
 [dev-dependencies]
     mockall      = "0.11.0"

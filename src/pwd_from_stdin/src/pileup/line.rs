@@ -35,7 +35,6 @@ impl Line {
         let chromosome: u8           = split_line[0].parse()?;
         let position  : u32          = split_line[1].parse()?;
         let reference : Option<char> = split_line[2].parse().ok();
-
         //Loop along individuals
         let mut individuals: Vec<Pileup> = Vec::new();
         for i in (3..split_line.len()).step_by(3) {

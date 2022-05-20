@@ -1,11 +1,5 @@
-use std::{
-    error::Error,
-};
+use std::error::Error;
 use log::{info, debug, warn};
-
-use genome::{
-    Genome
-};
 
 pub mod io;
 pub mod pedigrees;
@@ -13,46 +7,31 @@ pub mod pedigrees;
 use pwd_from_stdin::comparisons::Comparisons;
 
 
-// @TODO 
-//   + [DONE] [CRUCIAL] Print simulations results into files.
-//   + [DONE] [CRUCIAL] Pop selected contaminating individuals out of the pedigree founders candidates.
+// @TODO! MAIN
+//   +        [CRUCIAL] Add ability for multiple contaminating pop
 //   +        [CRUCIAL] Add ability to compute error rate from pileup file (see grups_module.pyx:610). 
 //   +                 - comparisons positions should keep a record of phred scales.
-//   + [DONE] [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
-//   + [DONE] [CRUCIAL] Find a way to restrict the number of tokio worker-threads!
+//   +        [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
 // -------------------------------------------------------------------------------------------------------------------
-//   + [DONE] [FEATURE] Implement ability to add multiple --contam-pop
-//   + [DONE] [FEATURE] ability to add multiple --contam-num-inds
-//   + [DONE] [FEATURE] ability to add different contaminating individuals per pair. 
-//   + [DONE] [FEATURE] Add nSNP downsampling (ds_rate_num_snps)
-//   + [DONE] [FEATURE] Add range ability for contamination-rate, pmd-rate, depth-rate
-//   +        [FEATURE] Add built-in vcf filtration module.
-// -------------------------------------------------------------------------------------------------------------------
-//   +        [ SPEED ] Implement per-vcf parallelization (?)
-//                      + Will most probably require refactoring from Rc<RefCell<Individual>> to Arc<Mutex<Individual>>.
-//                        + Might prove unproductive, as this could greatly impact memory consumption.
-//                        + Still needs some testing, as VCF I/O remains the biggest performance bottleneck.
-//   + [DONE] [ SPEED ] Benchmark Finite-State Transducer indexation mode.
-// -------------------------------------------------------------------------------------------------------------------
-//   + [DONE] [  QoL  ] If multiple parallelization options, separate into --threads and --decompression-threads for more 
-//                      flexibility.
 //   +        [  QoL  ] Finish implementing CLI Args (de)serialization.
-//   + [DONE] [  QoL  ] Add .vcf and GZip compressed support for vcf. (async I/O support for vcf, please...)
-// -------------------------------------------------------------------------------------------------------------------
 //
+// -------------------------------------------------------------------------------------------------------------------
+// @ TODO! CLEANUP + BUGFIX
+//   + [CRUCIAL] Remove dead arguments from CLI parser
+//   + [  BUG  ] GeneticMap does not detect if recomb-dir is empty.
+//   + [  BUG  ] GeneticMap panics if file != ".txt"
+//   + [  BUG  ] Grups Fst bugs out when Samples Panel does not perfectly match the VCF ordering.
+//   + [  BUG  ] VcfPanelReader::copy_from_source not working when using FST pop-subset
+// -------------------------------------------------------------------------------------------------------------------
 // @ TODO! META
 //   + [CRUCIAL] Refactor pwd_from_stdin::io and pedigree_sims::io into a self-contained library.
-//   + [CRUCIAL] More unit-testing, please!!! 
 //   + [CRUCIAL] Document pedigree_sims::* libraries.
-//   + [CRUCIAL] Split up pedigree_sims::pedigree::pedigree_simulations() into a managable Object or function, please.
-//   + [  QoL  ] Clean up or refactor dead code
 //
 pub fn run(
     _com_cli          : parser::Common,
     ped_cli           : parser::PedigreeSims,
-    genome            : Genome,
     comparisons       : &Comparisons,
-) -> Result<(), Box<dyn Error>>
+) -> Result<pedigrees::Pedigrees, Box<dyn Error>>
 {
 
     // ----------------------------- Sanity checks 
@@ -110,7 +89,7 @@ pub fn run(
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
     let mut pedigrees = pedigrees::Pedigrees::initialize(ped_cli.pedigree_pop, comparisons, &ped_cli.recomb_dir)?;
-    pedigrees.populate(&panel, ped_cli.reps, &genome, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
+    pedigrees.populate(&panel, ped_cli.reps, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
 
     // --------------------- Assign simulation parameters for each pedigree.
     pedigrees.set_params(ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.pmd_rate, &ped_cli.contamination_rate)?;
@@ -148,5 +127,5 @@ pub fn run(
     println!("--------------------------------------------------------------");
     pedigrees.compute_results(&output_files["result"])?;
 
-    Ok(())
+    Ok(pedigrees)
 }

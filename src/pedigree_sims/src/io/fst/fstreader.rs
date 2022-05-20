@@ -47,31 +47,28 @@ impl FSTReader {
     }
 
     pub fn find_chromosomes(&self) -> Vec<u8> {
-        let node = self.genotypes_set.as_fst().root();
+        let root = self.genotypes_set.as_fst().root();
         let mut string = Vec::new();
         let mut chromosomes = Vec::new();
-        self.find_chromosome(node, &mut string, &mut chromosomes);
+        self.find_chromosome(root, &mut string, &mut chromosomes);
         chromosomes
     }
 
 
     pub fn find_chromosome(&self, node: fst::raw::Node, string: &mut Vec<u8>, chromosomes: &mut Vec<u8>) {
         let sep = b' ';
-        match node.find_input(sep) {
-            None => {
-                for transition in node.transitions() {
-                    string.push(transition.inp);
-                    let mut local_string = string.clone();
-                    self.find_chromosome(self.genotypes_set.as_fst().node(transition.addr), &mut local_string, chromosomes);
-                }
-
-            },
-            Some(_) => {
+        for transition in node.transitions() {
+            if transition.inp != sep {
+                let mut local_string = string.clone();
+                local_string.push(transition.inp);
+                self.find_chromosome(self.genotypes_set.as_fst().node(transition.addr), &mut local_string, chromosomes);
+            }
+            else {
                 let chromosome = std::str::from_utf8(&string).unwrap().parse::<u8>().unwrap();
                 chromosomes.push(chromosome);
-
-            },
+            }
         }
+
     }
 
     pub fn contains_chr(&self, chr: u8) -> bool {

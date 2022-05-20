@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, BTreeMap},
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
     fs::File,
 };
@@ -13,18 +13,38 @@ use rand::seq::SliceRandom;
 
 // TODO: Convert this into named tuple with deref.
 #[derive(Debug, Clone)]
-pub struct VCFPanelReader{
+pub struct VCFPanelReader<'a> {
+    pub source_file : &'a Path,
     pub samples: HashMap<String, Vec<SampleTag>>,
 }
 
 
 
-impl VCFPanelReader {
+impl<'a> VCFPanelReader<'a> {
     // TODO: Convert this into ::from()
     pub fn new(panel_path: &Path) -> std::io::Result<VCFPanelReader> {
         let source = BufReader::new(File::open(panel_path)?);
         let samples = Self::parse_header(source)?;
-        Ok(VCFPanelReader{samples})
+        Ok(VCFPanelReader{samples, source_file: panel_path})
+    }
+
+    pub fn copy_from_source(&self, output_dir: &Path) -> std::io::Result<()> {
+
+        println!("source: {:?}", self.source_file);
+        println!("output: {:?}", output_dir);
+
+
+        let source = BufReader::new(File::open(self.source_file)?);
+        let mut writer = BufWriter::new(File::create(output_dir)?);
+        for line in source.lines(){
+            let line = line?;
+            let split_line = line.split('\t').collect::<Vec<&str>>();
+            let (id, pop) = (split_line[0], split_line[1]);
+            if self.samples[pop].contains(&SampleTag::new(id, None)) {
+                writer.write(format!("{line}\n").as_bytes())?;
+            }
+        }
+        Ok(())
     }
 
     pub fn fetch_contaminants(&self, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Vec<Vec<SampleTag>> {
