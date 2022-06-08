@@ -67,14 +67,14 @@ impl Line {
     }
 
     /// Apply random sampling on a single individual for self-comparison.
-    /// Two nucleotide sampled, without replacement.
+    /// Two nucleotide sampled (without replacement).
     pub fn random_sample_self(&self, index: &usize) -> Vec<&Nucleotide> {
         let mut rng = &mut rand::thread_rng();
         self.individuals[*index].nucleotides.choose_multiple(&mut rng, 2).collect() 
     }
 
     /// Apply random sampling on a a pair of individuals for pairwise-comparison.
-    /// One nucleotide sampled per-ind, without replacement.
+    /// One nucleotide sampled per individual (without replacement).
     pub fn random_sample_pair(&self, pair: &[Individual; 2]) -> Vec<&Nucleotide> {
         let mut rng = &mut rand::thread_rng();
         vec![

@@ -15,7 +15,7 @@ const POS_FORMAT_LEN: usize = 9;
 ///     See: `pwd_from_stdin::jackknife::JackknifeBlock`
 ///   - Hashable, but only in regards to chr and pos.
 ///     -> don't insert alternate variations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct SNPCoord {
     pub chromosome : u8,
     pub position   : u32,

@@ -5,7 +5,7 @@ const PHRED_ASCII_BASE: u8 = 33;
 /// - phred : Base-quality. Expressed in phred-33 scale.
 /// 
 /// # TODO: migrate nucleotide formating from `Pileup::new()` to `Nucleotide::new()`
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Nucleotide {
     pub base: char,
     pub phred: u8,
@@ -20,6 +20,12 @@ impl Nucleotide {
     /// Convert the BQ score back to the ASCII format
     pub fn get_score_ascii(&self) -> char {
         (self.phred + PHRED_ASCII_BASE) as char 
+    }
+
+    /// Convert phred score to sequencing error probability
+    pub fn error_prob(&self) -> f64 {
+        // P = 10^(-Q/10)
+        f64::powf(10.0, (-1.0 * (self.phred as f64)/10.0))
     }
 
     /// Convert an ASCII BQ score to phred-33.
@@ -48,6 +54,20 @@ mod tests {
             let ascii_score = (score + PHRED_ASCII_BASE) as char;
             let nucleotide = Nucleotide::new('A', ascii_score);
             assert_eq!(nucleotide.get_score_ascii(), ascii_score);
+        }
+    }
+
+    #[test]
+    fn compute_error_prob(){
+        let scores          = [0,   10,  20,   30,    40    ];
+        let expected_probs = [1.0, 0.1, 0.01, 0.001, 0.0001];
+
+        for (i, score) in scores.iter().enumerate() {
+            let ascii_score = (score + PHRED_ASCII_BASE) as char;
+
+            let nucleotide = Nucleotide::new('A', ascii_score);
+            println!("{}", nucleotide.error_prob());
+            assert_eq!(nucleotide.error_prob(), expected_probs[i])
         }
     }
 }

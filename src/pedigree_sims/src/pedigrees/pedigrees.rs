@@ -24,7 +24,7 @@ use pwd_from_stdin::{self, comparisons::Comparisons};
 use rand::{Rng, prelude::ThreadRng};
 use log::{info, trace, warn, debug};
 
-
+use pwd_from_stdin::comparisons::pwd::Coordinate;
 
 pub struct Pedigrees<'a> {
     pedigrees: HashMap<String, PedigreeReps>,
@@ -132,7 +132,6 @@ impl<'a> Pedigrees<'a> {
 
     #[allow(unused_labels)]
     pub fn pedigree_simulations_fst(&mut self, input_fst_path: &Path, maf: f64) -> Result<(), Box<dyn Error>> {
-        use std::ops::Bound::*;
         // --------------------- Read and store FST index into memory.
         let mut fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
 
@@ -144,16 +143,16 @@ impl<'a> Pedigrees<'a> {
             info!("Performing simulations for : {}", comparison.get_pair());
 
             // Extract positions matching the FST index chromosome(s)
-            // NOTE: Here we're using range(). But what we'd ideally like is drain_filter() . [Nightly only ]
-            let start = SNPCoord{chromosome: *contained_chromosomes.iter().min().unwrap(), position: std::u32::MIN, reference: None, alternate: None};
-            let stop =  SNPCoord{chromosome: *contained_chromosomes.iter().max().unwrap(), position: std::u32::MAX, reference: None, alternate: None};
-            let relevant_positions = comparison.positions.range((Included(&start), Included(&stop)));
+            // NOTE: Here we're using range(). But what we'd ideally like is drain_filter() . [Nightly only]
+            let start = Coordinate::new(*contained_chromosomes.iter().min().unwrap(), std::u32::MIN);
+            let stop = Coordinate::new(*contained_chromosomes.iter().min().unwrap(), std::u32::MAX);
+            let relevant_positions = comparison.positions.range(start..stop);
 
             // Get the number of typed positions for these chromosomes (this .clone() is quite expensive for just a fancy progress estimation...)
             let n = relevant_positions.clone().count();
 
             // Loop along positions.
-            'coordinate: for (i, coordinate) in relevant_positions.enumerate() {
+            'coordinate: for (i, coordinate) in relevant_positions.map(|pwd| &pwd.coordinate).enumerate() {
 
 
                 let (chromosome, position) = (coordinate.chromosome, coordinate.position);
@@ -209,7 +208,7 @@ impl<'a> Pedigrees<'a> {
             //let mut genotypes_filled: bool = false;
             'comparison: for comparison in self.comparisons.iter(){
                 // --------------------- Skip if the current position is not a valid candidate.
-                if ! comparison.positions.contains(&SNPCoord{chromosome, position, reference: None, alternate: None}){
+                if ! comparison.positions.contains(&Coordinate::new(chromosome, position)){
                     continue 'comparison
                 } else {
                     if ! vcf_reader.genotypes_filled {

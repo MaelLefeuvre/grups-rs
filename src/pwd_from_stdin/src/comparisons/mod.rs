@@ -6,6 +6,9 @@ mod comparison;
 mod comparisons;
 pub use comparisons::Comparisons;
 
+pub mod pwd;
+pub use pwd::Pwd;
+
 #[cfg(test)]
 mod tests;
 

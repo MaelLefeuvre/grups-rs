@@ -7,7 +7,7 @@ use std::{
     collections::BTreeSet
 };
 
-use super::Individual;
+use super::{Individual, Pwd};
 use super::{PAIRS_FORMAT_LEN, COUNT_FORMAT_LEN, AVERG_FORMAT_LEN, DISPL_SEP, FLOAT_FORMAT_PRECISION};
 /// A struct representing a given pairwise estimation of relatedness between two individuals.
 /// - pair            : contains a representation of the individuals being compared.
@@ -26,7 +26,7 @@ pub struct Comparison {
     pwd             : u32,
     sum_phred       : u32,
     pub blocks      : JackknifeBlocks,
-    pub positions   : BTreeSet<SNPCoord>
+    pub positions   : BTreeSet<Pwd>
 }
 
 impl Comparison {
@@ -46,21 +46,29 @@ impl Comparison {
     // Compare our two individuals at the given SNPposition ; increment the appropriate counters after the comparison 
     // has been made.
     pub fn compare(&mut self, line: &Line) -> Result<(), Box<dyn Error>> {
-        self.positions.insert(line.coordinate.clone());
+        //self.positions.insert(line.coordinate.clone());
+
         let random_nucl: Vec<&Nucleotide> = if self.self_comparison {   // Self comparison => Combination without replacement. 
-            line.random_sample_self(&self.pair[0].index)                 //   - possible combinations: n!/(n-2)!
+            line.random_sample_self(&self.pair[0].index)                //   - possible combinations: n!/(n-2)!
         } else {                                                        // Std comparison  => Permutation.
             line.random_sample_pair(&self.pair)                         //  - possible combinations: n_1 * n_2
         };
+
+        let pwd = Pwd::new(line.coordinate, &random_nucl);
+        
         self.add_phred(&random_nucl);
 
-        let current_block = self.blocks.find_block(&line.coordinate)
+        let current_block = self.blocks
+            .find_block(&line.coordinate)
             .ok_or(format!("Cannot find corresponding Jackknife Block for {}", line.coordinate))?;
+
         current_block.add_count();
-        if Self::check_pwd(&random_nucl) {
+        if pwd.is_pwd() {
             self.pwd +=1;
             current_block.add_pwd();
         }
+
+        self.positions.insert(pwd);
         Ok(())
     }
 
