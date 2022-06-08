@@ -145,7 +145,7 @@ impl<'a> Pedigrees<'a> {
             // Extract positions matching the FST index chromosome(s)
             // NOTE: Here we're using range(). But what we'd ideally like is drain_filter() . [Nightly only]
             let start = Coordinate::new(*contained_chromosomes.iter().min().unwrap(), std::u32::MIN);
-            let stop = Coordinate::new(*contained_chromosomes.iter().min().unwrap(), std::u32::MAX);
+            let stop  = Coordinate::new(*contained_chromosomes.iter().max().unwrap(), std::u32::MAX);
             let relevant_positions = comparison.positions.range(start..stop);
 
             // Get the number of typed positions for these chromosomes (this .clone() is quite expensive for just a fancy progress estimation...)
