@@ -197,8 +197,9 @@ mod tests {
                 {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
                 {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
+                {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}",
-                expected_pair_name, 0, 0, f64::NAN, f64::NAN
+                expected_pair_name, 0, 0, f64::NAN, 0.00000, f64::NAN
             ).unwrap();
         }
 
