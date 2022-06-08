@@ -42,10 +42,20 @@ impl Pedigree {
         Pedigree { individuals: BTreeMap::new(), comparisons: PedComparisons::new(), params: None, pop: None}
     }
 
-    pub fn compare_alleles(&mut self, cont_af: [f64; 2]) -> Result<(), Box<dyn Error>> {
+    pub fn compare_alleles(&mut self, cont_af: [f64; 2], pileup_error_probs: &[f64; 2]) -> Result<(), Box<dyn Error>> {
         // --------------------- Compare genomes.
         let contam_rate = self.get_params()?.contam_rate;
-        let seq_error_rate = self.get_params()?.seq_error_rate;
+
+        // A 'None' pedigree param error rate implies the user did not provide any custom error_rate and/or 
+        // wishes to use the pileup local error rate. 
+        let seq_error_rate = match self.get_params()?.seq_error_rate {
+            Some(error_rate) => error_rate,
+            None                       => *pileup_error_probs,
+        };
+
+        //println!("{seq_error_rate:?}");
+
+
         for comparison in &mut self.comparisons.iter_mut() {
             comparison.compare_alleles(contam_rate, cont_af, seq_error_rate)?;
         }
@@ -72,7 +82,7 @@ impl Pedigree {
 
 
 
-    pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: [f64; 2], contam_rate: [f64; 2]) {
+    pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: Option<[f64; 2]>, contam_rate: [f64; 2]) {
         //println!("error_rate: {seq_error_rate} | contam_rate: {contam_rate}");
         self.params = Some(
             PedigreeParams::new(snp_downsampling_rate, af_downsampling_rate, seq_error_rate, contam_rate)

@@ -14,10 +14,7 @@ use crate::{
     },
 };
 
-use genome::{
-    SNPCoord,
-    GeneticMap,
-};
+use genome::GeneticMap;
 
 use pwd_from_stdin::{self, comparisons::Comparisons};
 
@@ -79,7 +76,7 @@ impl<'a> Pedigrees<'a> {
         Ok(())
     }
 
-    pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: &Vec<Vec<f64>>, contam_rate: &Vec<Vec<f64>>) -> Result<(), String>{
+    pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: &Option<Vec<Vec<f64>>>, contam_rate: &Vec<Vec<f64>>) -> Result<(), String>{
 
         //let samples_indices = self.comparisons.get_pairs_indices();
         for comparison in self.comparisons.iter() {
@@ -87,18 +84,26 @@ impl<'a> Pedigrees<'a> {
             let pair_label = comparison.get_pair();
             let pedigree_reps = self.pedigrees.get_mut(&pair_label).ok_or(format!("Cannot access pair {pair_label}"))?;
 
-            let mut seq_error_rate_gen = ParamRateGenerator::from_user_input(seq_error_rate, pair_indices);
+            let mut seq_error_rate_gen = match seq_error_rate {
+                Some(seq_errors_vec) => Some(ParamRateGenerator::from_user_input(seq_errors_vec, pair_indices)),
+                None => None,
+            };
             let mut contam_rate_gen = ParamRateGenerator::from_user_input(contam_rate, pair_indices);
 
             pedigree_reps.iter_mut()
             .for_each(|ped| {
-                ped.set_params(snp_downsampling_rate, af_downsampling_rate, seq_error_rate_gen.gen_random_values(), contam_rate_gen.gen_random_values())
+                let seq_error_rate = match &mut seq_error_rate_gen {
+                    Some(generator) => Some(generator.gen_random_values()),
+                    None => None
+                };
+
+                ped.set_params(snp_downsampling_rate, af_downsampling_rate, seq_error_rate, contam_rate_gen.gen_random_values())
             });
         }
         Ok(())
     }
 
-    fn update_pedigrees(&mut self, reader: &dyn GenotypeReader, chromosome:u8, position: u32, comparison_label: &String) -> Result<(), Box<dyn Error>>{
+    fn update_pedigrees(&mut self, reader: &dyn GenotypeReader, chromosome:u8, position: u32, comparison_label: &String, pileup_error_probs: &[f64;2]) -> Result<(), Box<dyn Error>>{
 
         // Compute the interval between current and previous position, search trough the genetic map interval tree,
         // And compute the probability of recombination.
@@ -123,7 +128,7 @@ impl<'a> Pedigrees<'a> {
             pedigree.compute_offspring_alleles(interval_prob_recomb, i)?;
 
             // --------------------- Compare genomes.
-            pedigree.compare_alleles(cont_af)?;
+            pedigree.compare_alleles(cont_af, &pileup_error_probs)?;
             // --------------------- Clear genotypes before the next line!
             pedigree.clear_alleles();
         }
@@ -152,10 +157,9 @@ impl<'a> Pedigrees<'a> {
             let n = relevant_positions.clone().count();
 
             // Loop along positions.
-            'coordinate: for (i, coordinate) in relevant_positions.map(|pwd| &pwd.coordinate).enumerate() {
-
-
-                let (chromosome, position) = (coordinate.chromosome, coordinate.position);
+            'coordinate: for (i, pairwise_diff) in relevant_positions.enumerate() {
+                
+                let (chromosome, position) = (pairwise_diff.coordinate.chromosome, pairwise_diff.coordinate.position);
 
                 // --------------------- Print progress in increments of 10%
                 if (i % ((n/10)+1)) == 0 {
@@ -183,9 +187,10 @@ impl<'a> Pedigrees<'a> {
                     trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
                     continue 'coordinate
                 }
-
+                
+                let pileup_error_probs = pairwise_diff.error_probs();
                 // --------------------- Parse genotype fields and start updating dynamic simulations.
-                self.update_pedigrees(&fst_reader, chromosome, position, &comparison.get_pair())?;
+                self.update_pedigrees(&fst_reader, chromosome, position, &comparison.get_pair(), &pileup_error_probs)?;
             }
         }
         Ok(())
@@ -199,6 +204,8 @@ impl<'a> Pedigrees<'a> {
 
             // Get current chromosome and position.
             let (chromosome, position) = vcf_reader.parse_coordinate()?; // 1
+            let coordinate = Coordinate::new(chromosome, position);
+
 
             // --------------------- Print progress in increments of 50 000 lines.
             if i % 50_000 == 0 { info!(" {i: >9}: [{chromosome: <2} {position: >9}]");}
@@ -208,37 +215,39 @@ impl<'a> Pedigrees<'a> {
             //let mut genotypes_filled: bool = false;
             'comparison: for comparison in self.comparisons.iter(){
                 // --------------------- Skip if the current position is not a valid candidate.
-                if ! comparison.positions.contains(&Coordinate::new(chromosome, position)){
-                    continue 'comparison
-                } else {
-                    if ! vcf_reader.genotypes_filled {
-                        // Go to INFO field.
-                        vcf_reader.parse_info_field()?;
+                let relevant_position = comparison.positions.get(&coordinate);
+                match relevant_position {
+                    None                      => { continue 'comparison },
+                    Some(pairwise_diff) => {
+                        if ! vcf_reader.genotypes_filled {
+                            // Go to INFO field.
+                            vcf_reader.parse_info_field()?;
 
-                        // Check if this coordinate is a biallelic SNP and skip line if not.
-                        if vcf_reader.is_multiallelic() || ! vcf_reader.is_snp() {
-                            vcf_reader.next_line()?;
-                            continue 'line
-                        }
-
-                        // Extract population allele frequency.
-                        let pop_af = vcf_reader.get_pop_allele_frequency(&self.pedigree_pop)?;
-
-                        // Skip line if allele frequency is < maf
-                        // [WARN]: Note that {POP}_AF entries in the INFO field relate to the REF allele frequency, not MAF.
-                        //         ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
-                        if pop_af < maf || pop_af > (1.0-maf) {
-                                trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
+                            // Check if this coordinate is a biallelic SNP and skip line if not.
+                            if vcf_reader.is_multiallelic() || ! vcf_reader.is_snp() {
                                 vcf_reader.next_line()?;
                                 continue 'line
+                            }
+
+                            // Extract population allele frequency.
+                            let pop_af = vcf_reader.get_pop_allele_frequency(&self.pedigree_pop)?;
+
+                            // Skip line if allele frequency is < maf
+                            // [WARN]: Note that {POP}_AF entries in the INFO field relate to the REF allele frequency, not MAF.
+                            //         ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
+                            if pop_af < maf || pop_af > (1.0-maf) {
+                                    trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
+                                    vcf_reader.next_line()?;
+                                    continue 'line
+                            }
+
+                            // Parse genotypes. 
+                            vcf_reader.fill_genotypes()?;
                         }
-
-                        // Parse genotypes. 
-                        vcf_reader.fill_genotypes()?;
+                        // Parse genotype fields and start updating dynamic simulations.
+                        let pileup_error_probs = pairwise_diff.error_probs();
+                        self.update_pedigrees(&vcf_reader, chromosome, position, &comparison.get_pair().to_owned(), &pileup_error_probs)?;          
                     }
-
-                    // Parse genotype fields and start updating dynamic simulations.
-                    self.update_pedigrees(&vcf_reader, chromosome, position, &comparison.get_pair().to_owned())?;          
                 }
             }
             // Reset line if we never parsed genotypes.

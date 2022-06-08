@@ -232,9 +232,9 @@ pub struct PedigreeSims {
     /// Sequencing error rates (or rate ranges) for each pileup individual.
     /// 
     /// Format: <FLOAT> <FLOAT> ...
-    /// Argument may accept ranges i.e. '--pmd_rate 1.0-5.5' implies a sequencing error rate that is between 1% and 5.5%
-    #[clap(short='U', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_pedigree_param))]
-    pub pmd_rate : Vec<Vec<f64>>,
+    /// Argument may accept ranges i.e. '--seq_error_rate 1.0-5.5' implies a sequencing error rate that is between 1% and 5.5%
+    #[clap(short='U', long, required(false), multiple_values(true), parse(try_from_str=parse_pedigree_param))]
+    pub seq_error_rate : Option<Vec<Vec<f64>>>,
 
     // /// Number of replicates to perform when randomly drawing values from specified ranges for parameters c_rate, mean_cov, q_rate.
     // /// 

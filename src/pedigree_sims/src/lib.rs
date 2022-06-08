@@ -39,8 +39,13 @@ pub fn run(
         warn!("Number of contamination rates is lower than the number of comparisons. Values of --contamination-rate will wrap around.")
     }
 
-    if ped_cli.pmd_rate.len() < comparisons.len() {
-        warn!("Number of sequencing error rates is lower than the number of comparisons. Values of --contamination-rate will wrap around.")
+    match &ped_cli.seq_error_rate {
+        None => (),
+        Some(error_rates_vec) => {
+            if error_rates_vec.len() < comparisons.len() {
+                warn!("Number of sequencing error rates is lower than the number of comparisons. Values of --contamination-rate will wrap around.")
+            }
+        }
     }
 
     // ----------------------------- Prepare output files
@@ -92,8 +97,7 @@ pub fn run(
     pedigrees.populate(&panel, ped_cli.reps, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
 
     // --------------------- Assign simulation parameters for each pedigree.
-    pedigrees.set_params(ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.pmd_rate, &ped_cli.contamination_rate)?;
-
+    pedigrees.set_params(ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.seq_error_rate, &ped_cli.contamination_rate)?;
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
     match ped_cli.mode {
         parser::Mode::Vcf => {

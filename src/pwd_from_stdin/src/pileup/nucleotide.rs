@@ -25,7 +25,7 @@ impl Nucleotide {
     /// Convert phred score to sequencing error probability
     pub fn error_prob(&self) -> f64 {
         // P = 10^(-Q/10)
-        f64::powf(10.0, (-1.0 * (self.phred as f64)/10.0))
+        f64::powf(10.0, -1.0 * (self.phred as f64)/10.0)
     }
 
     /// Convert an ASCII BQ score to phred-33.
