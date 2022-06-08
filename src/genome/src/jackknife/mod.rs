@@ -8,3 +8,4 @@ pub use jackknife_block::JackknifeBlock;
 
 mod jackknife_blocks;
 pub use jackknife_blocks::JackknifeBlocks;
+pub use jackknife_blocks::JackknifeEstimates;

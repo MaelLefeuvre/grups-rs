@@ -1,4 +1,4 @@
-use genome::JackknifeBlocks;
+use genome::jackknife::{JackknifeBlocks, JackknifeEstimates};
 use genome::{SNPCoord, Genome};
 use crate::pileup::{Pileup, Line, Nucleotide};
 use std::error::Error;
@@ -96,21 +96,28 @@ impl Comparison {
     pub fn get_pair (&self,)-> String {
         format!("{}-{}", &self.pair[0].name, &self.pair[1].name)
     }
+
+    pub fn get_jackknife_estimates(&self) -> JackknifeEstimates {
+        self.blocks.compute_unequal_delete_m_pseudo_values(self.pwd, self.positions.len() as u32)
+    }
 }
 
 
 impl fmt::Display for Comparison {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let jackknife_estimates = self.get_jackknife_estimates();
         write!(f,
             "{: <PAIRS_FORMAT_LEN$}{DISPL_SEP}\
              {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
              {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
+             {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}",
             self.get_pair(),
             self.positions.len(),
             self.pwd,
             self.get_avg_pwd(),
+            jackknife_estimates.variance,
             self.get_avg_phred()
         )
     }

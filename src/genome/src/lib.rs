@@ -1,8 +1,7 @@
 mod snpcoord;
 pub use snpcoord::SNPCoord;
 
-mod jackknife;
-pub use jackknife::JackknifeBlocks;
+pub mod jackknife;
 
 mod genetic_map;
 pub use genetic_map::GeneticMap;

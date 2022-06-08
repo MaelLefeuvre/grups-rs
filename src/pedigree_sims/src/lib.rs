@@ -9,8 +9,6 @@ use pwd_from_stdin::comparisons::Comparisons;
 
 // @TODO! MAIN
 //   +        [CRUCIAL] Add ability for multiple contaminating pop
-//   +        [CRUCIAL] Add ability to compute error rate from pileup file (see grups_module.pyx:610). 
-//   +                 - comparisons positions should keep a record of phred scales.
 //   +        [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
 // -------------------------------------------------------------------------------------------------------------------
 //   +        [  QoL  ] Finish implementing CLI Args (de)serialization.
@@ -111,7 +109,6 @@ pub fn run(
             }
         },
         parser::Mode::Fst => {
-            // -------------- [PROTOTYPE]
             info!("Starting FST pedigree comparisons.");
             for fst in input_paths.iter(){
                 pedigrees.pedigree_simulations_fst(
@@ -120,7 +117,6 @@ pub fn run(
                 )?;
             }
         },
-        // -------------- [END PROTOTYPE]
     }
 
     // --------------------- Print pedigree simulation results.

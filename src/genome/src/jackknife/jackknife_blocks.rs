@@ -6,6 +6,11 @@ use std::fmt;
 
 use super::JackknifeBlock;
 
+pub struct JackknifeEstimates {
+    pub estimate: f64,
+    pub variance: f64,
+}
+
 #[derive(Debug)]
 /// A simple struct representing a HashMap of Jackknife Blocks for a given
 /// genome. Implemented within struct Comparison. See: `pwd_from_stdin::pileup::Comparison`
@@ -48,6 +53,43 @@ impl JackknifeBlocks {
             .iter_mut()
             .find(|block| block.range.contains(&coordinate.position))
     }
+
+    pub fn compute_unequal_delete_m_pseudo_values(&self, sum_pwd: u32, sum_overlap: u32) -> JackknifeEstimates {
+
+        //  for each chromosome_block {
+        //      for each (i, block) in chromosome_blocks.enumerate() {
+        //          self.compute_pseudo_value(i)
+        //}
+            
+        // Compute jackknifed avg_pwd estimate
+        let mut theta_jk: f64 = 0.0;
+        for chromosome_blocks in self.blocks.values() {
+            for block in chromosome_blocks.iter() {
+                let pseudo_value = block.compute_unequal_delete_m_pseudo_value(sum_pwd, sum_overlap);
+                if pseudo_value.hj.is_finite() {
+                    theta_jk += pseudo_value.weigthed_pseudovalue();
+                };
+            }
+        }
+
+        // Compute Jackknife variance estimate 
+        let mut var_jk  : f64 = 0.0;
+        for chromosome_blocks in self.blocks.values() {
+            for block in chromosome_blocks.iter() {
+                let pseudo_value = block.compute_unequal_delete_m_pseudo_value(sum_pwd, sum_overlap);
+                if pseudo_value.hj.is_finite() {
+                    var_jk += f64::powf(pseudo_value.weigthed_pseudovalue()-theta_jk, 2.0) / (pseudo_value.hj - 1.0)
+                }
+            }
+        }
+
+        let g : usize = self.blocks.values().map(|blocks| blocks.len()).sum();
+        let var_jk = var_jk / g as f64;
+
+        JackknifeEstimates{estimate: theta_jk, variance: var_jk}
+    }
+
+    
 }
 
 // Good Stuff: https://github.com/apolitical/impl-display-for-vec
