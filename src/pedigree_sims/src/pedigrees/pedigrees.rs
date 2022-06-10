@@ -23,9 +23,8 @@ use log::{info, trace, warn, debug};
 
 use pwd_from_stdin::comparisons::pwd::Coordinate;
 
-pub struct Pedigrees<'a> {
+pub struct Pedigrees {
     pedigrees: HashMap<String, PedigreeReps>,
-    comparisons: &'a Comparisons,
     pedigree_pop: String,
     genetic_map: GeneticMap,
     previous_positions: HashMap<String, u32>,
@@ -35,11 +34,8 @@ pub struct Pedigrees<'a> {
 /// @TODO! : Right now we're reading the pedigree definition file for each replicate. Which is highly inefficient.
 ///          This is because simply using clone() on a pedigree_template will merely clone() the Rc<RefCell>.
 ///          ==> This is NOT what we want. What we want is to create new instances of Rc<RefCell> from these values.
-impl<'a> Pedigrees<'a> {
-
-
-
-    pub fn initialize(pedigree_pop: String, comparisons: &'a Comparisons, recomb_dir: &PathBuf) -> Result<Self, Box<dyn Error>> {
+impl Pedigrees {
+    pub fn initialize(pedigree_pop: String, comparisons: &Comparisons, recomb_dir: &PathBuf) -> Result<Self, Box<dyn Error>> {
         // Generate pedigree replicates for each pwd_from_stdin::Comparison.
         let pedigrees = HashMap::new();
 
@@ -52,18 +48,19 @@ impl<'a> Pedigrees<'a> {
 
         let mut previous_positions = HashMap::new();
         for comparison in comparisons.iter() {
-            previous_positions.insert(comparison.get_pair().to_owned(), 0);
+            let key = comparison.get_pair();
+            previous_positions.insert(key.to_owned(), 0);
         }
         // --------------------- Initialize RNG
         let rng = rand::thread_rng();
 
-        Ok(Pedigrees{pedigrees, comparisons, pedigree_pop, previous_positions, genetic_map, rng})
+        Ok(Pedigrees{pedigrees, pedigree_pop, previous_positions, genetic_map, rng})
     }
 
-    pub fn populate(&mut self, panel: &VCFPanelReader, reps: u32, pedigree_path: &Path, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
+    pub fn populate(&mut self, comparisons: &Comparisons,  panel: &VCFPanelReader, reps: u32, pedigree_path: &Path, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
         let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind);
 
-        for comparison in self.comparisons.iter() {
+        for comparison in comparisons.iter() {
             let comparison_label = comparison.get_pair();
             let pair_indices = comparison.get_pair_indices();
 
@@ -76,10 +73,10 @@ impl<'a> Pedigrees<'a> {
         Ok(())
     }
 
-    pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: &Option<Vec<Vec<f64>>>, contam_rate: &Vec<Vec<f64>>) -> Result<(), String>{
+    pub fn set_params(&mut self, comparisons: &Comparisons, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: &Option<Vec<Vec<f64>>>, contam_rate: &Vec<Vec<f64>>) -> Result<(), String>{
 
         //let samples_indices = self.comparisons.get_pairs_indices();
-        for comparison in self.comparisons.iter() {
+        for comparison in comparisons.iter() {
             let pair_indices = comparison.get_pair_indices();
             let pair_label = comparison.get_pair();
             let pedigree_reps = self.pedigrees.get_mut(&pair_label).ok_or(format!("Cannot access pair {pair_label}"))?;
@@ -136,39 +133,37 @@ impl<'a> Pedigrees<'a> {
     }
 
     #[allow(unused_labels)]
-    pub fn pedigree_simulations_fst(&mut self, input_fst_path: &Path, maf: f64) -> Result<(), Box<dyn Error>> {
+    pub fn pedigree_simulations_fst(&mut self, comparisons: &mut Comparisons, input_fst_path: &Path, maf: f64) -> Result<(), Box<dyn Error>> {
         // --------------------- Read and store FST index into memory.
         let mut fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
 
-        // Get a list of which chromosomes are found within the FST index.
+        //// Get a list of which chromosomes are found within the FST index.
         let contained_chromosomes = fst_reader.find_chromosomes();
 
-
-        'comparison: for comparison in self.comparisons.iter() {
+        // Keep a record of positions that should get filtered out after maf < treshold.
+        let mut positions_to_delete = HashMap::new();
+        'comparison: for comparison in comparisons.iter() {
             info!("Performing simulations for : {}", comparison.get_pair());
 
-            // Extract positions matching the FST index chromosome(s)
-            // NOTE: Here we're using range(). But what we'd ideally like is drain_filter() . [Nightly only]
+            //// Extract positions matching the FST index chromosome(s)
+            //// NOTE: Here we're using range(). But what we'd ideally like is drain_filter() . [Nightly only]
             let start = Coordinate::new(*contained_chromosomes.iter().min().unwrap(), std::u32::MIN);
             let stop  = Coordinate::new(*contained_chromosomes.iter().max().unwrap(), std::u32::MAX);
             let relevant_positions = comparison.positions.range(start..stop);
-
+            //
             // Get the number of typed positions for these chromosomes (this .clone() is quite expensive for just a fancy progress estimation...)
             let n = relevant_positions.clone().count();
 
             // Loop along positions.
-            'coordinate: for (i, pairwise_diff) in relevant_positions.enumerate() {
-                
+            let key = comparison.get_pair();
+            'coordinate: for (i, pairwise_diff) in relevant_positions.enumerate() {                
                 let (chromosome, position) = (pairwise_diff.coordinate.chromosome, pairwise_diff.coordinate.position);
 
-                // --------------------- Print progress in increments of 10%
+                //// --------------------- Print progress in increments of 10%
                 if (i % ((n/10)+1)) == 0 {
                     let percent = (i as f32 / (n as f32).floor()) * 100.0 ;
                     info!("{percent: >5.1}% : [{chromosome: <2} {position: >9}]");
                 }
-
-                // --------------------- Don't even begin if we know this set does not contain this chromosome
-                //if ! fst_reader.contains_chr(chromosome){ continue 'coordinate }
 
                 // --------------------- Search through the FST index for the genotypes and pop frequencies at this coordinate.
                 fst_reader.clear_buffers();
@@ -177,29 +172,48 @@ impl<'a> Pedigrees<'a> {
 
                 // --------------------- If genotypes is empty, then this position is missing within the index... Skip ahead.
                 if ! fst_reader.has_genotypes() {
-                    warn!("Missing coordinate in fst index: [{chromosome: <2} {position: >9}]");
+                    debug!("Missing coordinate in fst index: [{chromosome: <2} {position: >9}]");
                     continue 'coordinate
                 }
 
-                // --------------------- Skip line if allele frequency is < maf
+                // --------------------- Skip line if allele frequency is < maf and keep in memory for filtration..
                 let pop_af = fst_reader.get_pop_allele_frequency(&self.pedigree_pop)?;
                 if pop_af < maf || pop_af > (1.0-maf) { 
-                    trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
+                    debug!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
+                    positions_to_delete.entry(key.to_owned()).or_insert_with(|| Vec::new()).push(pairwise_diff.coordinate);
                     continue 'coordinate
                 }
                 
                 let pileup_error_probs = pairwise_diff.error_probs();
                 // --------------------- Parse genotype fields and start updating dynamic simulations.
-                self.update_pedigrees(&fst_reader, chromosome, position, &comparison.get_pair(), &pileup_error_probs)?;
+                self.update_pedigrees(&fst_reader, chromosome, position, &key, &pileup_error_probs)?;
+                //true
             }
         }
+
+        // --------------------- Filter out unwanted alleles. 
+        Self::filter(&mut positions_to_delete, comparisons);
         Ok(())
     }
 
-    pub fn pedigree_simulations_vcf(&mut self, input_vcf_path: &Path, maf: f64, threads: usize) -> Result<(), Box<dyn Error>> {
+    fn filter(positions_to_delete: &mut HashMap<String, Vec<Coordinate>>, comparisons: &mut Comparisons) {
+        info!("Filtering out unwanted alleles from comparisons.");
+        for comparison in comparisons.iter_mut() {
+            let key = comparison.get_pair();
+            let pre_filtered_n = comparison.positions.len();
+            comparison.positions.retain(|pwd| ! positions_to_delete.entry(key.to_owned()).or_default().contains(&&pwd.coordinate));
+            info!("- {key: <20} filtered-out SNPs: {}", pre_filtered_n - comparison.positions.len());
+        }
+    }
+
+    pub fn pedigree_simulations_vcf(&mut self, comparisons: &mut Comparisons, input_vcf_path: &Path, maf: f64, threads: usize) -> Result<(), Box<dyn Error>> {
         // --------------------- Read VCF File line by line.
         let mut i = 0;
         let mut vcf_reader = VCFReader::new(input_vcf_path, threads)?;
+
+        // Keep a record of positions that should get filtered out after maf < treshold.
+        let mut positions_to_delete = HashMap::new();
+
         'line: while vcf_reader.has_data_left()? {
 
             // Get current chromosome and position.
@@ -213,7 +227,8 @@ impl<'a> Pedigrees<'a> {
 
             // --------------------- Loop across comparisons. 
             //let mut genotypes_filled: bool = false;
-            'comparison: for comparison in self.comparisons.iter(){
+            'comparison: for comparison in comparisons.iter(){
+                let key = comparison.get_pair();
                 // --------------------- Skip if the current position is not a valid candidate.
                 let relevant_position = comparison.positions.get(&coordinate);
                 match relevant_position {
@@ -236,7 +251,8 @@ impl<'a> Pedigrees<'a> {
                             // [WARN]: Note that {POP}_AF entries in the INFO field relate to the REF allele frequency, not MAF.
                             //         ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
                             if pop_af < maf || pop_af > (1.0-maf) {
-                                    trace!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
+                                    trace!("Skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
+                                    positions_to_delete.entry(key.to_owned()).or_insert_with(|| Vec::new()).push(pairwise_diff.coordinate);
                                     vcf_reader.next_line()?;
                                     continue 'line
                             }
@@ -253,12 +269,15 @@ impl<'a> Pedigrees<'a> {
             // Reset line if we never parsed genotypes.
             vcf_reader.next_line()?;
         }
+
+        // --------------------- Filter out unwanted alleles. 
+        Self::filter(&mut positions_to_delete, comparisons);
         Ok(())        
     }
 
-    pub fn write_simulations(&self, output_files: &HashMap<String, String>) -> Result<(), Box<dyn Error>> {
+    pub fn write_simulations(&self, comparisons: &Comparisons, output_files: &HashMap<String, String>) -> Result<(), Box<dyn Error>> {
         // --------------------- Print pedigree simulation results.
-        for comparison in self.comparisons.iter() {
+        for comparison in comparisons.iter() {
             let comparison_label = comparison.get_pair();
             let pedigree_vec = self.pedigrees.get(&comparison_label).unwrap();
 
@@ -270,10 +289,19 @@ impl<'a> Pedigrees<'a> {
         Ok(())
     }
 
-    pub fn compute_results(&self, output_file: &String) -> Result<(), Box<dyn Error>> {
-        let mut simulations_results = Vec::with_capacity(self.comparisons.len());
+    pub fn compute_results(&self, comparisons: &Comparisons, output_file: &String) -> Result<(), Box<dyn Error>> {
+        let mut simulations_results = Vec::with_capacity(comparisons.len());
+        let mut writer = pwd_from_stdin::io::Writer::new(Some(output_file.clone()))?;
 
-        for comparison in self.comparisons.iter() {
+        // Print header and write to result file
+        let simulation_header = format!("{: <20} - {: <20} - {: <10} - {: <10} - {: <10}",
+            "Pair_name", "Most_Likely_rel.", "Corr.avg-PWD", "Sim.avg-PWD", "Min_Z-Score"
+        );
+        println!("{simulation_header}");
+        simulations_results.push(simulation_header);
+
+
+        for comparison in comparisons.iter() {
             let comparison_label    = comparison.get_pair();
             let pedigree_vec = self.pedigrees.get(&comparison_label).unwrap();
     
@@ -298,13 +326,12 @@ impl<'a> Pedigrees<'a> {
             let min_z_score = if min_z_score == f64::MAX {f64::NAN} else {min_z_score};
             let pair_name = comparison.get_pair();
 
-            let simulation_result = format!("{pair_name: <20} - {most_likely_rel: <20} - {observed_avg_pwd: >8.6} - {most_likely_avg_pwd: >8.6} - {min_z_score: <8.6}");
+            let simulation_result = format!("{pair_name: <20} - {most_likely_rel: <20} - {observed_avg_pwd: >12.6} - {most_likely_avg_pwd: >12.6} - {min_z_score: <12.6}");
             println!("{simulation_result}");
             simulations_results.push(simulation_result);
         }
 
 
-        let mut writer = pwd_from_stdin::io::Writer::new(Some(output_file.clone()))?;
         writer.write_iter(simulations_results)?;
 
         Ok(())

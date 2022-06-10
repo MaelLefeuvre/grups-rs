@@ -53,9 +53,6 @@ impl Pedigree {
             None                       => *pileup_error_probs,
         };
 
-        //println!("{seq_error_rate:?}");
-
-
         for comparison in &mut self.comparisons.iter_mut() {
             comparison.compare_alleles(contam_rate, cont_af, seq_error_rate)?;
         }

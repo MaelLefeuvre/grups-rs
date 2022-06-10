@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use crate::pileup::Nucleotide;
 use genome::SNPCoord;
 
-#[derive(Debug,)]
+#[derive(Debug,Clone, Copy)]
 pub struct Coordinate {
     pub chromosome: u8,
     pub position  : u32,

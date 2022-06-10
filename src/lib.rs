@@ -22,8 +22,8 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 None => Genome::default(),
             };
             // ----------------------------- Run PWD_from_stdin.
-            let (comparisons, _target_positions) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
-            let _ = pedigree_sims::run(common, ped, &comparisons)?;
+            let (mut comparisons, _target_positions) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
+            let _ = pedigree_sims::run(common, ped, &mut comparisons)?;
         },
         PwdFromStdin {common, pwd} => {
             // ----------------------------- Parse Requested_samples

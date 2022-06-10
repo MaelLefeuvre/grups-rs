@@ -41,7 +41,7 @@ fn assert_simulation_results(
     const RELATIONSHIP_COL: usize = 1;
 
     let result = get_bufreader(filename);
-    for (i, line) in result.lines().skip(0).enumerate(){
+    for (i, line) in result.lines().skip(1).enumerate(){
         let line = parse_line(&line, " - ");
         assert_eq!(line[RELATIONSHIP_COL], expected_relationships[i]);
         //assert_eq!(line[PWD_COL], expected_avg_pwd[i]);

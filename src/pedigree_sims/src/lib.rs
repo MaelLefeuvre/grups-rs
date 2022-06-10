@@ -10,6 +10,8 @@ use pwd_from_stdin::comparisons::Comparisons;
 // @TODO! MAIN
 //   +        [CRUCIAL] Add ability for multiple contaminating pop
 //   +        [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
+//   +        [CRUCIAL] Add Missing SNP filtration mechanism. (remove &Pwd if Pwd.coordinate is not in vcf/fst file.)
+//                      - add "typed" counter in Pwd field ? -> remove if typed == 0 after all files have been used.
 // -------------------------------------------------------------------------------------------------------------------
 //   +        [  QoL  ] Finish implementing CLI Args (de)serialization.
 //
@@ -20,6 +22,7 @@ use pwd_from_stdin::comparisons::Comparisons;
 //   + [  BUG  ] GeneticMap panics if file != ".txt"
 //   + [  BUG  ] Grups Fst bugs out when Samples Panel does not perfectly match the VCF ordering.
 //   + [  BUG  ] VcfPanelReader::copy_from_source not working when using FST pop-subset
+//   + [  BUG  ] --maf argument should be expressed in percent, instead of ratio.
 // -------------------------------------------------------------------------------------------------------------------
 // @ TODO! META
 //   + [CRUCIAL] Refactor pwd_from_stdin::io and pedigree_sims::io into a self-contained library.
@@ -28,8 +31,8 @@ use pwd_from_stdin::comparisons::Comparisons;
 pub fn run(
     _com_cli          : parser::Common,
     ped_cli           : parser::PedigreeSims,
-    comparisons       : &Comparisons,
-) -> Result<pedigrees::Pedigrees, Box<dyn Error>>
+    comparisons       : &mut Comparisons,
+) -> Result<(), Box<dyn Error>>
 {
 
     // ----------------------------- Sanity checks 
@@ -92,16 +95,17 @@ pub fn run(
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
     let mut pedigrees = pedigrees::Pedigrees::initialize(ped_cli.pedigree_pop, comparisons, &ped_cli.recomb_dir)?;
-    pedigrees.populate(&panel, ped_cli.reps, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
+    pedigrees.populate(&comparisons, &panel, ped_cli.reps, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
 
     // --------------------- Assign simulation parameters for each pedigree.
-    pedigrees.set_params(ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.seq_error_rate, &ped_cli.contamination_rate)?;
+    pedigrees.set_params(&comparisons, ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.seq_error_rate, &ped_cli.contamination_rate)?;
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
     match ped_cli.mode {
         parser::Mode::Vcf => {
             info!("Starting VCF pedigree comparisons.");
             for vcf in input_paths.iter() {
                 pedigrees.pedigree_simulations_vcf(
+                    comparisons, 
                     vcf,
                     ped_cli.maf,
                     ped_cli.decompression_threads
@@ -112,6 +116,7 @@ pub fn run(
             info!("Starting FST pedigree comparisons.");
             for fst in input_paths.iter(){
                 pedigrees.pedigree_simulations_fst(
+                    comparisons,
                     fst,
                     ped_cli.maf
                 )?;
@@ -119,13 +124,15 @@ pub fn run(
         },
     }
 
+    //pedigrees.filter(comparisons);
+
     // --------------------- Print pedigree simulation results.
-    pedigrees.write_simulations(&output_files)?;
+    pedigrees.write_simulations(&comparisons, &output_files)?;
 
 
     // --------------------- Compute most likely relationship for each Comparison
     println!("--------------------------------------------------------------");
-    pedigrees.compute_results(&output_files["result"])?;
+    pedigrees.compute_results(&comparisons, &output_files["result"])?;
 
-    Ok(pedigrees)
+    Ok(())
 }
