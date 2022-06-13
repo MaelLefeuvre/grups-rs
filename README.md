@@ -82,6 +82,7 @@ See `Cargo.toml` for a complete list of crate dependencies (these are automatica
         -v, --verbose    Set the verbosity level (-v -vv -vvv -vvvv)
     
     SUBCOMMANDS:
+        from-yaml         Run GRUPS using a previously generated .yaml config file
         fst               Convert VCF files into FST-indexes (Finite State Transcucer)
         help              Print this message or the help of the given subcommand(s)
         pedigree-sims     Run pwd-from-stdin and perform pedigree simulations in one go.
@@ -190,6 +191,18 @@ MDH2-MDH3            - Unrelated            - 0.290323 - 0.322581 - 0.032258
 #### Tradeoffs.
 
 - FST indexes are a quite compressed data form, but not as much as `.vcf.gz` files. Users should expect a ~two-fold input file size increase when going from `.vcf.gz` to `.fst`.
+
+### Running GRUPS using yaml files
+
+When executing the `pedigree-sims` or `pwd-from-stdin` modules, GRUPS will automatically serialize your command line arguments and generate a timestamped `.yaml` configuration file containing every provided argument for the given run.
+
+This file will be located at the root of your output directory (which can be specified using `--output-dir`).
+
+To relaunch grups using the exact same configuration, simply run grups using the `from-yaml` module, and provide the path to the desired `.yaml` file
+
+```Bash
+grups from-yaml ./grups-output/2022-06-13T162822-pedigree-sims.yaml
+```
 
 
 ## Parameter List 

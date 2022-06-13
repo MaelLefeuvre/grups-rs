@@ -117,6 +117,7 @@ pub enum Commands {
         fst: VCFFst
     },
 
+    /// Run GRUPS using a previously generated .yaml config file.
     FromYaml {
         yaml: std::path::PathBuf,
     }
