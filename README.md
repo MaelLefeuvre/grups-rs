@@ -156,6 +156,55 @@ MDH1-MDH3            - First Degree         - 0.186047 - 0.141176 - 0.044870
 MDH2-MDH3            - Unrelated            - 0.290323 - 0.322581 - 0.032258
 ```
 
+### Defining custom pedigrees
+
+Defining pedigrees within grups is performed through simple definition files. See the example pedigree [here](resources/pedigrees/example_pedigree.txt)  
+
+In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, with each one tied to a keyword within the definition file.
+
+1. `INDIVIDUALS`: Define the individuals within the pedigree.
+    - Individuals are then defined by a unique, line-separated id or name.
+    - Ids must not contain any whitespace
+    - Dashes, underscores, and other special characters are allowed, but we recommend that users stick to using alphanumeric characters.
+
+    - Example:
+      ```
+      # Define individuals within the pedigree
+      INDIVIDUALS
+      father
+      mother
+      child
+      ```
+
+2. `RELATIONSHIPS`: Define the parents for each offspring.
+    - Relationships are parsed by targeting the `=repro()` regular expression, through this nomenclature:
+      ```
+      <offspring-id>=repro(<parent1-id>, <parent2-id>)
+      ```
+    - Example:
+      ```
+      Define offspring relationships
+      RELATIONSHIPS
+      child=repro(father,mother)
+      ```
+
+   
+3. `COMPARISONS` Define which pairwise comparisons should grups investigate to compute genetic distances.
+    - Each comparison is defined by a unique, line-separated id or name (e.g. 'parents', 'siblings').
+    - comparison ids can contain whitespaces, and various special characters (though we recommend sticking to alphanumeric characters and underscores).
+    - Comparisons are then parsed by targeting the `=compare()` regular expression, through this nomenclature:
+      ```
+      <relationship-id>=compare(<individual1-id>, individual2-id>)
+      ```
+    - Example:
+      ```
+      # Define pairwise comparisons
+      COMPARISONS
+      unrelated=compare(father,mother)
+      1st_degree=compare(child, mother)
+      ```
+
+
 ### Fst indexation
 
 The biggest performance bottleneck of GRUPS is I/O. Working with heavy vcf files such as the 1000G project can have its toll on performance. For extended uses of grups on a predefined dataset, FST-indexation of VCF files can in certain cases greatly increase performances, at the cost of a higher memory footprint.
