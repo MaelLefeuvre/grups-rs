@@ -19,7 +19,7 @@ use genome::GeneticMap;
 use pwd_from_stdin::{self, comparisons::Comparisons};
 
 use rand::{Rng, prelude::ThreadRng};
-use log::{info, trace, warn, debug};
+use log::{info, trace, debug};
 
 use pwd_from_stdin::comparisons::pwd::Coordinate;
 
@@ -66,7 +66,7 @@ impl Pedigrees {
 
             let mut pedigree_reps = PedigreeReps::with_capacity(reps as usize);
             pedigree_reps.set_contaminants(&samples_contam_tags, pair_indices);
-            debug!("Contaminant set for {comparison_label}: {:#?}", pedigree_reps.contaminants);
+            debug!("Contaminant set for {comparison_label}:\n{}", pedigree_reps.contaminants.as_ref().unwrap());
             pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel)?;
             self.pedigrees.insert(comparison_label.to_owned(), pedigree_reps);
         }

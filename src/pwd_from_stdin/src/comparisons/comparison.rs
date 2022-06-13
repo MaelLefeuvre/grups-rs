@@ -1,5 +1,5 @@
 use genome::jackknife::{JackknifeBlocks, JackknifeEstimates};
-use genome::{SNPCoord, Genome};
+use genome::{Genome};
 use crate::pileup::{Pileup, Line, Nucleotide};
 use std::error::Error;
 use std::{

@@ -54,6 +54,18 @@ impl Contaminant {
     }
 }
 
+impl std::fmt::Display for Contaminant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.iter().fold(Ok(()), |_, contaminants| {
+            write!(f, "- [")?;
+            contaminants.iter().fold(Ok(()), |_, contaminant| {
+                write!(f, " {contaminant} ")
+            })?;
+            writeln!(f, "]")
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
