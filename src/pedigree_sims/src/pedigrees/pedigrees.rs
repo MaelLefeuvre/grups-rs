@@ -19,7 +19,7 @@ use genome::GeneticMap;
 use pwd_from_stdin::{self, comparisons::Comparisons};
 
 use rand::{Rng, prelude::ThreadRng};
-use log::{info, trace, warn, debug};
+use log::{info, trace, debug};
 
 use pwd_from_stdin::comparisons::pwd::Coordinate;
 
@@ -58,7 +58,7 @@ impl Pedigrees {
     }
 
     pub fn populate(&mut self, comparisons: &Comparisons,  panel: &VCFPanelReader, reps: u32, pedigree_path: &Path, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
-        let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind);
+        let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind)?;
 
         for comparison in comparisons.iter() {
             let comparison_label = comparison.get_pair();
@@ -66,7 +66,7 @@ impl Pedigrees {
 
             let mut pedigree_reps = PedigreeReps::with_capacity(reps as usize);
             pedigree_reps.set_contaminants(&samples_contam_tags, pair_indices);
-            debug!("Contaminant set for {comparison_label}: {:#?}", pedigree_reps.contaminants);
+            debug!("Contaminant set for {comparison_label}:\n{}", pedigree_reps.contaminants.as_ref().unwrap());
             pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel)?;
             self.pedigrees.insert(comparison_label.to_owned(), pedigree_reps);
         }
@@ -187,7 +187,6 @@ impl Pedigrees {
                 let pileup_error_probs = pairwise_diff.error_probs();
                 // --------------------- Parse genotype fields and start updating dynamic simulations.
                 self.update_pedigrees(&fst_reader, chromosome, position, &key, &pileup_error_probs)?;
-                //true
             }
         }
 

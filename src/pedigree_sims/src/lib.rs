@@ -13,16 +13,16 @@ use pwd_from_stdin::comparisons::Comparisons;
 //   +        [CRUCIAL] Add Missing SNP filtration mechanism. (remove &Pwd if Pwd.coordinate is not in vcf/fst file.)
 //                      - add "typed" counter in Pwd field ? -> remove if typed == 0 after all files have been used.
 // -------------------------------------------------------------------------------------------------------------------
-//   +        [  QoL  ] Finish implementing CLI Args (de)serialization.
+//   + [DONE] [  QoL  ] Finish implementing CLI Args (de)serialization.
 //
 // -------------------------------------------------------------------------------------------------------------------
 // @ TODO! CLEANUP + BUGFIX
-//   + [CRUCIAL] Remove dead arguments from CLI parser
-//   + [  BUG  ] GeneticMap does not detect if recomb-dir is empty.
+//   + [ DONE  ][CRUCIAL] Remove dead arguments from CLI parser
+//   + [ FIXED ][  BUG  ] GeneticMap does not detect if recomb-dir is empty.
 //   + [  BUG  ] GeneticMap panics if file != ".txt"
 //   + [  BUG  ] Grups Fst bugs out when Samples Panel does not perfectly match the VCF ordering.
 //   + [  BUG  ] VcfPanelReader::copy_from_source not working when using FST pop-subset
-//   + [  BUG  ] --maf argument should be expressed in percent, instead of ratio.
+//   + [  BUG  ] vcfreader.rs:193:39 && fstreader.rs:144:14 panics if contaminating pop is missing from vcf/fst index.
 // -------------------------------------------------------------------------------------------------------------------
 // @ TODO! META
 //   + [CRUCIAL] Refactor pwd_from_stdin::io and pedigree_sims::io into a self-contained library.
@@ -44,7 +44,7 @@ pub fn run(
         None => (),
         Some(error_rates_vec) => {
             if error_rates_vec.len() < comparisons.len() {
-                warn!("Number of sequencing error rates is lower than the number of comparisons. Values of --contamination-rate will wrap around.")
+                warn!("Number of sequencing error rates is lower than the number of comparisons. Values of --seq-error-rate will wrap around.")
             }
         }
     }

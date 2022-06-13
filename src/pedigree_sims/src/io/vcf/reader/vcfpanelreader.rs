@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, BTreeMap},
     io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
-    fs::File,
+    fs::File, error::Error,
 };
 
 use crate::{io::vcf::reader::vcfreader::VCFReader};
@@ -24,17 +24,12 @@ impl<'a> VCFPanelReader<'a> {
     // TODO: Convert this into ::from()
     pub fn new(panel_path: &Path) -> std::io::Result<VCFPanelReader> {
         let source = BufReader::new(File::open(panel_path)?);
-        let samples = Self::parse_header(source)?;
+        let samples = Self::parse(source)?;
         Ok(VCFPanelReader{samples, source_file: panel_path})
     }
 
     pub fn copy_from_source(&self, output_dir: &Path) -> std::io::Result<()> {
-
-        println!("source: {:?}", self.source_file);
-        println!("output: {:?}", output_dir);
-
-
-        let source = BufReader::new(File::open(self.source_file)?);
+        let source     = BufReader::new(File::open(self.source_file)?);
         let mut writer = BufWriter::new(File::create(output_dir)?);
         for line in source.lines(){
             let line = line?;
@@ -47,7 +42,7 @@ impl<'a> VCFPanelReader<'a> {
         Ok(())
     }
 
-    pub fn fetch_contaminants(&self, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Vec<Vec<SampleTag>> {
+    pub fn fetch_contaminants(&self, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<Vec<Vec<SampleTag>>, Box<dyn Error>> {
         let mut samples_contam_tags: Vec<Vec<SampleTag>> = Vec::new();
 
         for num in contam_num_ind {
@@ -55,25 +50,30 @@ impl<'a> VCFPanelReader<'a> {
             let contam_pop = &contam_pop[*num % std::cmp::min(contam_num_ind.len(), contam_pop.len())]; // Wrap if contam_pop.len() < contam_num_ind.len() OR if contam_pop.len() > contam_num_ind.len()
 
             for _ in 0..*num {
-                let contam_sample_tag = self.random_sample(contam_pop, None).unwrap().clone();
+                let contam_sample_tag = self.random_sample(contam_pop, None)?.unwrap().clone();
                 contam_ind_tags.push(contam_sample_tag);
             }
             samples_contam_tags.push(contam_ind_tags);
         }
-        samples_contam_tags
+        Ok(samples_contam_tags)
     }
 
-    pub fn random_sample(&self, pop: &String, exclude: Option<&Vec<&SampleTag>>) -> Option<&SampleTag> {
+    pub fn random_sample(&self, pop: &String, exclude: Option<&Vec<&SampleTag>>) -> Result<Option<&SampleTag>, Box<dyn Error>> {
         let candidate = match exclude {
             Some(tag_vec) => {
                 self.samples[pop].iter()
                     .filter(|sample| ! tag_vec.contains(&sample))
                     .collect::<Vec<&SampleTag>>()
                     .choose(&mut rand::thread_rng()).map(|tag| *tag)
+            },
+            None => { 
+                match self.samples.get(pop) {
+                    Some(sample_vec) => sample_vec.choose(&mut rand::thread_rng()),
+                    None => return Err(format!("Could not fetch random sample using population tag: \"{pop}\"").into())
+                }
             }
-            None => self.samples[pop].choose(&mut rand::thread_rng())
         };
-        candidate
+        Ok(candidate)
     }
 
     pub fn subset_panel(&mut self, subset_pops: &[String]) {
@@ -94,7 +94,7 @@ impl<'a> VCFPanelReader<'a> {
         self.samples.iter_mut().for_each(|(_, tag_vec)| tag_vec.sort());
     }
 
-    pub fn parse_header(source: BufReader<File>) -> std::io::Result<HashMap<String, Vec<SampleTag>>> {
+    pub fn parse(source: BufReader<File>) -> std::io::Result<HashMap<String, Vec<SampleTag>>> {
         let mut output: HashMap<String, Vec<SampleTag>> = HashMap::new();
 
         for line in source.lines(){
@@ -113,15 +113,27 @@ impl<'a> VCFPanelReader<'a> {
         let reader = VCFReader::new(vcf, 0)?;
         let header = &reader.samples();
 
-        for (pop, sample_tags) in self.samples.iter_mut(){
+        // The intersect between the input panel file and the vcf might not be perfect -> Keep a record of missing entries.
+        let mut skipped_entries = Vec::new();
+
+        // Loop along lines and assign indices for each vcf entry.
+        for sample_tags in self.samples.values_mut(){
             for sample_tag in sample_tags.iter_mut() {
                 let sample_idx = match header.iter().position(|id| id == sample_tag.id()){
                     Some(idx) => idx - 9, // Correct for previous fields.
-                    None => {warn!("Sample not found in input vcfs. Skipping:\n{:?}", pop); continue}
+                    None => {skipped_entries.push(sample_tag.id()); continue}
                 };
                 sample_tag.set_idx(sample_idx);
             }
         }
+
+        // Warn the user if some samples were not found within the vcf file.
+        if ! skipped_entries.is_empty() {
+            skipped_entries.sort();
+            skipped_entries.dedup();
+            warn!("Some sample entries were not found in input vcfs:\n{:?}", skipped_entries);
+        }
+        
         Ok(())
     }
 }

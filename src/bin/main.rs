@@ -8,10 +8,19 @@ extern crate log;
 fn main() {
     // ----------------------------- Run CLI Parser 
     let cli = parser::Cli::parse();
+
     // ----------------------------- Init logger.
-    logger::Logger::init(cli.verbose+(!cli.quiet as u8));
+    let verbosity = if cli.quiet {0} else {cli.verbose+1};
+    logger::Logger::init(verbosity);
+    
     // ----------------------------- Serialize command line arguments
-    cli.serialize();
+    match cli.serialize() {
+        Ok(()) => (),
+        Err(e) => {
+            error!("{}", e);
+            process::exit(1);
+        }
+    };
     
     // ----------------------------- unpack Cli and run the appropriate modules.
     match grups::run(cli) {

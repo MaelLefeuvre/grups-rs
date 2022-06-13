@@ -32,7 +32,7 @@ impl PedigreeReps {
     pub fn populate(&mut self, pedigree_path: &Path, pop: &String, panel: &VCFPanelReader) -> Result<(), Box<dyn Error>> {
         for _ in 0..self.inner.capacity() {
             let mut pedigree = pedigree::io::pedigree_parser(pedigree_path).unwrap();
-            pedigree.set_tags(panel, pop, self.contaminants.as_ref());
+            pedigree.set_tags(panel, pop, self.contaminants.as_ref())?;
             pedigree.assign_offspring_strands()?;
             self.inner.push(pedigree);
         }

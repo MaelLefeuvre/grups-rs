@@ -1,10 +1,13 @@
+use std::error::Error;
+use std::fs::File;
 use std::num::ParseFloatError;
 use std::path::PathBuf;
 use clap::{Parser, Subcommand, Args, ArgEnum};
 
+use chrono;
 
 //use serde_yaml;
-use serde::{Serialize};
+use serde::{Serialize, Deserialize};
 
 use log::{info};
 
@@ -33,7 +36,7 @@ impl<'a> std::fmt::Display for ParserError<'a> {
     }
 }
 
-#[derive(Parser, Debug, Serialize)]
+#[derive(Parser, Debug, Serialize, Deserialize)]
 /// GRUPS: Get Relatedness Using Pedigree Simulations 
 pub struct Cli {
     ///Set the verbosity level (-v -vv -vvv -vvvv)
@@ -49,18 +52,49 @@ pub struct Cli {
     /// Use this argument to disable this. Only errors will be displayed.
     #[clap(short='q', long, global=true)]
     pub quiet: bool,
+
     #[clap(subcommand)]
     pub commands: Commands,
 }
 
 impl<'a> Cli{
-    pub fn serialize(&self){
+    pub fn serialize(&self) -> Result<(), Box<dyn Error>> {
+
+        // Parse arguments to yaml and print to console.
         let serialized = serde_yaml::to_string(&self).unwrap();
         info!("\n---- Command line args ----\n{}\n---", serialized);
+
+        // Fetch the appropriate output-directory and parse the name of the output file.
+        let current_time = chrono::offset::Local::now().format("%Y-%m-%dT%H%M%S").to_string();
+        let output_file = match &self.commands {
+            Commands::PedigreeSims {common, pwd: _, ped: _} => {
+                format!("{}/{current_time}-pedigree-sims.yaml", common.output_dir.to_str().unwrap())
+            },
+            Commands::PwdFromStdin {common, pwd: _} => {
+                format!("{}/{current_time}-pwd-from-stdin.yaml", common.output_dir.to_str().unwrap())
+            },
+            Commands::FST {fst} => {
+                format!("{}/{current_time}-fst-index.yaml", fst.output_dir.to_str().unwrap())
+            },
+
+            Commands::FromYaml {yaml: _} => {
+                return Ok(())
+            }
+        };
+
+        // Write arguments
+        match std::fs::write(&output_file, serialized) {
+            Err(e) => Err(format!("Unable to serialize arguments into {output_file}: [{e}]").into()),
+            Ok(()) => Ok(()),
+        }
+    }
+
+    pub fn deserialize(&self, yaml: std::path::PathBuf) -> Result<Self, Box<dyn Error>> {
+        Ok(serde_yaml::from_reader(File::open(yaml)?)?)
     }
 }
 
-#[derive(Subcommand, Debug, Serialize)]
+#[derive(Subcommand, Debug, Serialize, Deserialize)]
 pub enum Commands {
     PedigreeSims {
         #[clap(flatten)]
@@ -77,20 +111,19 @@ pub enum Commands {
         #[clap(flatten)]
         pwd: PwdFromStdin
     },
-    // PedigreeSims {
-    //     #[clap(flatten)]
-    //     common: Common,
-    //     #[clap(flatten)]
-    //     ped: PedigreeSims
-    // },
+
     FST {
         #[clap(flatten)]
         fst: VCFFst
+    },
+
+    FromYaml {
+        yaml: std::path::PathBuf,
     }
 }
 
 
-#[derive(Parser, Debug, Serialize, Default)]
+#[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct Common {
     /// Minimal required Base Quality (BQ) to perform comparison.
     /// 
@@ -141,8 +174,8 @@ pub struct Common {
     pub sample_names: Vec<String>,
 
     /// Output directory where results will be written.
-    #[clap(short, long, default_value("grups-output"))]
-    pub output_dir: String,
+    #[clap(short, long, default_value("grups-output"), parse(try_from_os_str=valid_output_dir))]
+    pub output_dir: std::path::PathBuf,
 
     /// Overwrite existing output files.
     #[clap(short='w', long)]
@@ -150,7 +183,7 @@ pub struct Common {
 }
 
 /// Compute the average PairWise Difference (PWD) within a pileup file.
-#[derive(Parser, Debug, Serialize, Default)]
+#[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct PwdFromStdin {
     /// Enable self-comparison mode on individuals.
     /// 
@@ -202,7 +235,7 @@ pub struct PwdFromStdin {
     pub samples: Vec<String>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Serialize, Deserialize)]
 pub enum Mode {
     Vcf,
     Fst,
@@ -213,7 +246,7 @@ impl Default for Mode {
 }
 
 /// Run pwd-from-stdin and perform pedigree simulations in one go.
-#[derive(Parser, Debug, Serialize, Default)]
+#[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct PedigreeSims {
     /// Proportion of SNPs to keep at true frequency
     #[clap(short='d', long, default_value("0.0"))]
@@ -309,7 +342,7 @@ pub struct PedigreeSims {
 }
 
 /// Convert VCF files into FST-indexes (Finite State Transcucer).
-#[derive(Args, Debug, Serialize, Default)]
+#[derive(Args, Debug, Default, Serialize, Deserialize)]
 pub struct VCFFst {
     /// Path to input Panel Definition files.
     #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
@@ -463,9 +496,13 @@ where
     }
 }
 
+fn percent_str_to_ratio(s: &str) -> Result<f64, ParseFloatError> {
+    Ok(s.parse::<f64>()? / 100.0)
+}
+
 fn parse_pedigree_param<'a>(s: &str) -> Result<Vec<f64>, ParserError<'a>> {
     let vec: Result<Vec<f64>, ParseFloatError> = s.split('-')
-        .map(|substr| substr.parse::<f64>())
+        .map(|substr| percent_str_to_ratio(substr))
         .collect();
 
     let vec = match vec {
@@ -475,8 +512,6 @@ fn parse_pedigree_param<'a>(s: &str) -> Result<Vec<f64>, ParserError<'a>> {
     if vec.len() < 1 || vec.len() > 2 {
         return Err(ParserError::RangeError("Found multiple dashes"))
     }
-
-    let vec = vec.iter().map(|val| *val / 100.0).collect(); // Divide percent to ratio.
     Ok(vec)
 }
 

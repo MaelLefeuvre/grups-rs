@@ -32,6 +32,10 @@ impl DerefMut for GeneticMap {
 impl GeneticMap {
     pub fn from_dir(mut self, dir: &PathBuf) -> Result<GeneticMap, Box<dyn Error>> {
         let map_paths = Self::fetch_genetic_maps(dir)?;
+        if map_paths.is_empty() {
+            let dir_str = dir.to_str().expect("Failed to parse genetic-map directory to string.");
+            return Err(format!("Failed to find or parse any genetic-map in provided directory: {dir_str}", ).into())
+        }
         for map in map_paths.iter() {
             self.from_map(map)?;
         }

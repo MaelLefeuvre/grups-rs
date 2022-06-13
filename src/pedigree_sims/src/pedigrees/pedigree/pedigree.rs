@@ -167,7 +167,7 @@ impl Pedigree {
     }
 
 
-    pub fn set_tags(&mut self, panel: &VCFPanelReader, pop: &String, contaminants: Option<&Contaminant>) {
+    pub fn set_tags(&mut self, panel: &VCFPanelReader, pop: &String, contaminants: Option<&Contaminant>) -> Result<(), Box<dyn Error>>{
         self.pop = Some(pop.to_owned());
 
         // Contaminating individual are excluded from pedigree individuals.
@@ -175,11 +175,11 @@ impl Pedigree {
 
 
         for mut founder in self.founders_mut() {
-            let random_tag = panel.random_sample(pop, Some(&exclude_tags)).unwrap();
+            let random_tag = panel.random_sample(pop, Some(&exclude_tags))?.unwrap();
             founder.set_tag(random_tag.clone());
             exclude_tags.push(random_tag); // Exclude this pedigree individual for other iterations.
-
-        }
+        };
+        Ok(())
     }
 
     pub fn clear_alleles(&mut self){
