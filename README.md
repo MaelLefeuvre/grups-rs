@@ -7,7 +7,39 @@ rust port & update of [grups](https://github.com/sameoldmike/grups).
 See:  
 > Martin, M. D., Jay, F., Castellano, S., & Slatkin, M. (2017). Determination of genetic relatedness from low-coverage human genome sequences using pedigree simulations. Molecular ecology, 26(16), 4145–4157. https://doi.org/10.1111/mec.14188
 
-## Dependencies
+## Data Dependencies:
+### 1. SNP Callset
+
+GRUPS requires an SNP-callset in the form of `.vcf` or `.vcf.gz` files to perform pedigree simulations. Any VCF file will work (see. [Caveats](#Caveats-(when-using-an-alternative-callset)), but GRUPS remains, as of now, mainly designed to work with the [1000G-phase3 dataset](https://www.internationalgenome.org/category/phase-3/).
+
+The 1000G-phase3 dataset can be downloaded [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/).
+
+### 2. Input panel definition file
+
+GRUPS will require an input panel definition file to distinguish (super-)populations and define samples within your SNP Callset.  
+
+If you plan to use the `1000G-phase3` callset, a predefined panel can be downloaded [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel)
+
+This file is in tab-separated format and must at least contain the following columns:
+```Text
+<SAMPLE-ID>    <POP-ID>    <SUPER-POP-ID>
+```
+
+### 3. Recombination Maps
+
+GRUPS requires a genetic recombination map to simulate meiosis. For main intents and purposes, and when using the `1000G-phase3` callset, we recommend the HapMap-II-b37 map, which can be downloaded [here](https://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/)
+
+#### Caveats (when using an alternative callset)
+
+If you plan to use an alternative SNP Callset, here are a few caveats you should keep in mind when preparing your input:
+
+- GRUPS will require an input panel definition file to your SNP Callset. See the [Input panel definition File](#2.-Input-panel-definition-file) section for the appropriate format, and/or check the 1000G-phase3 `.panel` file as a template [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel).
+
+- As of now, GRUPS does not calculate population allele frequencies by itself, and will rather look through the `INFO` field (column 7) of your callset for the appropriate tag. Thus, if you plan to simulate genomes using the `EUR` population, your SNP callset *must* carry a `EUR_AF` info tag, specifying the the allele frequency, at each SNP coordinate. See the [bcftools +fill-tag](https://samtools.github.io/bcftools/howtos/plugin.fill-tags.html) plugin documentation to learn how to annotate population-specific allele frequencies.
+
+- By default, GRUPS will consider the provided SNP callset as being called on the `GRCh37` reference genome. If your callset has been generated using another reference genome, you'll have to provide the software with a fasta index file (`.fa.fai`) of your reference, using the `--fasta` argument (See the [pwd-from-stdin parameter list](#pwd-from-stdin) section for more information).
+
+## Software Dependencies
 ### 1. cargo  
 This project is written in [Rust](https://www.rust-lang.org/), and thus requires [cargo](https://crates.io/) for source compilation.  
 
@@ -131,7 +163,7 @@ The biggest performance bottleneck of GRUPS is I/O. Working with heavy vcf files
 grups fst --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
 ```
 
-Once the indexation is completed, `.fst` and `.fst.frq` files can be used seamlessly when performing performing pedigree simulations. The user merely has to specify the input type using `--mode fst`. Specifying a target directory is performed in the same way, using `--data-dir`.
+Once the indexation is completed, `.fst` and `.fst.frq` files can be used seamlessly when performing pedigree simulations. The user merely has to specify the input type using `--mode fst`. Specifying a target directory is performed in the same way, using `--data-dir`.
 
 ```Bash
 grups pedigree-sims --pileup ./tests/test-data/pileup/parents-offspring.pileup \
@@ -157,7 +189,7 @@ MDH2-MDH3            - Unrelated            - 0.290323 - 0.322581 - 0.032258
 
 #### Tradeoffs.
 
-- FST indexes are a quite compressed data form, but not as much as `.vcf.gz` files. Users should expect a ~2X file size increase when going from `.vcf.gz` to `.fst`.
+- FST indexes are a quite compressed data form, but not as much as `.vcf.gz` files. Users should expect a ~two-fold input file size increase when going from `.vcf.gz` to `.fst`.
 
 
 ## Parameter List 
