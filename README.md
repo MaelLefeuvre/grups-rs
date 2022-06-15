@@ -6,7 +6,7 @@
 
 GRUPS (*Get Relatedness Using Pedigree Simulations*) is an ancient-DNA genetic relatedness kinship estimation software, revolving around pedigree simulations using existing genotype callsets (Typically, the [1000G-phase3 dataset](https://www.internationalgenome.org/category/phase-3/)), and based on the methods developed in [Martin D., et al. (2017)](https://doi.org/10.1111/mec.14188), 
 
-GRUPS-rs currently supports the simulation of user-defined pedigree in thousand of replicates, to compute the expected genetic distances of two individuals under various relatedness scenarios (See section: [Defining custom pedigrees](#-Defining-custom-pedigrees)).
+GRUPS-rs currently supports the simulation of user-defined pedigree in thousand of replicates, to compute the expected genetic distances of two individuals under various relatedness scenarios (See section: [Defining custom pedigrees](#Defining-custom-pedigrees)).
 
 Modern human contamination, sequencing errors and allele-fixation parameters can also be introduced within the simulations to account for the biases they may introduce in real-life datasets.
 
