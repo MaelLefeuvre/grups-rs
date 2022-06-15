@@ -207,10 +207,36 @@ In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, w
 
 ### Fst indexation
 
+#### Basic principles
 The biggest performance bottleneck of GRUPS is I/O. Working with heavy vcf files such as the 1000G project can have its toll on performance. For extended uses of grups on a predefined dataset, FST-indexation of VCF files can in certain cases greatly increase performances, at the cost of a higher memory footprint.
 
 ```
 grups fst --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
+```
+
+#### Multithreading
+FST-indexation can be quite long and resource intensive (altough it remains a one-time operation). Thus, the use of multithreading across vcf files is recommended, provided your computer is equipped with multiple cores:
+```
+grups fst --threads `nproc` --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
+```
+
+If, your input VCF are BGZF-compressed, `.vcf.gz` files one can also leverage multiple decompression thread per vcf file.
+```
+grups fst --decompression-threads 8 --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
+```
+
+**NB:** be aware that the combined use of `--threads` and `--decompression-threads` is ***multiplicative***. E.g.: calling `grups fst` with `--threads 3` and `--decompression-threads 4` will preempt 12 OS-threads.
+
+#### FST pre-filtration
+On top of this, FST-indexation has the added benefit of performing prefiltration of unwanted entries within the input vcf file. Most notably:
+- Duplicate coordinate entries.
+- Coordinates containing a `MULTI_ALLELIC` tag within the `INFO` field.
+- Entries which are not of type `VT=SNP`.
+
+#### FST population subsetting
+More-over, if the user expects to use only a single pedigree and contaminating population, FST indexation can be used to filter-out unused samples from the original VCF file
+```
+grups fst --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --pop-subset EUR|AFR --output-dir ./test-fst-index
 ```
 
 Once the indexation is completed, `.fst` and `.fst.frq` files can be used seamlessly when performing pedigree simulations. The user merely has to specify the input type using `--mode fst`. Specifying a target directory is performed in the same way, using `--data-dir`.
@@ -241,7 +267,7 @@ MDH2-MDH3            - Unrelated            - 0.290323 - 0.322581 - 0.032258
 
 - FST indexes are a quite compressed data form, but not as much as `.vcf.gz` files. Users should expect a ~two-fold input file size increase when going from `.vcf.gz` to `.fst`.
 
-### Running GRUPS using yaml files
+### Running GRUPS using yaml config files
 
 When executing the `pedigree-sims` or `pwd-from-stdin` modules, GRUPS will automatically serialize your command line arguments and generate a timestamped `.yaml` configuration file containing every provided argument for the given run.
 
@@ -252,7 +278,6 @@ To relaunch grups using the exact same configuration, simply run grups using the
 ```Bash
 grups from-yaml ./grups-output/2022-06-13T162822-pedigree-sims.yaml
 ```
-
 
 ## Parameter List 
 

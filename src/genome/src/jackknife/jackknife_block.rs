@@ -19,8 +19,9 @@ impl Pseudovalue {
 
 ///Chromosome Block for Jackknife resampling. Implemented within struct `JackknifeBlocks`, which is itself implemented
 ///within structs `pwd_from_stdin::pileup::Comparison`
+/// # Fields
 /// - chromosome  : chromosome name (warn: not by index -> cannot handle specific names, such as "X", "MT", "chr7", etc.)
-/// - range       : [start, end[ coordinates of the block.
+/// - range       : `[start, end[` coordinates of the block.
 /// - site_counts : counts the number of overlapping SNPs for a given pair of individuals.
 /// - pwd_counts  : counts the number of pairwise differences for a given pair of individuals.
 /// 
@@ -40,6 +41,11 @@ pub struct JackknifeBlock {
 }
 
 impl JackknifeBlock {
+    /// Instantiate a new Jackknife block from an interval
+    /// # Arguments:
+    /// - `chromosome`: name of the chromosome (u8 cast)
+    /// - `start`     : 0-based start-coordinate of the block.
+    /// - `end`       : 0-based end-coordinate of the block
     pub fn new(chromosome: u8, start: u32, end: u32) -> JackknifeBlock {
         JackknifeBlock{chromosome, range: Range{start, end}, site_counts: 0, pwd_counts:0}
     }

@@ -8,11 +8,15 @@ use super::super::Individual;
 
 use crate::io::vcf::SampleTag; 
 
-
-
 use rand::Rng;
 use rand::seq::SliceRandom;
 
+/// Track a pedigree genetic relatedness comparison
+/// # Fields:
+/// - `label`            : User-defined name of the comparison (e.g. "Siblings")
+/// - `pair`             : Size-two array of Pedigree Individual references (w/ interior mutability)
+/// - `pwd`              : number of occurring pairwise differences.
+/// - `overlap`          : number of overlapping SNPs
 #[derive(Debug, Clone)]
 pub struct PedComparison {
     pub label        : String,
@@ -23,27 +27,48 @@ pub struct PedComparison {
 }
 
 impl PedComparison {
+    /// Instantiate a new comparison between a pair of Pedigree Individuals.
+    /// # Arguments:
+    /// - `label`          : User-defined name of the comparison (e.g. "Siblings")
+    /// - `pair`           : Size-two array of Pedigree Individual references
+    /// - `self_comparison`: Whether or not the two individuals of the pair are the same.
     pub fn new(label: &str, pair: [&Rc<RefCell<Individual>>; 2], self_comparison: bool) -> PedComparison {
         let pair = Self::format_pair(pair);
         PedComparison{label: label.to_string(), pair, _self_comparison: self_comparison, pwd: 0, overlap: 0 }
     }
 
+    /// Increment the `self.pwd` field.
     pub fn add_pwd(&mut self){
         self.pwd += 1;
     }
 
+    /// Increment the `self.overlap` field.
     pub fn add_overlap(&mut self){
         self.overlap +=1;
     }
 
+    /// Compute the average pairwise differences between the two individuals.
+    /// i.e. `self.pwd / self.overlap` 
     pub fn get_avg_pwd(&self) -> f64 {
         self.pwd as f64 / self.overlap as f64
     }
     
+    /// Rc::clone() the provided pair of pedigree individuals during instantiation. (see. `PedComparison::new()`)
+    /// # Arguments:
+    /// - `pair`: Size-two array of Pedigree Individual references.
     fn format_pair(pair: [&Rc<RefCell<Individual>>; 2]) ->  [Rc<RefCell<Individual>>; 2] {
         [Rc::clone(pair[0]), Rc::clone(pair[1])]
     }
 
+    /// Simulate observed reads for the two pedigree individuals, and check if there is a pairwise difference between 
+    /// these randomly sampled simulated data.
+    /// # Arguments:
+    /// - `contam_rate`   : Size-two array of the simulated contamination rate. 
+    ///                     Entry[i] of the array corresponds to `self.pair[i]`.
+    /// - `contam_pop_af` : Population allele frequency of the contaminating population for the current SNP coordinate.
+    ///                     Entry[i] of the array corresponds to `self.pair[i]`.
+    /// - `seq_error_rate`: Size-two array of the simulated sequencing error rate.
+    ///                     Entry[i] of the array corresponds to `self.pair[i]`.
     pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2]) -> Result<(), Box<dyn Error>> {
         self.add_overlap();
         let random_sample0 = Self::simulate_observed_reads(1, contam_rate[0], contam_pop_af[0], seq_error_rate[0], self.pair[0].borrow().get_alleles()?);
@@ -54,12 +79,20 @@ impl PedComparison {
         Ok(())
     }
 
+    /// Simulate `n` observed pileup reads from a set of alleles and given the provided contamination and sequencing parameters.
+    /// # Arguments:
+    /// - `n`             : Number of pileup observations to simulate.
+    /// - `contam_rate`   : Modern human contamination rate required for the simulation.
+    /// - `contam_pop_af` : allele frequency of the contaminating population for the current SNP coordinate.
+    /// - `seq_error_rate`: sequencing error rate required for the simulation.
+    /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
     fn simulate_observed_reads(n: u8, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Vec<u8> {
         let mut reads = Vec::with_capacity(n as usize);
         let mut rng = rand::thread_rng();
 
-        // Simulate contamination.
+        // ---- Simulate n pileup observations.
         for _ in 0..n {
+            // ---- Simulate modern human contamination. 
             let chosen_base: u8 = match rng.gen::<f64>() < contam_rate {
                 true  => match rng.gen::<f64>() < contam_pop_af {
                     true  => 1,  // Becomes the alternative reference allele, if contam_rate * contam_pop_af
@@ -68,7 +101,7 @@ impl PedComparison {
                 false => *alleles.choose(&mut rng).unwrap(),
             };
 
-            // Simulate sequencing error rate.
+            // ---- Simulate sequencing error rate.
             let seqerror_choices: Vec<[u8; 3]> = vec![[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
             if rng.gen::<f64>() < seq_error_rate {
                 let wrong_base: u8 = *seqerror_choices[chosen_base as usize].choose(&mut rng).unwrap();

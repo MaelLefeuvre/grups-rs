@@ -8,6 +8,14 @@ use std::{
     path::{PathBuf}
 };
 
+/// Iterate over the contents of a OS-directory and search for all files ending with `.vcf` or `.vcf.gz`.
+/// Return these matches as a vector of PathBuf.
+/// 
+/// # Arguments:
+/// - `input_dir`: path of the targeted directory, were search should be performed.
+/// 
+/// # Errors:
+/// - Returns an error if the output Vec<PathBuf> is empty after iterating over all the contents of `input_dir`
 pub fn get_input_vcfs(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
     let paths = std::fs::read_dir(input_dir)?;
 
@@ -40,6 +48,16 @@ pub fn get_input_vcfs(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
     Ok(vcfs)
 }
 
+/// Iterate over the contents of a OS-directory and search for all files ending with `.panel`
+/// Return these matches as a vector of PathBuf.
+/// 
+/// # Arguments:
+/// - `input_dir`: path of the targeted directory, were search should be performed.
+/// 
+/// # Errors:
+/// Returns an error if, after iterating over all the contents of `input_dir`:
+/// - the output Vec<PathBuf> is empty.
+/// - the length of the output Vec<PathBuf> is greater than 1. 
 pub fn fetch_input_panel(input_dir: &PathBuf) -> std::io::Result<PathBuf>{
 
     let paths = std::fs::read_dir(input_dir)?;

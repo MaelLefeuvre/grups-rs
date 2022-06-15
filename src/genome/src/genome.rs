@@ -23,15 +23,21 @@ impl Error for FastaIndexReaderError {}
 impl std::fmt::Display for FastaIndexReaderError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::FileNotFound(path, err)   => write!(f, "{}: {}",path, err),
-            Self::ParseInt(path, line, err) => write!(f, "{}: Line {} - Invalid line format [{}]", path, line, err),
-            Self::InvalidFileFormat(ext)  => write!(f, "Invalid fasta file format: expected [.fasta|.fa], got '{}'", ext),
+            Self::FileNotFound(path, err) => {
+                write!(f, "{}: {}",path, err)
+            },
+            Self::ParseInt(path, line, err) => {
+                write!(f, "{}: Line {} - Invalid line format [{}]", path, line, err)
+            },
+            Self::InvalidFileFormat(ext)  => {
+                write!(f, "Invalid fasta file format:\n - expected [.fa |.fa.fai |.fasta | .fasta.fai]\n - got '{}'", ext)
+            },
         }
     }
 }
 
 
-
+/// BTreeMap of chromosomes, with Key: chromosome name (u8) | Value: Chromosome
 #[derive(Debug, Clone)]
 pub struct Genome(BTreeMap<u8, Chromosome>);
 
@@ -44,9 +50,13 @@ impl Deref for Genome {
 }
 
 impl Genome {
+    /// Instantiate a new, empty chromosome
+    /// # @TODO convert this into default()
     pub fn new() -> Genome {
         Genome(BTreeMap::new())
-    }    
+    }
+
+    /// Create a new genome from a slice of Chromosomes
     pub fn from(chromosomes: &[Chromosome]) -> Genome {
         let mut genome = Genome::new();
         for chr in chromosomes {
@@ -56,23 +66,37 @@ impl Genome {
     }
 
     /// Read a `.fasta.fai` file and parse it into a vector of Chromosome structs.
+    /// # Arguments
+    /// - `path`: Path leading to either a `.fasta`, `.fasta.fai`, `.fa` or `.fa.fai` file.
+    ///           In the case of a `.fasta` or `.fa` file, a companion `.fai` with a matching file-stem
+    ///           must be located within the same directory.
     /// 
-    /// TODO: - convert 'path' variable to &str
-    ///       - Check for .fai.fai extension doubles.
+    /// # Expected file format:
+    /// - Fields         : `<CHROMOSOME>`    `<LENGTH>`
+    /// - Field-separator: `'\t'`
+    /// 
+    /// # Errors:
+    /// - returns `FastaIndexReaderError::InvalidFileFormat` if ...
+    ///   - `path` does not carry a file extension.
+    ///   - `path` extension is neither (`.fa`, `.fasta` or `.fai`)
+    /// - returns `FastaIndexReaderError::FileNotFound` if no matching `.fai` file could be found within the 
+    ///   target directory
+    /// - returns `FastaIndexReaderError::ParseInt` if there is an invalid length value at column 1
     pub fn from_fasta_index(path: &str) -> Result<Genome,FastaIndexReaderError> {
         use FastaIndexReaderError::{InvalidFileFormat, FileNotFound, ParseInt};
         info!("Parsing reference genome: {}", path);
 
-        let fai = match Path::new(path).extension() { // Check file extension
+        // ---- Extract the  file extention of `path` and format the expected `.fai` file if necessary.
+        let fai = match Path::new(path).extension() {
             None                 => return Err(InvalidFileFormat("None".to_string())),
-            Some(osstr)          => match osstr.to_str(){ 
+            Some(osstr)  => match osstr.to_str(){ 
                 Some("fai")          => path.to_string(),                          
                 Some("fasta" | "fa") => format!("{}{}", path, ".fai"), // Append '.fai' if it is not there
                 Some(other)    => return Err(InvalidFileFormat(".".to_string()+other)),
                 None                 => return Err(InvalidFileFormat("None".to_string())),
             }        
         };
-        debug!("fasta.fai file : {}", fai);
+        debug!("Matching fasta.fai file : {}", fai);
     
     
         let mut genome = Self::new();
@@ -87,9 +111,9 @@ impl Genome {
             let split_line: Vec<&str> = line.split('\t').collect();
             match split_line[0].replace("chr", "").parse::<u8>() {
                 Ok(result) =>{ 
-                    let name      : u8        = result;
-                    let length    : u32       = match split_line[1].parse() {
-                        Ok(len) => len,
+                    let name      : u8  = result;
+                    let length    : u32 = match split_line[1].parse() {
+                        Ok(len)           => len,
                         Err(e)  => return Err(ParseInt(fai, name, e.to_string()))
                     };
                     debug!("Chromosome: {: <3} {: <10} {: <12}", index, name, length);

@@ -2,6 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use super::PedComparison;
 
+/// Vector of all the tracked pedigree comparisons for a given Pedigree
 #[derive(Debug, Clone)]
 pub struct PedComparisons(Vec<PedComparison>);
 
@@ -27,6 +28,7 @@ impl std::fmt::Display for PedComparisons {
 }
 
 impl PedComparisons {
+    /// Instantiate a new set of pedigree comparisons.
     pub fn new() -> Self {
         Self(Vec::new())
     }

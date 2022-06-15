@@ -7,6 +7,11 @@ use std::{
 
 use log::{info, debug};
 
+/// Search for a companion `.fst.frq` file next to the provided `fst_file`. Returns an error if there are none.
+/// # Arguments: 
+/// - `fst_file`: path leading to a `.fst` file.
+/// # Errors:
+/// - returns an error if there are no `.fst.frq` companion file for the provided `fst_file`
 fn match_input_frq(fst_file: &Path) -> std::io::Result<()> {
     let frq = fst_file.with_extension("fst.frq");
     if ! frq.exists() {
@@ -16,6 +21,16 @@ fn match_input_frq(fst_file: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Iterate over the contents of a OS-directory and search for all files ending with `.fst`
+/// Return these matches as a vector of PathBuf.
+/// 
+/// # Arguments:
+/// - `input_dir`: path of the targeted directory, were search should be performed.
+/// 
+/// # Errors:
+/// Returns an error if:
+/// - after iterating over all the contents of `input_dir`the output Vec<PathBuf> is empty.
+/// - any found `.fst` file does not have a matching `.fst.frq` companion file. See: `match_input_frq()`
 pub fn get_input_fst(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
     let paths = std::fs::read_dir(input_dir)?;
 

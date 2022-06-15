@@ -6,10 +6,17 @@ use std::{
     cell::RefCell,
 };
 
+/// Mock a founder individual with no parents.
+/// # Arguments:
+///  - `label`: raw string slice defining the individual's name (e.g. "father", "mother", etc.)
 pub fn mock_founder(label: &str) -> Individual {
     Individual::new(label, None)
 }
 
+/// Mock an offspring individual, with two parents.
+/// # Arguments:
+///  - `label` : raw string slice defining the individual's name (e.g. "child")
+/// - `parents`: sice two array, defining the parents names (e.g. ["mother", "father"])
 pub fn mock_offspring(label: &str, parents_labels: Option<[&str; 2]>) -> Individual {
     let parents_labels = parents_labels.unwrap_or(["father", "mother"]);
 
@@ -19,6 +26,7 @@ pub fn mock_offspring(label: &str, parents_labels: Option<[&str; 2]>) -> Individ
     Individual::new(label, parents)
 }
 
+/// Mock a pedigree comparison, using two founder individuals (=> this comparison is always labeled "unrelated")
 pub fn mock_pedcomparison() -> PedComparison {
     let ind1 = Rc::new(RefCell::new(mock_founder("ind1")));
     let ind2 = Rc::new(RefCell::new(mock_founder("ind2")));

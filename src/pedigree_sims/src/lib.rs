@@ -14,19 +14,18 @@ use pwd_from_stdin::comparisons::Comparisons;
 //                      - add "typed" counter in Pwd field ? -> remove if typed == 0 after all files have been used.
 // -------------------------------------------------------------------------------------------------------------------
 //   + [DONE] [  QoL  ] Finish implementing CLI Args (de)serialization.
-//
+//            [  QoL  ] Add multiple candidate file extensions to GeneticMap.
 // -------------------------------------------------------------------------------------------------------------------
 // @ TODO! CLEANUP + BUGFIX
 //   + [ DONE  ][CRUCIAL] Remove dead arguments from CLI parser
 //   + [ FIXED ][  BUG  ] GeneticMap does not detect if recomb-dir is empty.
-//   + [  BUG  ] GeneticMap panics if file != ".txt"
 //   + [  BUG  ] Grups Fst bugs out when Samples Panel does not perfectly match the VCF ordering.
 //   + [  BUG  ] VcfPanelReader::copy_from_source not working when using FST pop-subset
 //   + [  BUG  ] vcfreader.rs:193:39 && fstreader.rs:144:14 panics if contaminating pop is missing from vcf/fst index.
 // -------------------------------------------------------------------------------------------------------------------
 // @ TODO! META
-//   + [CRUCIAL] Refactor pwd_from_stdin::io and pedigree_sims::io into a self-contained library.
-//   + [CRUCIAL] Document pedigree_sims::* libraries.
+//   +          [CRUCIAL] Refactor pwd_from_stdin::io and pedigree_sims::io into a self-contained library.
+//   + [ DONE  ][CRUCIAL] Document pedigree_sims::* libraries.
 //
 pub fn run(
     _com_cli          : parser::Common,
@@ -99,6 +98,7 @@ pub fn run(
 
     // --------------------- Assign simulation parameters for each pedigree.
     pedigrees.set_params(&comparisons, ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.seq_error_rate, &ped_cli.contamination_rate)?;
+    
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
     match ped_cli.mode {
         parser::Mode::Vcf => {
