@@ -170,7 +170,7 @@ MDH2-MDH3            - Unrelated            - 0.290323 - 0.322581 - 0.032258
 
 Defining pedigrees within grups is performed through simple definition files. See the example pedigree [here](resources/pedigrees/example_pedigree.txt)  
 
-In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, with each one tied to a keyword within the definition file.
+In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, each one tied to a keyword within the definition file:
 
 1. `INDIVIDUALS`: Define the individuals within the pedigree.
     - Individuals are then defined by a unique, line-separated id or name.
@@ -193,12 +193,14 @@ In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, w
       ```
     - Example:
       ```
-      Define offspring relationships
+      # Define offspring relationships
       RELATIONSHIPS
       child=repro(father,mother)
       ```
 
-   
+Note that comment lines are allowed within the definition file: any line starting with a `#` character is ignored during parsing.
+
+
 3. `COMPARISONS` Define which pairwise comparisons should grups investigate to compute genetic distances.
     - Each comparison is defined by a unique, line-separated id or name (e.g. 'parents', 'siblings').
     - comparison ids can contain whitespaces, and various special characters (though we recommend sticking to alphanumeric characters and underscores).
