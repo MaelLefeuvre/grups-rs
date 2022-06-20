@@ -159,7 +159,7 @@ impl Pedigree {
                 Some([parent1, parent2])
             },
         };
-        let ind = Rc::new(RefCell::new(Individual::new(&label, parents)));
+        let ind = Rc::new(RefCell::new(Individual::new(label, parents)));
         self.individuals.insert(label.to_owned(), ind);
         Ok(())
     }

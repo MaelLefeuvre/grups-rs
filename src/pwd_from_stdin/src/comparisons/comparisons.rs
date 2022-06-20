@@ -8,7 +8,7 @@ use super::comparison::Comparison;
 use super::individual::Individual;
 
 /// Vector of all the user-requested comparisons
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Comparisons (Vec<Comparison>);
 
 impl Comparisons {
@@ -61,12 +61,6 @@ impl fmt::Display for Comparisons {
         self.0.iter().fold(Ok(()), |result, comparison| {
             result.and_then(|_| writeln!(f, "{}", comparison))
         })
-    }
-}
-
-impl Default for Comparisons {
-    fn default() -> Self {
-        Self(Vec::new())
     }
 }
 
@@ -195,11 +189,12 @@ mod tests {
             writeln!(expected_output,
                 "{: <PAIRS_FORMAT_LEN$}{DISPL_SEP}\
                 {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
-                {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
+                {: <AVERG_FORMAT_LEN$.1}{DISPL_SEP}\
+                {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}",
-                expected_pair_name, 0, 0, f64::NAN, 0.00000, f64::NAN
+                expected_pair_name, 0, 0.0, f64::NAN, f64::NAN, 0.00000, f64::NAN
             ).unwrap();
         }
 

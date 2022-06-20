@@ -40,7 +40,7 @@ impl PedigreeReps {
     /// # @ TODO:
     /// - `samples_contam_tags` should be an array. at the very least, this method should 
     ///    check if `samples_contam_tags.len()` == 2
-    pub fn set_contaminants(&mut self, samples_contam_tags: &Vec<Vec<SampleTag>>, pair_indices: [usize; 2]) {
+    pub fn set_contaminants(&mut self, samples_contam_tags: &[Vec<SampleTag>], pair_indices: [usize; 2]) {
         let tags_0 = samples_contam_tags[pair_indices[0] % samples_contam_tags.len()].clone();
         let tags_1 = samples_contam_tags[pair_indices[1] % samples_contam_tags.len()].clone();
         self.contaminants = Some(Contaminant::new([tags_0, tags_1]))

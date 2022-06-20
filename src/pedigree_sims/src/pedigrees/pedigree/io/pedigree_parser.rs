@@ -13,7 +13,7 @@ enum ParseMode {Individuals, Relationships, Comparisons}
 /// Parse a pedigree definition file and return a `Pedigree` struct.
 /// # Arguments:
 /// - `path`: Path leading to the input pedigree definition file.
-pub fn pedigree_parser<'a> (path: &'a Path) -> std::io::Result<Pedigree> {
+pub fn pedigree_parser(path: &Path) -> std::io::Result<Pedigree> {
     // ---- Ressource acquisition
     let mut parse_mode = None;
     let mut pedigree = Pedigree::new();

@@ -17,7 +17,7 @@ pub struct Individual {
 }
 
 impl Individual {
-    pub fn new<'a> (name: Option<&'a String>, index: usize, min_depth: u16) -> Individual {
+    pub fn new (name: Option<&String>, index: usize, min_depth: u16) -> Individual {
         // Parse name and give default if non-existent
         let name = match name {                            
             Some(name) => name.to_string(),

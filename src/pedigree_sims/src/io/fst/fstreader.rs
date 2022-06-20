@@ -75,16 +75,16 @@ impl FSTReader {
     /// - `string`     : raw byte-string. This vector is passed and constructed upon each recursion step.
     /// - `chromosomes`: vector of chromosomes names (in u8) form. This is the final desired output.
     ///                  Each entry of `chromosomes` is constructed from `string`.
-    fn find_chromosome(&self, node: fst::raw::Node, string: &mut Vec<u8>, chromosomes: &mut Vec<u8>) {
+    fn find_chromosome(&self, node: fst::raw::Node, string: &mut [u8], chromosomes: &mut Vec<u8>) {
         let sep = b' '; // FST-set fields are space-separated. 
         for transition in node.transitions() {
             if transition.inp != sep { // If the next character is not a space, add the current character to the string being constructed.
-                let mut local_string = string.clone();
+                let mut local_string = string.to_owned();
                 local_string.push(transition.inp); 
                 self.find_chromosome(self.genotypes_set.as_fst().node(transition.addr), &mut local_string, chromosomes);
             }
             else { // If we've found a separator character, the current string is fully defined. -> add this string to our chromosome list.
-                let chromosome = std::str::from_utf8(&string).unwrap().parse::<u8>().unwrap();
+                let chromosome = std::str::from_utf8(string).unwrap().parse::<u8>().unwrap();
                 chromosomes.push(chromosome);
             }
         }

@@ -54,7 +54,7 @@ impl JackknifeBlocks {
             .find(|block| block.range.contains(&coordinate.position))
     }
 
-    pub fn compute_unequal_delete_m_pseudo_values(&self, sum_pwd: u32, sum_overlap: u32) -> JackknifeEstimates {
+    pub fn compute_unequal_delete_m_pseudo_values(&self, sum_pwd: f64, sum_overlap: u32) -> JackknifeEstimates {
 
         //  for each chromosome_block {
         //      for each (i, block) in chromosome_blocks.enumerate() {

@@ -4,9 +4,6 @@ use std::num::ParseFloatError;
 use std::path::PathBuf;
 use clap::{Parser, Subcommand, Args, ArgEnum};
 
-use chrono;
-
-//use serde_yaml;
 use serde::{Serialize, Deserialize};
 
 use log::{info};
@@ -503,14 +500,14 @@ fn percent_str_to_ratio(s: &str) -> Result<f64, ParseFloatError> {
 
 fn parse_pedigree_param<'a>(s: &str) -> Result<Vec<f64>, ParserError<'a>> {
     let vec: Result<Vec<f64>, ParseFloatError> = s.split('-')
-        .map(|substr| percent_str_to_ratio(substr))
+        .map(percent_str_to_ratio)
         .collect();
 
     let vec = match vec {
         Ok(vec) => vec,
         Err(_) => return Err(ParserError::RangeError("ParseFloatError")),
     };
-    if vec.len() < 1 || vec.len() > 2 {
+    if vec.is_empty() || vec.len() > 2 {
         return Err(ParserError::RangeError("Found multiple dashes"))
     }
     Ok(vec)

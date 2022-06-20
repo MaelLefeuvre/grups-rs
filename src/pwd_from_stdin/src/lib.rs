@@ -134,7 +134,7 @@ pub fn run<'a>(
     let mut pwd_writer = Writer::new(Some(output_files["pwd"].clone()))?;
     if ! pwd_cli.filter_sites {
         info!("Printing results...");
-        let header = format!("{: <20} - Overlap - Sum PWD - Avg. Pwd - JK. Var. - Avg. Phred", "Name");
+        let header = format!("{: <20} - Overlap - Sum PWD  - Avg. Pwd - 95-CI.   - JK. Var. - Avg. Phred", "Name");
         println!("{}", header);
         pwd_writer.write_iter(&vec![header])?;       // Print PWD results to file.
         pwd_writer.write_iter(comparisons.iter())?;  // 

@@ -96,6 +96,10 @@ impl<'a> VCFIndexer<'a> {
     }
 
     /// Read through the contents of `self.reader` and dynamically build our `.fst` and `.fst.frq` sets.
+    /// # Safety
+    /// This function is unsafe because parsing keys requires constructing &mut Vec without utf8 validation.
+    /// If this constraint is violated, using the original String after dropping the &mut Vec may violate memory safety
+    /// as Rust assumes that Strings are valid UTF-8
     pub unsafe fn build_fst(&mut self) -> Result<(), Box<dyn Error>> {
         'line: while self.reader.has_data_left()? {
             // ---- Parse the current position 
@@ -130,8 +134,7 @@ impl<'a> VCFIndexer<'a> {
 
             // ...and skip line if this is not an SNP.
             if vtype != "SNP" {
-                //println!("Not an SNP. Skipping.");
-                self.clear_buffers()?;     // If so, skip this lines, and don't insert the keys of the previous line.
+                self.clear_buffers()?;
                 self.coordinate_buffer.clear();
                 continue 'line
             }

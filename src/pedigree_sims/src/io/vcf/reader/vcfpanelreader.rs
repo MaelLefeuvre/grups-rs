@@ -49,7 +49,7 @@ impl<'a> VCFPanelReader<'a> {
             let split_line = line.split('\t').collect::<Vec<&str>>();
             let (id, pop) = (split_line[0], split_line[1]);
             if self.samples[pop].contains(&SampleTag::new(id, None)) {
-                writer.write(format!("{line}\n").as_bytes())?;
+                writer.write_all(format!("{line}\n").as_bytes())?;
             }
         }
         Ok(())
@@ -68,7 +68,7 @@ impl<'a> VCFPanelReader<'a> {
     /// # Behavior:
     /// - `When contam_pop.len()` and `contam_num_ind.len()` differ, indices and values are expected to wrap around,
     ///    according to the smallest vector length out of the two. 
-    pub fn fetch_contaminants(&self, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<Vec<Vec<SampleTag>>, Box<dyn Error>> {
+    pub fn fetch_contaminants(&self, contam_pop: &[String], contam_num_ind: &Vec<usize>) -> Result<Vec<Vec<SampleTag>>, Box<dyn Error>> {
         let mut samples_contam_tags: Vec<Vec<SampleTag>> = Vec::new();
 
         // ---- Loop along `contam_num_ind` and populate `samples_contam_tags` with n sampletags.
@@ -105,9 +105,10 @@ impl<'a> VCFPanelReader<'a> {
             // If there are sample tags to exclude, pre-filter out these SampleTags from `self.samples` before random sampling.
             Some(tag_vec) => {
                 candidates.iter()
-                    .filter(|sample| ! tag_vec.contains(&sample))
+                    .filter(|sample| ! tag_vec.contains(sample))
                     .collect::<Vec<&SampleTag>>()
-                    .choose(&mut rand::thread_rng()).map(|tag| *tag)
+                    .choose(&mut rand::thread_rng())
+                    .copied()
             },
             // If there are no sampleTag to exclude, directly proceed to random sampling.
             None => candidates.choose(&mut rand::thread_rng())

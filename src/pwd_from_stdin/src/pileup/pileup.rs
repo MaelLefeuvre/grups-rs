@@ -1,6 +1,8 @@
 use genome::SNPCoord;
-use std::iter::Peekable;
+use std::ops::Add;
+use std::{iter::Peekable, collections::HashMap};
 use std::error::Error;
+use itertools::Itertools;
 
 use super::{Nucleotide, PileupError};
 
@@ -47,6 +49,20 @@ impl Pileup {
             };
         }
         Ok(Pileup { depth, nucleotides })
+    }
+
+    pub fn observation_set(&self) -> (HashMap<char, f64>, f64) {
+        let mut set: HashMap<char, f64> = HashMap::new();
+        let mut sum_phred = 0;
+        for nucleotide in self.nucleotides.iter() {
+            *set.entry(nucleotide.base).or_insert(0.0) += 1.0;
+            sum_phred += nucleotide.phred;
+        }
+        for count in set.values_mut() {
+            *count = *count / self.nucleotides.len() as f64;
+        }
+        let avg_phred = sum_phred as f64 / self.nucleotides.len() as f64 ;
+        (set, avg_phred)
     }
 
     /// Apply base quality filtration for each Nucleotide, using a given a phred treshold

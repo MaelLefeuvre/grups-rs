@@ -113,7 +113,7 @@ impl Individual {
     /// # Errors
     /// - In case `self.alleles` is `None`
     pub fn get_alleles(&self) -> Result<[u8; 2], Box<dyn Error>> {
-        self.alleles.ok_or("Attempting to access empty alleles.".into())
+        self.alleles.ok_or_else(|| "Attempting to access empty alleles.".into())
     }
 
     /// Simulate meiosis for the current position and return a unique allele (as `u8`).

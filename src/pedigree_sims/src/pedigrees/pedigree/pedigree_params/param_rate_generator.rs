@@ -1,5 +1,6 @@
 use rand::distributions::uniform::SampleUniform;
 use std::cmp::PartialOrd;
+use std::fmt::Debug;
 
 use super::PedParam;
 
@@ -26,18 +27,20 @@ impl<T> ParamRateGenerator<T> {
     /// # Panics:
     /// - whenever `rates[i].len()` > 2
     /// - if self.inner.len() > 2
-    pub fn from_user_input(rates: &Vec<Vec<T>>, indices: [usize; 2]) -> Self 
+    pub fn from_user_input(rates: &[Vec<T>], indices: [usize; 2]) -> Self 
     where 
-        T: 'static + Copy + SampleUniform + PartialOrd
+        T: 'static + Copy + SampleUniform + PartialOrd + Debug
     {
         let mut inner = Vec::new();
         // ---- Instantiate two PedParam. One for each compaired individual. 
-        for i in 0..2 {
-            let rate_idx = indices[i] % rates.len() ; // Wrap around values if the user did not provide enough ranges!
+        for index in &indices {
+            let rate_idx = index % rates.len() ; // Wrap around values if the user did not provide enough ranges!
             let rate_gen: Box<dyn PedParam<T>> = <dyn PedParam<T>>::from_vec(&rates[rate_idx]);
             inner.push(rate_gen);
         }
-        let inner: [Box<dyn PedParam<T>>; 2 ] = inner.try_into().unwrap_or_else(|v: Vec<Box<dyn PedParam<T>>> | panic!("Expected a Vec of length {} but it was {}", 2, v.len()));
+        let inner: [Box<dyn PedParam<T>>; 2 ] = inner.try_into()
+            .expect("Invalid ParamRateGenerator array length.");
+            
         Self {inner}
     }
 

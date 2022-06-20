@@ -94,10 +94,10 @@ pub fn run(
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
     let mut pedigrees = pedigrees::Pedigrees::initialize(ped_cli.pedigree_pop, comparisons, &ped_cli.recomb_dir)?;
-    pedigrees.populate(&comparisons, &panel, ped_cli.reps, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
+    pedigrees.populate(comparisons, &panel, ped_cli.reps, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
 
     // --------------------- Assign simulation parameters for each pedigree.
-    pedigrees.set_params(&comparisons, ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.seq_error_rate, &ped_cli.contamination_rate)?;
+    pedigrees.set_params(comparisons, ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.seq_error_rate, &ped_cli.contamination_rate)?;
     
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
     match ped_cli.mode {
@@ -127,12 +127,12 @@ pub fn run(
     //pedigrees.filter(comparisons);
 
     // --------------------- Print pedigree simulation results.
-    pedigrees.write_simulations(&comparisons, &output_files)?;
+    pedigrees.write_simulations(comparisons, &output_files)?;
 
 
     // --------------------- Compute most likely relationship for each Comparison
     println!("--------------------------------------------------------------");
-    pedigrees.compute_results(&comparisons, &output_files["result"])?;
+    pedigrees.compute_results(comparisons, &output_files["result"])?;
 
     Ok(())
 }

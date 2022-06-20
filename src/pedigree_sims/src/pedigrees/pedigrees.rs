@@ -94,7 +94,7 @@ impl Pedigrees {
     /// - `pedigree_path` : path leading to the pedigree definition file
     /// - contam_pop`     : user-defined name of the (super-)population-id requested to simulate modern human contamination
     /// - `contam_num_ind`: vector of user-requested contaminating individuals `contam_num_ind[i] is tied to pileup `sample[i]`
-    pub fn populate(&mut self, comparisons: &Comparisons,  panel: &VCFPanelReader, reps: u32, pedigree_path: &Path, contam_pop: &Vec<String>, contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
+    pub fn populate(&mut self, comparisons: &Comparisons,  panel: &VCFPanelReader, reps: u32, pedigree_path: &Path, contam_pop: &[String], contam_num_ind: &Vec<usize>) -> Result<(), Box<dyn Error>> {
 
         // ---- Randomly sample contaminant SampleTags, according to the requested population and number of individuals.
         let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind)?;
@@ -130,7 +130,7 @@ impl Pedigrees {
     /// 
     /// # Errors
     /// - if `self.pedigrees` does contain a given pileup comparison label.
-    pub fn set_params(&mut self, comparisons: &Comparisons, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: &Option<Vec<Vec<f64>>>, contam_rate: &Vec<Vec<f64>>) -> Result<(), String>{
+    pub fn set_params(&mut self, comparisons: &Comparisons, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: &Option<Vec<Vec<f64>>>, contam_rate: &[Vec<f64>]) -> Result<(), String>{
 
         // ---- Iterate upon pileup comparisons and assign parameters for each pedigree simulation replicate.
         for comparison in comparisons.iter() {
@@ -140,10 +140,9 @@ impl Pedigrees {
 
             // ---- Instantiate a sequencing error `ParamRateGenerator` if the user specified sequencing error rates.
             //      If the user did not provide any, assign `None` -> the phred-scores of the pileup will then be used to compute the seq-error probability
-            let mut seq_error_rate_gen = match seq_error_rate {
-                Some(seq_errors_vec) => Some(ParamRateGenerator::from_user_input(seq_errors_vec, pair_indices)),
-                None => None,
-            };
+            let mut seq_error_rate_gen = seq_error_rate.as_ref()
+                .map(|seq_errors_vec| ParamRateGenerator::from_user_input(seq_errors_vec, pair_indices));
+
             // ---- Instantiate a contamination `ParamRateGenerator`
             let mut contam_rate_gen = ParamRateGenerator::from_user_input(contam_rate, pair_indices);
 
@@ -151,10 +150,8 @@ impl Pedigrees {
             //      constant values. (depending on the user-input)
             pedigree_reps.iter_mut()
             .for_each(|ped| {
-                let seq_error_rate = match &mut seq_error_rate_gen {
-                    Some(generator) => Some(generator.gen_random_values()),
-                    None => None
-                };
+                let seq_error_rate = seq_error_rate_gen.as_mut()
+                    .map(|generator| generator.gen_random_values());
 
                 ped.set_params(snp_downsampling_rate, af_downsampling_rate, seq_error_rate, contam_rate_gen.gen_random_values())
             });
@@ -201,7 +198,7 @@ impl Pedigrees {
             pedigree.compute_offspring_alleles(interval_prob_recomb, i)?;
 
             // --------------------- Compare genomes.
-            pedigree.compare_alleles(cont_af, &pileup_error_probs)?;
+            pedigree.compare_alleles(cont_af, pileup_error_probs)?;
             // --------------------- Clear genotypes before the next line!
             pedigree.clear_alleles();
         }
@@ -264,7 +261,7 @@ impl Pedigrees {
                 let pop_af = fst_reader.get_pop_allele_frequency(&self.pedigree_pop)?;
                 if pop_af < maf || pop_af > (1.0-maf) { 
                     debug!("skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
-                    positions_to_delete.entry(key.to_owned()).or_insert_with(|| Vec::new()).push(pairwise_diff.coordinate);
+                    positions_to_delete.entry(key.to_owned()).or_insert_with(Vec::new).push(pairwise_diff.coordinate);
                     continue 'coordinate
                 }
                 
@@ -290,7 +287,7 @@ impl Pedigrees {
         for comparison in comparisons.iter_mut() {
             let key = comparison.get_pair();
             let pre_filtered_n = comparison.positions.len();
-            comparison.positions.retain(|pwd| ! positions_to_delete.entry(key.to_owned()).or_default().contains(&&pwd.coordinate));
+            comparison.positions.retain(|pwd| ! positions_to_delete.entry(key.to_owned()).or_default().contains(&pwd.coordinate));
             info!("- {key: <20} filtered-out SNPs: {}", pre_filtered_n - comparison.positions.len());
         }
     }
@@ -351,7 +348,7 @@ impl Pedigrees {
                             //              ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
                             if pop_af < maf || pop_af > (1.0-maf) {
                                     trace!("Skip allele at [{chromosome: <2} {position: >9}]: pop_af: {pop_af:<8.5} --maf: {maf}");
-                                    positions_to_delete.entry(key.to_owned()).or_insert_with(|| Vec::new()).push(pairwise_diff.coordinate);
+                                    positions_to_delete.entry(key.to_owned()).or_insert_with(Vec::new).push(pairwise_diff.coordinate);
                                     vcf_reader.next_line()?;
                                     continue 'line
                             }
@@ -398,10 +395,10 @@ impl Pedigrees {
     /// # Arguments
     /// - `comparisons`   : pileup Comparisons of our real samples.
     /// - `output_files`  : target output file where results are written.
-    pub fn compute_results(&self, comparisons: &Comparisons, output_file: &String) -> Result<(), Box<dyn Error>> {
+    pub fn compute_results(&self, comparisons: &Comparisons, output_file: &str) -> Result<(), Box<dyn Error>> {
         // ---- Resource acquisition
         let mut simulations_results = Vec::with_capacity(comparisons.len());
-        let mut writer = pwd_from_stdin::io::Writer::new(Some(output_file.clone()))?;
+        let mut writer = pwd_from_stdin::io::Writer::new(Some(output_file.to_owned()))?;
 
         // ---- Print header and write to output_file
         let simulation_header = format!("{: <20} - {: <20} - {: <10} - {: <10} - {: <10}",

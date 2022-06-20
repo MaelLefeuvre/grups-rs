@@ -1,16 +1,16 @@
 use rand::Rng;
-use rand::RngCore;
+use std::fmt::Debug;
 use std::ops::Range;
 use rand::distributions::uniform::SampleUniform;
 use std::cmp::PartialOrd;
 
 /// Trait defining a pedigree parameter. This struct is mainly leveraged by `super::ParamRateGenerator` to generate
 /// constant/random values, according to the user-provided rates.
-pub trait PedParam<T>{
+pub trait PedParam<T>: std::fmt::Debug {
     fn value(&mut self) -> T;
 }
 
-impl<T: 'static + Copy + SampleUniform + PartialOrd> dyn PedParam<T> {
+impl<T: 'static + Copy + SampleUniform + PartialOrd + Debug> dyn PedParam<T> {
     /// Instantiate a new PedParam, given a vector of values.
     /// 
     /// # Arguments:
@@ -19,7 +19,7 @@ impl<T: 'static + Copy + SampleUniform + PartialOrd> dyn PedParam<T> {
     /// # Panics
     /// - whenever `vec.len() > 2`
 
-    pub fn from_vec(vec: &Vec<T>) -> Box<dyn PedParam<T>> {
+    pub fn from_vec(vec: &[T]) -> Box<dyn PedParam<T>> {
         match vec.len() {
             // If length is 1, the user is requesting a set, constant rate
             // => instantiate a `PedParamConst`
@@ -38,11 +38,12 @@ impl<T: 'static + Copy + SampleUniform + PartialOrd> dyn PedParam<T> {
 /// Constant pedigree parameter. Calling `self.value()` on this struct will always return the same value (the one given by the user)
 /// # Fields:
 /// - `inner` : user-provided rate.
+#[derive(Debug)]
 struct PedParamConst<T> {
     inner: T
 }
 
-impl<T: Copy> PedParam<T> for PedParamConst<T> {
+impl<T: Copy + Debug> PedParam<T> for PedParamConst<T> {
     /// Return the rate previously given by the user.
     fn value(&mut self) -> T {
         self.inner
@@ -61,12 +62,13 @@ impl<T> PedParamConst<T> {
 /// # Fields:
 /// - `inner`: random number generator.
 /// - `range`: user-defined range of acceptable rates.
+#[derive(Debug)]
 struct PedParamRange<T> {
-    inner: Box<dyn RngCore>,
+    inner: rand::prelude::ThreadRng,
     range: Range<T>
 }
 
-impl<T: SampleUniform + PartialOrd + Copy> PedParam<T> for PedParamRange<T> {
+impl<T: SampleUniform + PartialOrd + Copy + Debug> PedParam<T> for PedParamRange<T> {
     /// Return a randomly generated rate, within the user-provided range.
     fn value(&mut self) -> T {
         self.inner.gen_range(self.range.start, self.range.end)
@@ -76,7 +78,7 @@ impl<T: SampleUniform + PartialOrd + Copy> PedParam<T> for PedParamRange<T> {
 impl<T> PedParamRange<T> {
     /// Instantiate a new random PedParam.
     pub fn new(start: T, end: T) -> Self {
-        let inner = Box::new(rand::thread_rng());
+        let inner = rand::thread_rng();
         let range = Range{start, end};
         Self {inner, range}
     }

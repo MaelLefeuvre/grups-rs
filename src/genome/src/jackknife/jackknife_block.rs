@@ -37,7 +37,7 @@ pub struct JackknifeBlock {
     pub chromosome : u8,
     pub range      : Range<u32>,
     site_counts: u32,
-    pwd_counts : u32,
+    pwd_counts : f64,
 }
 
 impl JackknifeBlock {
@@ -47,13 +47,13 @@ impl JackknifeBlock {
     /// - `start`     : 0-based start-coordinate of the block.
     /// - `end`       : 0-based end-coordinate of the block
     pub fn new(chromosome: u8, start: u32, end: u32) -> JackknifeBlock {
-        JackknifeBlock{chromosome, range: Range{start, end}, site_counts: 0, pwd_counts:0}
+        JackknifeBlock{chromosome, range: Range{start, end}, site_counts: 0, pwd_counts:0.0}
     }
 
     /// Incrementer for the `pwd_counts` field. Called by `pwd_from_stdin::Comparison::compare()`
     /// when a pairwise difference has been declared.
-    pub fn add_pwd(&mut self) {
-        self.pwd_counts += 1;
+    pub fn add_pwd(&mut self, pwd: f64) {
+        self.pwd_counts += pwd;
     }
 
     /// Incremented for the `site_counts` field. Infaillibly called by `pwd_from_stdin::Comparison::compare()`
@@ -61,13 +61,13 @@ impl JackknifeBlock {
         self.site_counts += 1;
     }
 
-    pub fn compute_unequal_delete_m_pseudo_value(&self, sum_pwd: u32, sum_overlap: u32) -> Pseudovalue {
+    pub fn compute_unequal_delete_m_pseudo_value(&self, sum_pwd: f64, sum_overlap: u32) -> Pseudovalue {
         // hj = n / m_j
         // theta: Estimate of avg_PWD bassed on all the observations.
         // theta_minus_j: Estimate of avg_PWD based on all the observations, except those from Block j
         let hj          = sum_overlap as f64 / self.site_counts as f64; // hj = n/m_j
         let theta         = sum_pwd as f64 / sum_overlap as f64;          // Estimate of avg_pwd based on all the observations 
-        let theta_minus_j = (sum_pwd - self.pwd_counts) as f64 / (sum_overlap - self.site_counts) as f64; // Estimate of avg_pwd based on all the observations 
+        let theta_minus_j = (sum_pwd - self.pwd_counts as f64) as f64 / (sum_overlap - self.site_counts) as f64; // Estimate of avg_pwd based on all the observations 
 
         let theta_j = hj * theta - (hj - 1.0) * theta_minus_j;
         Pseudovalue{hj, theta_j}
@@ -120,9 +120,9 @@ mod tests {
     #[test]
     fn increment_pwd_count() {
         let mut block = JackknifeBlock::new(1, 0, 1000);
-        assert_eq!(block.pwd_counts, 0);
-        block.add_pwd();
-        assert_eq!(block.pwd_counts, 1);
+        assert_eq!(block.pwd_counts, 0.0);
+        block.add_pwd(1.0);
+        assert_eq!(block.pwd_counts, 1.0);
     }
 
     #[test]

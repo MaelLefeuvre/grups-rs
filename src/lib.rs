@@ -44,7 +44,7 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         },
 
         FromYaml{yaml} => {
-            let cli: Cli = match serde_yaml::from_reader(std::fs::File::open(yaml.to_owned())?) {
+            let cli: Cli = match serde_yaml::from_reader(std::fs::File::open(&yaml)?) {
                 Ok(cli)  => cli,
                 Err(e) => return Err(format!("Unable to deserialize arguments from {yaml:?} file: [{e}]").into())
             };
