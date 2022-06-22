@@ -12,20 +12,38 @@ use crate::io::vcf::SampleTag;
 use rand::{Rng};
 use log::{trace};
 
+/// Space padding lengths used for `std::fmt::Display` of Individual
+const TAG_DISPLAY_LEN    : usize = 10; // Space padding of `self.tag`
+const LABEL_DISPLAY_LEN  : usize = 10; // Space padding of `self.label`
+const PARENTS_DISPLAY_LEN: usize = 25; // Space padding of `self.parents`
 
+/// Pedigree Individual.
+/// # Fields:
+/// - `tag`                  : Optional SampleTag of the Individual 
+///                              - `Some(SampleTag)` if the individual is a founder.
+///                              - `None`            if the individual is a simulated offspring.
+/// - `label`                : User-defined name of the individual (e.g. 'child', 'father', 'mother')
+/// - `parents`              : Optional Set of references for each parents of the individual.
+///                              - `None`             if the individual is a founder.
+///                              - `Some(references)` if the individual is a simulated offspring.
+/// - `strands`              : Optional array indicating the provenance of each individual's chromosome strand.
+///                            Strand provenance is tracked as a set of two indices. `strands[i]` = strand index of 
+///                            `parents[i]`. Two possible values: `0` = left strand and `1` == right strand of the 
+///                            given parent. 
+///                              - `None`          if the individual is a founder.
+///                              - `Some(strands)` if the individual is a simulated offspring. 
+/// - `currently_recombining`: Array of `bool` tracking whether or not the parent's chromosome is currently
+///                            recombining. `currently_recombining[i]` = tracker for `parents[i]`.
+/// - `alleles`              : Optional size-two set of alleles of the Individual for the current SNP position.
 #[derive(Debug, Clone)]
 pub struct Individual {
-    pub tag    : Option<SampleTag>,   // NA005842
-    pub label  : String,              // son, mother, stepmom, etc...
-    parents    : Option<Parents>,
-    pub strands    : Option<[usize; 2]>,
+    pub tag                  : Option<SampleTag>,
+    pub label                : String,
+    parents                  : Option<Parents>,
+    pub strands              : Option<[usize; 2]>,
     pub currently_recombining: [bool; 2],
-    pub alleles: Option<[u8; 2]>,
+    pub alleles              : Option<[u8; 2]>,
 }
-
-const TAG_DISPLAY_LEN: usize = 10;
-const LABEL_DISPLAY_LEN: usize = 10;
-const PARENTS_DISPLAY_LEN: usize = 25;
 
 impl std::fmt::Display for Individual {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -76,31 +94,57 @@ impl PartialOrd for Individual {
 type ParentsRef<'a> = [&'a Rc<RefCell<Individual>>; 2];
 
 impl Individual {
+    /// Instantiate a new individual.
+    /// # Arguments
+    /// - `label`  : User-defined name of the individual (e.g. "father", "mother", "child", etc.)
+    /// - `parents`: Size-two array of `&Rc<RefCell<Individual>>`, representing the individual's parents. 
     pub fn new(label: &str, parents: Option<ParentsRef>) -> Individual {
         let parents = parents.map(Self::format_parents);
         Individual {tag: None, label: label.to_string(), parents, strands: None, currently_recombining: [false, false], alleles: None}
     }
 
+    /// Manually set the alleles for this individual. Used during tests only, to bypass some methods and create mock Individuals.
     #[cfg(test)]
     pub fn set_alleles(&mut self, alleles: [u8; 2]) {
         self.alleles = Some(alleles);
     }
 
+    /// Return the contents of `self.alleles`
+    /// # Errors
+    /// - In case `self.alleles` is `None`
     pub fn get_alleles(&self) -> Result<[u8; 2], Box<dyn Error>> {
-        self.alleles.ok_or("Attempting to access empty alleles.".into())
+        self.alleles.ok_or_else(|| "Attempting to access empty alleles.".into())
     }
 
+    /// Simulate meiosis for the current position and return a unique allele (as `u8`).
+    /// Arguments:
+    /// - `selected_strand`                : index of `self.alleles` used for sampling. The provided value will most likely
+    ///                                      originate from `self.strands` of the simulated offspring. 
+    /// - `offspring_currently_recombining`: bool indicating whether the strand being currently simulated is under recombination.
+    ///                                      The provided value will most likely originate from `self.currently_recombining` of
+    ///                                      the simulated offspring.
+    /// # Panics:
+    /// - when `self.alleles` is `None`
     pub fn meiosis(&self, selected_strand: usize, offspring_currently_recombining: bool) -> u8 {
+        // --- Switch the selected strand if the offspring is currently recombining.
         let selected_strand = match offspring_currently_recombining {
             false => selected_strand,
             true => (selected_strand + 1) % 2
         };
+
+        // ---- Return the allele at index = selected_strand. 
         match self.alleles {
             None          => panic!("Trying to perform meiosis within an empty genome!"),
             Some(alleles) => alleles[selected_strand],
         }
     }
 
+    /// Randomly assign a strand provenance for each parents. This method should be called once, before the simulations.
+    /// Returns `true` if strand assignment was succesful and non-redundant, `false` if the individual's strand were 
+    /// already assigned.
+    /// 
+    /// # Errors:
+    /// - if `self.parents` is `None`
     pub fn assign_strands(&mut self) -> Result<bool, String> {
         if self.parents == None {
             return Err("Assigning strands is meaningless, as this individual has no parents.".to_owned())
@@ -113,53 +157,86 @@ impl Individual {
         Ok(true)
     }
 
+    /// Return a reference to `self.tag`
     pub fn get_tag(&self) -> Option<&SampleTag> {
         self.tag.as_ref()
     }
 
+    /// Manually set the Individuals parents.
+    /// # Arguments
+    /// - `parents`: Size-two array of `&Rc<RefCell<Individual>>`, representing the individual's parents. 
     pub fn set_parents(&mut self, parents: ParentsRef) {
         self.parents = Some(Self::format_parents(parents));
     }
 
-    pub fn is_founder(&self) -> bool {
-        self.parents == None
-    }
-
-    pub fn set_tag(&mut self, tag: SampleTag){
-        self.tag = Some(tag);
-    }
-
+    /// Rc::clone() the provided pair of of parents during instantiation. (see. `Individual::new()`)
     fn format_parents(parents:  [&Rc<RefCell<Individual>>; 2]) -> Parents {
         Parents::new([Rc::clone(parents[0]), Rc::clone(parents[1])])
     }
 
+    /// Check whether or not this individual is a founder individual. Returns `true` if `self.parents == None`
+    pub fn is_founder(&self) -> bool {
+        self.parents == None
+    }
+
+    /// Manually set the individuals SampleTag. meaningless for offsprings.*
+    /// Arguments:
+    /// - `tag`: Input sample identification tag. (i.e. the name and idx of the snp-callsed individual being used for simulations)
+    pub fn set_tag(&mut self, tag: SampleTag){
+        self.tag = Some(tag);
+    }
+
+    /// Set the Individual's `self.alleles` field to `None`. 
+    /// This method is most likely called when switching from one simulated SNP coordinate to another.
     pub fn clear_alleles(&mut self){
         self.alleles = None
     }
     
+    /// Set the individual's alleles, given a recombination probability. 
+    /// - Returns `true`  if assignment was successful and non-redundant.
+    /// - Returns `false` if `self.alleles` were already assigned.
+    /// 
+    /// # Arguments:
+    /// - `recombination_prob`: probability that a recombination occured between the previous and current coordinate.
+    ///                         This was most likely computed from a genetic_map. See `genome::GeneticMap` and 
+    ///                         `genome::RecombinationRange`
+    /// - `ped_idx`           : replicate index of this individual's belonging pedigree. This parameter is purely provided
+    ///                         for debugging and logging, and serves no purpose during allele assignment.
+    /// # Errors
+    /// - when trying to assign alleles while `self.strands` is `None`.
+    /// 
+    /// # Panics
+    /// - When attempting to assign alleles while `self.parents` is `None` (i.e. Individual is a founder.)
+    /// 
+    /// # @ TODO
+    /// - Instantiating a new Rng for each individual might not be very efficient...
+    ///   Passing a &ThreadRng reference around might be better.
     pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize) -> Result<bool, Box<dyn Error>> {
+        // ---- Ensure this method call is non-redundant.
         if self.alleles != None {
             return Ok(false)
         }
+        // ---- Ensure the individual is 'equipped' with parents before attempting allele assignment.
         match &self.parents {
             None => panic!("Cannot generate genome, as parents are missing."),
             Some(parents) => {
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::thread_rng(); 
+                // ---- Perform allele assignment for each parent.
                 for (i, parent) in parents.iter().enumerate() {
 
-                    //Assign parent genome if not previously generated.
-                    if parent.borrow().alleles == None {
+                    // ---- Assign parent genome if not previously generated.
+                    if parent.borrow().alleles.is_none() {
                         parent.borrow_mut().assign_alleles(recombination_prob, i).unwrap();
                     }
 
-                    // Check if recombination occured for each parent and update counters if so.
+                    // ---- Check if recombination occured for each parent and update recombination tracker if so.
                     if rng.gen::<f64>() < recombination_prob {
                         trace!("Cross-over occured in ped: {:<5} - ind: {}", ped_idx, self.label);
                         self.currently_recombining[i] = ! self.currently_recombining[i];
                     }
                 }
 
-                // Assign alleles.
+                // ---- Perform allele assignment for `self`, by simulating meiosis for each parent.
                 self.alleles = match self.strands {
                     None => return Err(format!("Cannot assign alleles when self.strands is empty. [{}]", self).into()),
                     Some([s1, s2]) => {

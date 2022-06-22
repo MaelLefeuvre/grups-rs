@@ -14,7 +14,7 @@ pub struct Nucleotide {
 impl Nucleotide {
     pub fn new(base: char, score: char) -> Nucleotide {
         let phred = Nucleotide::to_phred(score);       
-        Nucleotide {base: base, phred}
+        Nucleotide {base, phred}
     }
 
     /// Convert the BQ score back to the ASCII format

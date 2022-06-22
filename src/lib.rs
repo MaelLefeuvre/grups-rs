@@ -25,6 +25,7 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let (mut comparisons, _target_positions) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
             let _ = pedigree_sims::run(common, ped, &mut comparisons)?;
         },
+        
         PwdFromStdin {common, pwd} => {
             // ----------------------------- Parse Requested_samples
             let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
@@ -37,12 +38,17 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             // ----------------------------- Run PWD_from_stdin.
             let (_,_) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
         },
-        // PedigreeSims {..} => {
-        //    println!("Command pedigree-sims: {:#?}", cli.commands);
-        //},
 
         FST {fst: fst_cli} => {
             vcf_fst::run(&fst_cli)?
+        },
+
+        FromYaml{yaml} => {
+            let cli: Cli = match serde_yaml::from_reader(std::fs::File::open(&yaml)?) {
+                Ok(cli)  => cli,
+                Err(e) => return Err(format!("Unable to deserialize arguments from {yaml:?} file: [{e}]").into())
+            };
+            self::run(cli)?;
         }
     };
     Ok(())

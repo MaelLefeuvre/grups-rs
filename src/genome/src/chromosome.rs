@@ -1,5 +1,9 @@
 #[derive(Debug, Clone)]
 /// A simple struct representing a chromosome index. This is mainly used to compute Jackknife Blocks
+/// # Fields:
+/// - `index` : 0-based index of the chromosome
+/// - `name`  : 1-based name of the chromosome (i.e. 1-22)
+/// - `length`: length of the chromosome (bp)
 pub struct Chromosome {
     pub index  : usize,
     pub name   : u8,
@@ -7,6 +11,11 @@ pub struct Chromosome {
 }
 
 impl Chromosome {
+    /// Instantiate a new chromosome
+    /// # Fields:
+    /// - `index` : 0-based index of the chromosome
+    /// - `name`  : 1-based name of the chromosome (i.e. 1-22)
+    /// - `length`: length of the chromosome (bp)
     pub fn new(index: usize, name: u8, length: u32) -> Chromosome{
         Chromosome{index, name, length}
     }

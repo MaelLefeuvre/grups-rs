@@ -1,13 +1,16 @@
-# grups
+# GRUPS-rs : A high-performance rust port and update of [grups](https://github.com/sameoldmike/grups).  
 
 ![Build](https://github.com/MaelLefeuvre/grups/workflows/Build/badge.svg)
 
-rust port & update of [grups](https://github.com/sameoldmike/grups).  
+## Introduction
 
-See:  
-> Martin, M. D., Jay, F., Castellano, S., & Slatkin, M. (2017). Determination of genetic relatedness from low-coverage human genome sequences using pedigree simulations. Molecular ecology, 26(16), 4145–4157. https://doi.org/10.1111/mec.14188
+GRUPS (*Get Relatedness Using Pedigree Simulations*) is an ancient-DNA genetic relatedness kinship estimation software, revolving around pedigree simulations using existing genotype callsets (Typically, the [1000G-phase3 dataset](https://www.internationalgenome.org/category/phase-3/)), and based on the methods developed in [Martin D., et al. (2017)](https://doi.org/10.1111/mec.14188), 
 
-## Dependencies
+GRUPS-rs currently supports the simulation of user-defined pedigree in thousand of replicates, to compute the expected genetic distances of two individuals under various relatedness scenarios (See section: [Defining custom pedigrees](#Defining-custom-pedigrees)).
+
+Modern human contamination, sequencing errors and allele-fixation parameters can also be introduced within the simulations to account for the biases they may introduce in real-life datasets.
+
+## Software Dependencies
 ### 1. cargo  
 This project is written in [Rust](https://www.rust-lang.org/), and thus requires [cargo](https://crates.io/) for source compilation.  
 
@@ -18,6 +21,7 @@ user@desktop:~$ curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
     
 See `Cargo.toml` for a complete list of crate dependencies (these are automatically downloaded by cargo when setting up compilation)
 
+---
 ## Installation from source
 
 1. Clone this repository
@@ -50,11 +54,50 @@ See `Cargo.toml` for a complete list of crate dependencies (these are automatica
         -v, --verbose    Set the verbosity level (-v -vv -vvv -vvvv)
     
     SUBCOMMANDS:
+        from-yaml         Run GRUPS using a previously generated .yaml config file
         fst               Convert VCF files into FST-indexes (Finite State Transcucer)
         help              Print this message or the help of the given subcommand(s)
         pedigree-sims     Run pwd-from-stdin and perform pedigree simulations in one go.
         pwd-from-stdin    Compute the average PairWise Difference (PWD) within a pileup file
    ```
+
+## Data Dependencies:
+### 1. SNP Callset
+
+GRUPS requires an SNP-callset in the form of `.vcf` or `.vcf.gz` files to perform pedigree simulations. Any VCF file will work (see. [Caveats](#Caveats-(when-using-an-alternative-callset)), but GRUPS remains, as of now, mainly designed to work with the [1000G-phase3 dataset](https://www.internationalgenome.org/category/phase-3/).
+
+The 1000G-phase3 dataset can be downloaded [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/).
+
+### 2. Input panel definition file
+
+GRUPS will require an input panel definition file to distinguish (super-)populations and define samples within your SNP Callset.  
+
+If you plan to use the `1000G-phase3` callset, a predefined panel can be downloaded [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel)
+
+This file is in tab-separated format and must at least contain the following columns:
+```Text
+<SAMPLE-ID>    <POP-ID>    <SUPER-POP-ID>
+```
+
+### 3. Recombination Maps
+
+GRUPS requires a genetic recombination map to simulate meiosis. For main intents and purposes, and when using the `1000G-phase3` callset, we recommend the HapMap-II-b37 map, which can be downloaded [here](https://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/)
+
+### Caveats (when using an alternative SNP-callset)
+
+If you plan to use an alternative SNP Callset, here are a few caveats you should keep in mind when preparing your input:
+
+1. GRUPS will require an input panel definition file to your SNP Callset. See the [Input panel definition File](#2.-Input-panel-definition-file) section for the appropriate format, and/or check the 1000G-phase3 `.panel` file as a template [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel).
+
+2. As of now, GRUPS does not calculate population allele frequencies by itself, and will rather look through the `INFO` field (column 7) of your callset for the appropriate tag. Thus, if you plan to simulate genomes using the `EUR` population, your SNP callset *must* carry a `EUR_AF` info tag, specifying the the allele frequency, at each SNP coordinate. See the [bcftools +fill-tag](https://samtools.github.io/bcftools/howtos/plugin.fill-tags.html) plugin documentation to learn how to annotate population-specific allele frequencies.
+
+3. As of now, GRUPS distinguishes relevant SNP coordinates within the callset using various `INFO` field annotations. If you plan to use a different SNP-callset, either ensure your `.vcf` files are correctly annotated with the following tags, or make sure all position that are not bi-allelic SNPs have been thoroughly filtered-out from your dataset before using GRUPS:
+    - Poly-allelic sequence variations are distinguished (and ignored) by searching for the `MULTI_ALLELIC` tag.
+    - SNPs are distinguished from other types of mutation by searching for the `VT=SNP` tag.  
+
+4. By default, GRUPS will consider the provided SNP callset as being called on the `GRCh37` reference genome. If your callset has been generated using another reference genome, you'll have to provide the software with a fasta index file (`.fa.fai`) of your reference, using the `--fasta` argument (See the [pwd-from-stdin parameter list](#pwd-from-stdin) section for more information).
+
+---
 ## Usage
 
 ### pwd-from-sdin
@@ -123,15 +166,91 @@ MDH1-MDH3            - First Degree         - 0.186047 - 0.141176 - 0.044870
 MDH2-MDH3            - Unrelated            - 0.290323 - 0.322581 - 0.032258
 ```
 
+### Defining custom pedigrees
+
+Defining pedigrees within grups is performed through simple definition files. See the example pedigree [here](resources/pedigrees/example_pedigree.txt)  
+
+In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, each one tied to a keyword within the definition file:
+
+1. `INDIVIDUALS`: Define the individuals within the pedigree.
+    - Individuals are then defined by a unique, line-separated id or name.
+    - Ids must not contain any whitespace
+    - Dashes, underscores, and other special characters are allowed, but we recommend that users stick to using alphanumeric characters.
+
+    - Example:
+      ```
+      # Define individuals within the pedigree
+      INDIVIDUALS
+      father
+      mother
+      child
+      ```
+
+2. `RELATIONSHIPS`: Define the parents for each offspring.
+    - Relationships are parsed by targeting the `=repro()` regular expression, through this nomenclature:
+      ```
+      <offspring-id>=repro(<parent1-id>, <parent2-id>)
+      ```
+    - Example:
+      ```
+      # Define offspring relationships
+      RELATIONSHIPS
+      child=repro(father,mother)
+      ```
+
+Note that comment lines are allowed within the definition file: any line starting with a `#` character is ignored during parsing.
+
+
+3. `COMPARISONS` Define which pairwise comparisons should grups investigate to compute genetic distances.
+    - Each comparison is defined by a unique, line-separated id or name (e.g. 'parents', 'siblings').
+    - comparison ids can contain whitespaces, and various special characters (though we recommend sticking to alphanumeric characters and underscores).
+    - Comparisons are then parsed by targeting the `=compare()` regular expression, through this nomenclature:
+      ```
+      <relationship-id>=compare(<individual1-id>, individual2-id>)
+      ```
+    - Example:
+      ```
+      # Define pairwise comparisons
+      COMPARISONS
+      unrelated=compare(father,mother)
+      1st_degree=compare(child, mother)
+      ```
+
 ### Fst indexation
 
+#### Basic principles
 The biggest performance bottleneck of GRUPS is I/O. Working with heavy vcf files such as the 1000G project can have its toll on performance. For extended uses of grups on a predefined dataset, FST-indexation of VCF files can in certain cases greatly increase performances, at the cost of a higher memory footprint.
 
 ```
 grups fst --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
 ```
 
-Once the indexation is completed, `.fst` and `.fst.frq` files can be used seamlessly when performing performing pedigree simulations. The user merely has to specify the input type using `--mode fst`. Specifying a target directory is performed in the same way, using `--data-dir`.
+#### Multithreading
+FST-indexation can be quite long and resource intensive (altough it remains a one-time operation). Thus, the use of multithreading across vcf files is recommended, provided your computer is equipped with multiple cores:
+```
+grups fst --threads `nproc` --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
+```
+
+If, your input VCF are BGZF-compressed, `.vcf.gz` files one can also leverage multiple decompression thread per vcf file.
+```
+grups fst --decompression-threads 8 --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
+```
+
+**NB:** be aware that the combined use of `--threads` and `--decompression-threads` is ***multiplicative***. E.g.: calling `grups fst` with `--threads 3` and `--decompression-threads 4` will preempt 12 OS-threads.
+
+#### FST pre-filtration
+On top of this, FST-indexation has the added benefit of performing prefiltration of unwanted entries within the input vcf file. Most notably:
+- Duplicate coordinate entries.
+- Coordinates containing a `MULTI_ALLELIC` tag within the `INFO` field.
+- Entries which are not of type `VT=SNP`.
+
+#### FST population subsetting
+More-over, if the user expects to use only a single pedigree and contaminating population, FST indexation can be used to filter-out unused samples from the original VCF file
+```
+grups fst --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --pop-subset EUR|AFR --output-dir ./test-fst-index
+```
+
+Once the indexation is completed, `.fst` and `.fst.frq` files can be used seamlessly when performing pedigree simulations. The user merely has to specify the input type using `--mode fst`. Specifying a target directory is performed in the same way, using `--data-dir`.
 
 ```Bash
 grups pedigree-sims --pileup ./tests/test-data/pileup/parents-offspring.pileup \
@@ -157,9 +276,38 @@ MDH2-MDH3            - Unrelated            - 0.290323 - 0.322581 - 0.032258
 
 #### Tradeoffs.
 
-- FST indexes are a quite compressed data form, but not as much as `.vcf.gz` files. Users should expect a ~2X file size increase when going from `.vcf.gz` to `.fst`.
+- FST indexes are a quite compressed data form, but not as much as `.vcf.gz` files. Users should expect a ~two-fold input file size increase when going from `.vcf.gz` to `.fst`.
 
+---
+## Running GRUPS using yaml config files
 
+When executing the `pedigree-sims` or `pwd-from-stdin` modules, GRUPS will automatically serialize your command line arguments and generate a timestamped `.yaml` configuration file containing every provided argument for the given run.
+
+This file will be located at the root of your output directory (which can be specified using `--output-dir`).
+
+To relaunch grups using the exact same configuration, simply run grups using the `from-yaml` module, and provide the path to the desired `.yaml` file
+
+```Bash
+grups from-yaml ./grups-output/2022-06-13T162822-pedigree-sims.yaml
+```
+
+---
+## Building the GRUPS API docs.
+
+The complete documentation for the GRUPS-rs public API can be built using `cargo`:
+```Bash
+cargo doc --workspace --open --no-deps --document-private-items
+```
+Using this command, the documentation's `html` entry-point will be located under `target/doc/pedigree_sims/index.html` and should automatically open in your default browser.
+
+---
+
+## Citing GRUPS-rs
+
+If you plan to use GRUPS-rs, pleace include the original publication from [Martin D. et al (2017)](https://doi.org/10.1111/mec.14188) as a citation:
+> Martin, M. D., Jay, F., Castellano, S., & Slatkin, M. (2017). Determination of genetic relatedness from low-coverage human genome sequences using pedigree simulations. Molecular ecology, 26(16), 4145–4157. https://doi.org/10.1111/mec.14188
+
+--- 
 ## Parameter List 
 
 ### Common args
@@ -257,7 +405,6 @@ MDH2-MDH3            - Unrelated            - 0.290323 - 0.322581 - 0.032258
     Fasta indexed reference genome.
 
     Note that a '.fasta.fai' genome index file must be present at the same directory.
-
 
 #### Flags 
 - `-f, --filter-sites`  
@@ -398,9 +545,9 @@ MDH2-MDH3            - Unrelated            - 0.290323 - 0.322581 - 0.032258
     [default: 0]
 
 ## Contributing
-
-### Obtaining code coverage 
-
+---
+## Obtaining code coverage metrics for GRUPS-rs
+    
 1. Install cargo tarpaulin  
     ```
     cargo install cargo-tarpaulin

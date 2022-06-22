@@ -81,7 +81,6 @@ impl Line {
             self.individuals[pair[0].index].nucleotides.choose(&mut rng).unwrap(),
             self.individuals[pair[1].index].nucleotides.choose(&mut rng).unwrap(),
         ]
-
     }
 
 }

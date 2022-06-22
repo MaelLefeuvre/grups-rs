@@ -6,12 +6,20 @@ use std::{
 
 use crate::pedigrees::Pedigree;
 
-pub fn pedigree_parser<'a> (path: &'a Path) -> std::io::Result<Pedigree> {
-    #[derive(Debug)]
-    enum ParseMode {Individuals, Relationships, Comparisons}
+/// Simple enum representing the three 'parsing modes' or 'steps' required to fully define a pedigree, and found
+/// within the pedigree definition file.
+enum ParseMode {Individuals, Relationships, Comparisons}
+
+/// Parse a pedigree definition file and return a `Pedigree` struct.
+/// # Arguments:
+/// - `path`: Path leading to the input pedigree definition file.
+pub fn pedigree_parser(path: &Path) -> std::io::Result<Pedigree> {
+    // ---- Ressource acquisition
     let mut parse_mode = None;
     let mut pedigree = Pedigree::new();
     let reader = BufReader::new(File::open(path)?);
+
+    // ---- Parse the pedigree definition file.
     for line in reader.lines() {
         let line= line?;
         let line: Vec<&str> = line.split('#').collect();
@@ -20,14 +28,17 @@ pub fn pedigree_parser<'a> (path: &'a Path) -> std::io::Result<Pedigree> {
             Some(_)          => (),
         }
 
+        // --- Switch to the relevant ParseMode if the corresponding pattern has been found.
         let mut change_parse_mode = |mode| {parse_mode = Some(mode); true};
         if let true = match line[0] {
             "INDIVIDUALS"   => change_parse_mode(ParseMode::Individuals),
             "RELATIONSHIPS" => change_parse_mode(ParseMode::Relationships),
             "COMPARISONS"   => change_parse_mode(ParseMode::Comparisons),
             _               => (false)
-        }{continue}
+        }{continue} // ---- ...And skip the current line if we've just switched to a different mode.
 
+        // ---- If this is neither a comment line, not a mode-switch,
+        //      run the appropriate parsing method, according to the current ParseMode.
         match parse_mode {
             Some(ParseMode::Individuals)   => {
                 let label = line[0].to_string();
@@ -48,20 +59,34 @@ pub fn pedigree_parser<'a> (path: &'a Path) -> std::io::Result<Pedigree> {
     Ok(pedigree)
 }
 
+/// Parse a pedigree definition line, using a given regular expression
+/// # Arguments:
+/// - `line`: buffer of the current pedigree definition line
+/// - `regex`: Optional regular expression used for splitting keys from value(s).
+/// 
+/// # Errors:
+///  - return `std::io::Error::InvalidData` when parsing has failed.
+/// 
+/// # @ TODO:
+/// - return error if `values.len()` > 2
 fn parse_pedline (line: Vec<& str>, regex: &str) -> std::io::Result<(String, String, String)> {
     use std::io::ErrorKind::InvalidData;
+
+    // ---- Split line across the provided regex and create a <String> iterator.
     let mut temp=line[0].trim()
-        .strip_suffix(')')
+        .strip_suffix(')') 
         .ok_or(InvalidData)?
         .split(regex)
         .map(|s| s.to_string());
 
-    let ind = temp.next().ok_or(InvalidData)?;
+    // ---- Extract the individual/comparison label.
+    let key = temp.next().ok_or(InvalidData)?;
 
-    let parents: Vec<String> = temp.next()
+    // ---- Split values across ',' and extract the parents / compared individuals.
+    let values: Vec<String> = temp.next()
         .ok_or(InvalidData)?
         .split(',')
         .map(|s| s.to_string())
         .collect();
-    Ok((ind, parents[0].to_owned(), parents[1].to_owned()))
+    Ok((key, values[0].to_owned(), values[1].to_owned()))
 }

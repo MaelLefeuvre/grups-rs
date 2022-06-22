@@ -6,12 +6,15 @@ use std::{
 
 use super::Individual;
 
-
-
+/// Helper struct to Deref and Display the parents of an individual.
+/// 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parents([Rc<RefCell<Individual>>; 2]);
 
 impl Parents{
+    /// Instantiate a new set of Parents.
+    /// # Arguments
+    /// - `parents`: size-two array of Rc<RefCell<Individual>. Each Individual being a parent.  
     pub fn new(parents: [Rc<RefCell<Individual>>; 2]) -> Parents {
         Parents(parents)
     }
