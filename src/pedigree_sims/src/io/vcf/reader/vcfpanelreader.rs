@@ -40,7 +40,7 @@ impl<'a> VCFPanelReader<'a> {
             let line = line?;
             let split_line = line.split('\t').collect::<Vec<&str>>();
             let (id, pop) = (split_line[0], split_line[1]);
-            if self.samples[pop].contains(&SampleTag::new(id, None)) {
+            if self.samples.get(pop).unwrap_or(&Vec::new()).contains(&SampleTag::new(id, None)) {
                 writer.write(format!("{line}\n").as_bytes())?;
             }
         }

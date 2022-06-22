@@ -256,6 +256,12 @@ pub fn run(
         .build()
         .unwrap();
 
+        let output_panel_path = format!("{}/{}",
+        fst_cli.output_dir.to_str().unwrap(),
+        input_panel_path.file_name().unwrap().to_str().unwrap());
+    info!("output_panel_path: {output_panel_path}");
+    panel.copy_from_source(Path::new(&output_panel_path))?;
+
 
     pool.scope(|scope|{
         for vcf in input_vcf_paths.iter(){
@@ -280,11 +286,5 @@ pub fn run(
             });
         }
     });
-
-
-    let output_panel_path = format!("{}/{}",
-        fst_cli.output_dir.to_str().unwrap(),
-        input_panel_path.file_name().unwrap().to_str().unwrap());
-    panel.copy_from_source(Path::new(&output_panel_path)).unwrap();
     Ok(())
 }
