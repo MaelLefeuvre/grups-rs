@@ -318,7 +318,13 @@ pub fn run(
         .build()
         .unwrap();
 
-    // --------------------- Instantiate a scoped thread for each `.vcf(.gz)` file.
+    let output_panel_path = format!("{}/{}",
+        fst_cli.output_dir.to_str().unwrap(),
+        input_panel_path.file_name().unwrap().to_str().unwrap());
+    info!("output_panel_path: {output_panel_path}");
+    panel.copy_from_source(Path::new(&output_panel_path))?;
+
+
     pool.scope(|scope|{
         for vcf in input_vcf_paths.iter(){
             scope.spawn(|_| {
@@ -349,12 +355,5 @@ pub fn run(
             });
         }
     });
-
-    // -------------------------- Copy the source input panel definition file into the output directory
-    //                            (filter-out unrelevant entries if the user requested a population subset)
-    let output_panel_path = format!("{}/{}",
-        fst_cli.output_dir.to_str().unwrap(),
-        input_panel_path.file_name().unwrap().to_str().unwrap());
-    panel.copy_from_source(Path::new(&output_panel_path)).unwrap();
     Ok(())
 }
