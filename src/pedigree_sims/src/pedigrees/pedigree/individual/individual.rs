@@ -231,7 +231,7 @@ impl Individual {
 
                     // ---- Check if recombination occured for each parent and update recombination tracker if so.
                     if rng.gen::<f64>() < recombination_prob {
-                        trace!("Cross-over occured in ped: {:<5} - ind: {}", ped_idx, self.label);
+                        trace!("- Cross-over occured in ped: {:<5} - ind: {}", ped_idx, self.label);
                         self.currently_recombining[i] = ! self.currently_recombining[i];
                     }
                 }

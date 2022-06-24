@@ -177,9 +177,9 @@ impl Pedigrees {
 
         // ---- Compute the interval between current and previous position, search trough the genetic map interval tree,
         //      and compute the probability of recombination.
-        let previous_position    : u32 = self.previous_positions[comparison_label];
-        let interval_prob_recomb : f64 = self.genetic_map.compute_recombination_prob(chromosome, previous_position, position);
-        //trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - pop_af: {pop_af:?} - cont_af: {cont_af:?} - recomb_prop: {interval_prob_recomb:<8.6}");
+        let previous_position    : &mut u32 = self.previous_positions.get_mut(comparison_label).expect("Failed to access and update previous position tracker.");
+        let interval_prob_recomb : f64      = self.genetic_map.compute_recombination_prob(chromosome, *previous_position, position);
+        trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - recomb_prob: {interval_prob_recomb:<8.6}");
 
 
         let pedigree_vec = self.pedigrees.get_mut(comparison_label).unwrap();
@@ -202,6 +202,11 @@ impl Pedigrees {
             // --------------------- Clear genotypes before the next line!
             pedigree.clear_alleles();
         }
+
+        // Keep track of the previous position:
+        *previous_position = position;
+
+
         Ok(())
     }
 

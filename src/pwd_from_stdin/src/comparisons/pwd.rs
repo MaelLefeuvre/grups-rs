@@ -78,11 +78,7 @@ impl Pwd {
             phreds[1] += nucs[1].phred as f64;
             counter += 1.0; 
         }
-        println!("deterministic self:");
-        println!("{pwd} / {counter} = {}", pwd  /counter);
-        println!("{} {}", phreds[0]/counter, phreds[1] /counter);
-        println!("--------------------");
-
+        
         let coordinate = Coordinate{chromosome: line.coordinate.chromosome, position: line.coordinate.position};
         let phreds = [phreds[0]/counter , phreds[1]/counter];
         let pwd = pwd/counter ;
