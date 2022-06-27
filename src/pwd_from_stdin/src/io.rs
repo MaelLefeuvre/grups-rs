@@ -10,6 +10,8 @@ use std::io::Write;
 use std::io::BufWriter;
 use std::path::PathBuf;
 
+use log::{info, trace};
+
 #[derive(Debug)]
 pub enum SNPReaderError {
     InvalidFileFormatError(String),
@@ -88,7 +90,7 @@ impl<'a> SNPReader<'a> {
     /// Return: HashMap of structs 'SNPCoord'
     /// 
     /// TODO: This should take a &self reference.
-    pub fn hash_target_positions(self) -> Result<HashSet<SNPCoord>, Box<dyn Error>> {
+    pub fn hash_target_positions(self, exclude_transitions: bool) -> Result<HashSet<SNPCoord>, Box<dyn Error>> {
         let mut target_positions : HashSet<SNPCoord> = HashSet::new(); // Output
         for line in self.source.lines() {
             let line = line?;
@@ -100,8 +102,26 @@ impl<'a> SNPReader<'a> {
             let alternate : Option<char> = split_line[self.columns[3]].parse().ok();
             
             let coordinate: SNPCoord     = SNPCoord {chromosome, position, reference, alternate};
+
+            if exclude_transitions && !coordinate.has_known_alleles() {
+                return Err("Cannot filter-out transitions if reference and alternate alleles is unknown. \
+                Please provide a --targets file with known reference and alternate alleles.".into())
+            }
+
             target_positions.insert(coordinate);
         }
+
+        let transitions = vec![['A', 'G'], ['G', 'A'], ['C', 'T'], ['T', 'C']];
+        if exclude_transitions {
+            info!("Filtering transitions from targets file.");
+            let before = target_positions.len();
+            target_positions.retain(|nuc| {
+                !transitions.contains(&[nuc.reference.unwrap(), nuc.alternate.unwrap()])
+            });
+            let after = target_positions.len();
+            info!("{} transitions filtered out. (Before: {} - After: {})", before-after, before, after);
+        }
+
         Ok(target_positions)
     }
 
@@ -168,6 +188,7 @@ pub fn get_results_file_prefix<'a>(file_prefix: &'a mut PathBuf, file_ext: Vec<&
     let mut outfiles_hash = HashMap::new();
     for ext in file_ext {
         file_prefix.set_extension(ext);
+        trace!("Output File: {file_prefix:?}");
         outfiles_hash.insert(ext, String::from(file_prefix.to_str().unwrap()));
     }
     Ok(outfiles_hash)
@@ -183,7 +204,7 @@ pub enum FileKey{Suffix, Ext}
 /// ==> A new file is generated for each pair of individuals. 
 pub fn get_output_files<'a>(file_prefix: &'a mut PathBuf, allow_overwrite: bool, sort: FileKey, suffixes: &[String], file_ext: &[&'a str]) -> std::io::Result<HashMap<String, String>> {
     // Create output directory. Early return if we can't create it
-    let root_dir= file_prefix.parent().unwrap_or(file_prefix);
+    let root_dir = file_prefix.parent().unwrap_or(file_prefix);
     match std::fs::create_dir_all(root_dir){
         Ok(()) => (),
         Err(err) => return Err(
@@ -195,11 +216,15 @@ pub fn get_output_files<'a>(file_prefix: &'a mut PathBuf, allow_overwrite: bool,
     // Generate a HashMap of filepaths from the file_prefix
     let mut outfiles_hash = HashMap::new();
     for suffix in suffixes {
-        let mut file = PathBuf::from(format!("{}{}{}",
-        file_prefix.to_str().unwrap(),
-        if suffix.is_empty() {""} else {"-"},
-        suffix
-    ));
+        let mut file = PathBuf::from(
+            format!("{}{}{}.", // final dot is to fake an extension
+                file_prefix.to_str().unwrap(),
+                if suffix.is_empty() {""} else {"-"},
+                suffix
+            )
+        );
+
+        trace!("File: {file:?}");
         for ext in file_ext {
             file.set_extension(ext);
             can_write_file(allow_overwrite, &file)?;
@@ -207,6 +232,8 @@ pub fn get_output_files<'a>(file_prefix: &'a mut PathBuf, allow_overwrite: bool,
                 FileKey::Suffix => suffix.clone(),
                 FileKey::Ext    => ext.to_string()
             };
+
+            trace!("Output file: {file:?}");
             outfiles_hash.insert(key, String::from(file.to_str().unwrap()));
         }
     }

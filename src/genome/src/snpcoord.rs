@@ -23,6 +23,12 @@ pub struct SNPCoord {
     pub alternate  : Option<char>,
 }
 
+impl SNPCoord {
+    pub fn has_known_alleles(&self) -> bool {
+        self.reference.is_some() && self.alternate.is_some()
+    }
+}
+
 impl Ord for SNPCoord {
     fn cmp(&self, other: &Self) -> Ordering {
         (self.chromosome, self.position).cmp(&(other.chromosome, other.position))

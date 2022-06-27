@@ -231,6 +231,13 @@ pub struct PwdFromStdin {
     /// Note that slices are inclusive.
     #[clap(short='s', long, multiple_values(true), default_values(&["0", "1"]))]
     pub samples: Vec<String>,
+
+    /// Exclude transitions from the input targets file.
+    /// 
+    /// Note that this arguement requires the use of --targets to provide the program with a list of coordinates.
+    /// The given coordinate file must furthermore explicitely provide with the REF/ALT alleles.
+    #[clap(long)]
+    pub exclude_transitions: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Serialize, Deserialize)]

@@ -202,11 +202,8 @@ impl Pedigrees {
             // --------------------- Clear genotypes before the next line!
             pedigree.clear_alleles();
         }
-
         // Keep track of the previous position:
         *previous_position = position;
-
-
         Ok(())
     }
 

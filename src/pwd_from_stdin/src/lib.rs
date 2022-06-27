@@ -68,10 +68,16 @@ pub fn run<'a>(
     info!("Parsing target_positions...");
     let target_positions = match &com_cli.targets {
         None => HashSet::new(),
-        Some(filename) => SNPReader::new(filename)?.hash_target_positions()?
+        Some(filename) => SNPReader::new(filename)?.hash_target_positions(pwd_cli.exclude_transitions)?
     };
 
     let target_required: bool = ! target_positions.is_empty();
+
+    // Early exit If the user requested transition filtration without specifying an SNP panel.
+    if ! target_required && pwd_cli.exclude_transitions {
+        return Err("The use of --exclude-transitions requires an input SNP targets file, with known <REF> and <ALT> columns. \
+        Please provide such a file, using the --targets argument".into())
+    }
 
     // ----------------------------- Parse requested Chromosomes
     let valid_chromosomes : Vec<u8> = match com_cli.chr.clone() {
@@ -117,7 +123,7 @@ pub fn run<'a>(
             line.filter_known_variants(current_coord);
         }
 
-        // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        
+        // ----------------------- Compute PWD (or simplys print the line if there's an existing overlap)        
         for comparison in comparisons.iter_mut() {
             if comparison.satisfiable_depth(&line.individuals) {
                 if ! pwd_cli.filter_sites {
