@@ -169,8 +169,10 @@ impl<'a> Writer<'a>{
         T: IntoIterator<Item = I>,
         I: std::fmt::Display,
     {
+        const WRITER_SEPARATOR: &str = "\t";
+        let re = regex::Regex::new(r"[ ]+-[ ]+").unwrap();
         iter.into_iter()
-            .map(|obj| self.source.write(format!("{}\n", obj).as_bytes()))
+            .map(|obj| self.source.write(re.replace_all(format!("{}\n", obj).as_str(), WRITER_SEPARATOR).as_bytes()))
             .collect::<Result<Vec<usize>, std::io::Error>>()?;
         self.source.flush()
     }

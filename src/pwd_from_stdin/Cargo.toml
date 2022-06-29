@@ -13,6 +13,7 @@
   itertools    = "0.10.3"
   rand         = "0.8.5"
   log          = "0.4.16"
+  regex        = "1.5.0"
   mockall      = "0.11.0"
   mockall_double = "0.3.0"
 

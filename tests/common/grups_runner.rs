@@ -27,7 +27,7 @@ fn assert_pwd_matches(
     let result = get_bufreader(filename);
 
     for (i, line) in result.lines().skip(1).enumerate(){
-        let line = parse_line(&line, " - ");
+        let line = parse_line(&line, "\t");
         assert_eq!(line[OVERLAP_COL], expected_overlap[i]);
         assert_eq!(line[PWD_COL], expected_avg_pwd[i]);
     }
@@ -42,7 +42,7 @@ fn assert_simulation_results(
 
     let result = get_bufreader(filename);
     for (i, line) in result.lines().skip(1).enumerate(){
-        let line = parse_line(&line, " - ");
+        let line = parse_line(&line, "\t");
         assert_eq!(line[RELATIONSHIP_COL], expected_relationships[i]);
         //assert_eq!(line[PWD_COL], expected_avg_pwd[i]);
     }

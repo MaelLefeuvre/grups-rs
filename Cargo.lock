@@ -1219,6 +1219,7 @@ dependencies = [
  "mockall_double",
  "parser",
  "rand 0.8.5",
+ "regex",
  "rust-lapper",
  "thread_local",
 ]
