@@ -14,5 +14,7 @@ RoxygenNote: 7.2.0
 Imports:
   plotly,
   shiny,
+  DT,
   dplyr,
+  zoo,
   stringr

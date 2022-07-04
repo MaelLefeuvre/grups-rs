@@ -1,67 +1,60 @@
 #' @export
 #' @importFrom dplyr %>%
-#' @importFrom utils read.table
 #' @import plotly
-#' @param path path leading to a GRUPS `.pwd` results file.
-#' @return plotly plot
-plot_pairwise_diff <- function(path) {
-  # Load dataset
-  pwd_data <- read.table(path, sep = "\t", header = TRUE)
-
-  # Companion dataset, ordered according to avg.pwd
-  plot_data <- data.frame(
-    avg   = sort(pwd_data[, 4]),
-    ci    = pwd_data[, 5][order(pwd_data[, 4])],
-    pairs = pwd_data[, 1][order(pwd_data[, 4])]
-  )
-
-  # Comparisons are considered as self-comparisons if both individuals share
-  # the same name.
-  plot_data$self <- lapply(
-    strsplit(as.character(plot_data$pairs), "-"),
-    FUN = function(x) x[1] == x[2]
-  )
-
-  # Order pairs according to their avg pwd.
-  plot_data$pairs <- factor(
-    plot_data$pairs,
-    levels = plot_data$pairs[order(plot_data$avg, decreasing = FALSE)]
-  )
-
-  # Compute mean of avg pwd for self-comparisons.
-  # - [WARN]: NaN if there are no self-comparisons.
-  avg_self <- mean(plot_data$avg[which(plot_data$self == TRUE)])
+#' @param plot_data data frame
+#' @return plotly barplot
+plot_pairwise_diff <- function(data, hide_self_comparisons = FALSE, norm_method = NULL, norm_metric = NULL, norm_values = NULL) {
+  plot_data <- data$data
+  norm_values <- data$norm_values
 
   # Add horizontal Ms lines as annotations if avg_self is not undefined
-  if (!is.nan(avg_self)) {
+  if (!is.nan(norm_values$Self)) {
     plot_annotations <- list(
-      grups.plots::ms_annotation("Ms", avg_self),
-      grups.plots::ms_annotation("(3/2)Ms", (3 / 2) * avg_self),
-      grups.plots::ms_annotation("2Ms", 2 * avg_self)
+      grups.plots::ms_annotation("Ms", norm_values$Self),
+      grups.plots::ms_annotation("(3/2)Ms", norm_values$First),
+      grups.plots::ms_annotation("2Ms", norm_values$Unrelated)
     )
     plot_shapes <- list(
-      grups.plots::hline(avg_self),
-      grups.plots::hline((3 / 2) * avg_self),
-      grups.plots::hline(2 * avg_self)
+      grups.plots::hline(norm_values$Self),
+      grups.plots::hline(norm_values$First),
+      grups.plots::hline(norm_values$Unrelated)
     )
   } else {
     plot_annotations <- plot_shapes <- list()
   }
 
+  # Hide self-comparisons from the plot if the user requested it.
+  if (hide_self_comparisons) {
+    plot_data <- plot_data[which(plot_data$self == FALSE),]
+  }
+
+  print(plot_data)
   # Plot
-  plotly::plot_ly(data    = plot_data,
+  plotly::plot_ly(type    = "bar",
+                  data    = plot_data,
                   x       = ~pairs,
-                  y       = ~avg,
-                  error_y = ~list(array = ci,
+                  y       = ~norm_avg,
+                  color   = ~rel,
+                  error_y = ~list(array = norm_ci,
                                   color = "#000000"
                  )
   ) %>%
-  plotly::layout(yaxis       = list(title = "Mean genetic distance",
-                                          range = c(0, 0.300)
-                                     ),
-                       xaxis       = list(title = "Pairs"),
-                       shapes      = plot_shapes,
-                       annotations = plot_annotations
+  plotly::layout(title = list(text = "Raw average genetic distances.",
+                              y    = 0.99,
+                              yref = "paper"
+                             ),
+                 yaxis = list(title = "Mean genetic distance"
+                              #range = c(0, 0.300)
+                             ),
+                 xaxis       = list(title = "Pairs"),
+                 legend = list(title = list(text = "<b>Relationship</b>"),
+                               orientation = "h",
+                              y            = -0.2,
+                              yref         = "paper"
+                              ),
+                 shapes      = plot_shapes,
+                 annotations = plot_annotations,
+                 margin      = list(r = 60)
   ) %>%
-  plotly::config(editable = TRUE, displaylogo = FALSE)
+  plotly::config(editable = TRUE, displaylogo = FALSE, scrollZoom = TRUE)
 }
