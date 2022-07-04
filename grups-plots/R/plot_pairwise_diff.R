@@ -3,7 +3,7 @@
 #' @importFrom utils read.table
 #' @import plotly
 #' @param path path leading to a GRUPS `.pwd` results file.
-#' @return plotly plot
+#' @return plotly barplot
 plot_pairwise_diff <- function(path) {
   # Load dataset
   pwd_data <- read.table(path, sep = "\t", header = TRUE)
@@ -49,19 +49,25 @@ plot_pairwise_diff <- function(path) {
   }
 
   # Plot
-  plotly::plot_ly(data    = plot_data,
+  plotly::plot_ly(type    = "bar",
+                  data    = plot_data,
                   x       = ~pairs,
                   y       = ~avg,
                   error_y = ~list(array = ci,
                                   color = "#000000"
                  )
   ) %>%
-  plotly::layout(yaxis       = list(title = "Mean genetic distance",
-                                          range = c(0, 0.300)
-                                     ),
-                       xaxis       = list(title = "Pairs"),
-                       shapes      = plot_shapes,
-                       annotations = plot_annotations
+  plotly::layout(title = list(text = "Raw average genetic distances.",
+                              y    = 0.99,
+                              yref = "paper"
+                             ),
+                 yaxis = list(title = "Mean genetic distance",
+                              range = c(0, 0.300)
+                             ),
+                 xaxis       = list(title = "Pairs"),
+                 shapes      = plot_shapes,
+                 annotations = plot_annotations,
+                 margin      = list(r = 60)
   ) %>%
-  plotly::config(editable = TRUE, displaylogo = FALSE)
+  plotly::config(editable = TRUE, displaylogo = FALSE, scrollZoom = TRUE)
 }
