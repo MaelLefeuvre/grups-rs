@@ -15,9 +15,12 @@ load_simfile <- function(path) {
     "overlap",
     "avg"
   )
+<<<<<<< HEAD
 
   # Reorder labels according to distribution average.
   data$label = factor(data$label, levels = levels(data$label)[order(aggregate(avg~label, data, FUN=mean)$avg)])
   
+=======
+>>>>>>> a3a0ac3e88cf36b194b81d22d16fb3930ed370f4
   data
 }
