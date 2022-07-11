@@ -44,7 +44,6 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     full.names = TRUE,
     pattern = "\\.sims$"
   )
-
   # ---- 3b. Extract simulations. pair names, parse everything into a df.    [B FUNCTION]
   sim_files <- data.frame(
     path = sim_files,
