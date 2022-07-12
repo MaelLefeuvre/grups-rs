@@ -34,7 +34,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     path      = blk_files,
     row.names = stringr::str_extract(  # Extract pair names
       blk_files,
-      "(?<=-)([^-]+)-([^-]+)(?=.blk$)"
+      "(?<=-)([A-Za-z0-9]+([-0-9]+){0,1}-[A-Za-z0-9]+([-0-9]+){0,1})(?=.blk$)" #"(?<=-)([^-]+)-([^-]+)(?=.blk$)"
     ),
     stringsAsFactors = FALSE
   )
@@ -49,7 +49,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     path = sim_files,
     row.names = stringr::str_extract( # Extract pair names
       sim_files,
-      "(?<=-)([^-]+)-([^-]+)(?=.sims$)"
+      "(?<=-)([A-Za-z0-9]+([-0-9]+){0,1}-[A-Za-z0-9]+([-0-9]+){0,1})(?=.sims$)" #"(?<=-)([^-]+)-([^-]+)(?=.sims$)"
     ),
     stringsAsFactors = FALSE
   )

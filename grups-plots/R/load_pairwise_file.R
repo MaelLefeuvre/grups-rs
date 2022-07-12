@@ -9,11 +9,14 @@ load_pairwise_file <- function(path, min_overlap = 0, norm_method, norm_metric, 
   # Filter out individuals with an overlap lower than the req. treshold
   pwd_data <- pwd_data[which(pwd_data[, 2] >= min_overlap),]
 
+  pwd_data <- pwd_data[order(pwd_data[, 4]), ]
+
   # Companion dataset, ordered according to avg.pwd
   plot_data <- data.frame(
-    avg   = sort(pwd_data[, 4]),
-    ci    = pwd_data[, 5][order(pwd_data[, 4])],
-    pairs = pwd_data[, 1][order(pwd_data[, 4])]
+    avg     = pwd_data[, 4],
+    ci      = pwd_data[, 5],
+    pairs   = pwd_data[, 1],
+    overlap = pwd_data[, 2]
   )
 
   # Comparisons are considered as self-comparisons if both individuals share
@@ -46,8 +49,8 @@ load_pairwise_file <- function(path, min_overlap = 0, norm_method, norm_metric, 
     z_temps <- abs(x - unlist(norm_values))
     z_temps <- z_temps[which.min(z_temps)]
   })
-
   plot_data$z_score <- unlist(z_scores)
+
   plot_data$rel <- factor(names(unlist(z_scores)), levels = c("Unrelated", "First", "Second", "Third", "Fourth", "Fifth", "Self"))
 
   list(data = plot_data, norm_values = norm_values)

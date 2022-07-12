@@ -23,8 +23,8 @@ plot_pedigree_sims <- function(sims_dataframe, pwd_path, labels_to_plot, pair) {
   pwd_data <- read.table(pwd_path, sep = "\t", header = TRUE)
   pwd_data <- pwd_data[which(pwd_data$Name == pair), ]
   # extract mean and 95%CI.
-  plotdist_mean <- pwd_data[1,4]
-  plotdist_std  <- pwd_data[1,5]
+  plotdist_mean <- pwd_data[1, 4]
+  plotdist_std  <- pwd_data[1, 5]
   # ---- Prepare observed pwd lines.
   fin_rel <- list(type = "line",
                  line = list(color="black"),

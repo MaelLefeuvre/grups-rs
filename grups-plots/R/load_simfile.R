@@ -17,6 +17,12 @@ load_simfile <- function(path) {
   )
 
   # Reorder labels according to distribution average.
-  data$label = factor(data$label, levels = levels(data$label)[order(aggregate(avg~label, data, FUN=mean)$avg)])
+  data$label <- factor(data$label)
+  data$label <- factor(
+    data$label,
+    levels = levels(data$label)[order(aggregate(avg~label,
+                                                data,
+                                                FUN = mean)$avg)]
+  )
   data
 }
