@@ -67,15 +67,27 @@ impl PedigreeReps {
     }
 
     /// Aggregate the sum of all simulated pairwise differences for each pedigree comparison.
-    /// Returns a hashmap with Key = comparison_label | Value = sum( avg_pwd )
-    pub fn compute_sum_simulated_pwds(&self) -> HashMap<String, f64> {
-        let mut sum_simulated_pwds = HashMap::new();
+    /// Returns a hashmap with Key = comparison_label | Value = ( sum(avg_pwd), sumsq(avg_pwd) )
+    /// # @TODO: This data structure is error prone and should be converted to a struct or named tuple.
+    pub fn compute_sum_simulated_stats(&self) -> HashMap<String, (f64,f64)> {
+        let mut sum_simulated_stats = HashMap::new();
         for pedigree in self.iter() {
+            // Sum the avg pwd of each replicate
             for comparison in pedigree.comparisons.iter() {
-                *sum_simulated_pwds.entry(comparison.label.to_owned()).or_insert(0.0) += comparison.get_avg_pwd()
+                sum_simulated_stats.entry(comparison.label.to_owned()).or_insert((0.0, 0.0)).0 += comparison.get_avg_pwd()
             }
         }
-        sum_simulated_pwds
+
+        // Compute the sum-squared for sample variance.
+        //let mut simulation_sum_squares = HashMap::new();
+        for pedigree in self.iter() {
+            for comparison in pedigree.comparisons.iter() {
+                let simulation_avg = sum_simulated_stats.get(&comparison.label).unwrap().0 / self.len() as f64;
+                sum_simulated_stats.get_mut(&comparison.label).unwrap().1 += (comparison.get_avg_pwd() - simulation_avg).powf(2.0);
+
+            }
+        }
+        sum_simulated_stats
     }
 }
 

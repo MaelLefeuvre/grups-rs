@@ -1,10 +1,7 @@
 #' @export
-get_bc_matrix <- function(sims_data) {
+get_bc_matrix <- function(sims_data, labels_to_keep) {
   labels_relationships <- levels(sims_data$label)
 
-  #data2 <- aggregate(sims_data$avg, by=list(sims_data$label, sims_data$replicate), FUN=sum)
-  #print(head(data2))
-  #print("hiiiii----------------")
   BC_matrix = matrix(0, length(labels_relationships), length(labels_relationships))
   colnames(BC_matrix) <- rownames(BC_matrix) <- labels_relationships
 
@@ -16,9 +13,9 @@ get_bc_matrix <- function(sims_data) {
           rel2_rows <- which(sims_data$label == rel2)
           merged_data <- c(sims_data[rel1_rows,]$avg, sims_data[rel2_rows,]$avg)
 
-          merged_data_hist  <- hist(merged_data, breaks=length(merged_data)/10, freq=FALSE)
-          histX <- hist(sims_data[rel1_rows, ]$avg, breaks=merged_data_hist$breaks, freq=FALSE)
-          histY <- hist(sims_data[rel2_rows, ]$avg, breaks=merged_data_hist$breaks, freq=FALSE)
+          merged_data_hist  <- hist(merged_data, breaks=length(merged_data)/10, plot = FALSE)
+          histX <- hist(sims_data[rel1_rows, ]$avg, breaks=merged_data_hist$breaks, plot = FALSE)
+          histY <- hist(sims_data[rel2_rows, ]$avg, breaks=merged_data_hist$breaks, plot = FALSE)
           histXPr <- histX$counts / sum(histX$counts)
           histYPr <- histY$counts / sum(histY$counts)
           numBCbins <- length(histXPr)
@@ -31,6 +28,8 @@ get_bc_matrix <- function(sims_data) {
     }
   )
 
-
+  # Filter-out unwanted relationships
+  BC_matrix <- BC_matrix[which(rownames(BC_matrix) %in% labels_to_keep),]
+  BC_matrix <- BC_matrix[, which(colnames(BC_matrix) %in% labels_to_keep)]
   BC_matrix
 }

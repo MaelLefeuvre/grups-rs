@@ -4,18 +4,26 @@
 #' @param pair Pairwise comparison identifier, or label.
 #' @param subset string or vector of chromosomes to subset.
 #' @return plotly scatterplot
-plot_sliding_window <- function(block_dataframe, pair, chromosomes = NA) {
+plot_sliding_window <- function(block_dataframe, pair) {
+
+    # Set color palette, and suppress warnings:
+    colorpalette <- suppressWarnings(
+      RColorBrewer::brewer.pal(
+        length(levels(as.factor(block_dataframe$chr))),
+        "Set2"
+      )
+    )
 
     # Filter out chromosome which were not requested by the user.
-    block_dataframe <- block_dataframe[which(block_dataframe$chr %in% chromosomes),]
-
+    #block_dataframe <- block_dataframe[which(block_dataframe$chr %in% chromosomes),]
     plot_title <- paste("Average mismatch rate for", pair)
-
     plotly::plot_ly(
+        type  = "scatter",
         data  = block_dataframe,
         x     = ~start,
         y     = ~avg_pwd,
         color = ~as.factor(chr),
+        colors = colorpalette,
         mode  = "lines+markers"
     ) %>%
 
@@ -27,16 +35,17 @@ plot_sliding_window <- function(block_dataframe, pair, chromosomes = NA) {
                       yref = "paper"
                      ),
         xaxis  = list(title = "Position (Mb)"),
-        yaxis  = list(title="Average mismatch rate"),
+        yaxis  = list(title="Average mismatch rate", range = c(0,1)),
         legend = list(title       = list(text = '<b> Chromosome </b>'),
                       orientation = 'h',
                       y            = -0.2,
                       yref         = "paper"
                      )
     ) %>%
-    plotly::config(editable    = FALSE,
+    plotly::config(editable    = TRUE,
                    displaylogo = FALSE,
                    scrollZoom  = TRUE
-                  )
+                  ) #%>% filter(chr %in% input$chromosome_labels) %>% group_by(chr) %>% plotly::add_lines()
+
 
 }

@@ -415,7 +415,7 @@ impl Pedigrees {
             let pedigree_vec = self.pedigrees.get(&comparison_label).unwrap();
     
             // ---- Aggregate the sum of avg. PWD for each relatedness scenario.
-            let sum_simulated_pwds = pedigree_vec.compute_sum_simulated_pwds();
+            let sum_simulated_stats = pedigree_vec.compute_sum_simulated_stats();
     
             // ---- Select the scenario having the least amount of Z-score with our observed avg.PWD
             let observed_avg_pwd        : f64 = comparison.get_avg_pwd();
@@ -423,10 +423,11 @@ impl Pedigrees {
             let mut most_likely_avg_pwd : f64 = 0.0;
             let mut most_likely_rel     : String = "None".to_string();
 
-            for (scenario, simulated_sum_avg_pwd) in sum_simulated_pwds.iter() {
-                let avg_avg_pwd: f64 = simulated_sum_avg_pwd/pedigree_vec.len() as f64;
-                let scenario_z_score = (avg_avg_pwd - observed_avg_pwd).abs();
-                if  scenario_z_score < min_z_score {
+            for (scenario, simulated_sum_stats) in sum_simulated_stats.iter() {
+                let avg_avg_pwd: f64 = simulated_sum_stats.0 / pedigree_vec.len() as f64;
+                let std_dev    : f64 = (simulated_sum_stats.1 / (pedigree_vec.len() as f64 - 1.0)).sqrt();
+                let scenario_z_score = (avg_avg_pwd - observed_avg_pwd) / std_dev;
+                if  scenario_z_score.abs() < min_z_score.abs() {
                     min_z_score =  scenario_z_score;
                     most_likely_rel = scenario.to_owned();
                     most_likely_avg_pwd = avg_avg_pwd;

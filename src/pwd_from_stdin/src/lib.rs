@@ -30,7 +30,7 @@ pub fn run<'a>(
 ) -> Result<(Comparisons, HashSet<SNPCoord>), Box<dyn Error>>{
 
     // ----------------------------- Sanity checks.
-    pwd_cli.check_depth()?; // Ensure min_depths are > 2 when allowing self-comparisons
+    //pwd_cli.check_depth()?; // Ensure min_depths are > 2 when allowing self-comparisons
     com_cli.check_input()?; // Ensure the user has either requested stdin or --pileup
 
     if pwd_cli.min_depth.len() < requested_samples.len() {

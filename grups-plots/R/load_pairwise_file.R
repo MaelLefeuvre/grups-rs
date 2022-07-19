@@ -2,7 +2,7 @@
 #' @importFrom utils read.table
 #' @param path path leading to a GRUPS `.pwd` results file.
 #' @return dataframe
-load_pairwise_file <- function(path, min_overlap = 0, norm_method, norm_metric, norm_value) {
+load_pairwise_file <- function(path, min_overlap = 0, norm_method = "Raw", norm_metric = "All", norm_value = NULL) {
   # Load dataset
   pwd_data <- read.table(path, sep = "\t", header = TRUE)
 

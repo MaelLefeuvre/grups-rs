@@ -6,6 +6,7 @@ use std::{
     fmt,
     collections::BTreeSet
 };
+use log::warn;
 
 // One pass standard deviation calculator: http://suave_skola.varak.net/proj2/stddev.pdf
 #[derive(Debug)]
@@ -67,7 +68,18 @@ pub struct Comparison {
 }
 
 impl Comparison {
-    pub fn new(pair: [Individual; 2], self_comparison: bool, genome: &Genome, blocksize: u32) -> Comparison {
+    pub fn new(mut pair: [Individual; 2], self_comparison: bool, genome: &Genome, blocksize: u32) -> Comparison {
+        if self_comparison {
+            let pair_name = format!("{}-{}", pair[0].name, pair[1].name);
+            for individual in pair.iter_mut() {
+                if individual.min_depth < 2 {
+                    warn!("[{pair_name}]: A minimal depth of 2 is required for self comparisons, while {} has min_depth = {}.\n
+                        Rescaling said value to 2 (for this specific comparison)...", individual.name, individual.min_depth
+                    );
+                    individual.min_depth = 2
+                }
+            }
+        }
         Comparison {pair, self_comparison, pwd: 0.0 , sum_phred:0.0, variance: Variance::new(), blocks: JackknifeBlocks::new(genome, blocksize), positions: BTreeSet::new()}
     }
 

@@ -71,12 +71,23 @@ plot_pedigree_sims <- function(sims_dataframe, pwd_path, labels_to_plot, pair) {
   sd_min[c("y0",  "y1")] <- plotdist_mean - plotdist_std
   lines <- list(fin_rel, sd_plus, sd_min, uncert)
 
+
+  # ---- Select color palette and suppress RColorBrewer Warnings:
+  colorpalette <- suppressWarnings(
+    RColorBrewer::brewer.pal(
+      length(levels(sims_dataframe$label)),
+      "Set2"
+    )
+  )
+
+
   # ---- A. Main plot.
   plotly::plot_ly(type     = "violin",
                   data     = sims_dataframe,
                   x        = ~label,
                   y        = ~avg,
                   color    = ~label,
+                  colors   = colorpalette,
                   box      = list(visible = TRUE),
                   meanline = list(visible = TRUE)
                  ) %>%
@@ -92,8 +103,8 @@ plot_pedigree_sims <- function(sims_dataframe, pwd_path, labels_to_plot, pair) {
                 shapes = lines
                 ) %>% 
 
-  plotly::config(editable    = FALSE,
-                                displaylogo = FALSE,
-                                scrollZoom  = TRUE
-                               )
+  plotly::config(editable    = TRUE,
+                 displaylogo = FALSE,
+                 scrollZoom  = TRUE
+                )
 }

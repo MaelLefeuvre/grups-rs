@@ -13,11 +13,14 @@ shiny_reactive_checkbox <- function(values, title, input_id, ncol = 2) {
     -moz-column-count: ", ncol, ";    /* Firefox */ 
     -moz-column-fill: auto;
     -column-fill: balance;
+    margin: 10px
     "
   )
 
   list(
     shiny::h5(title),
+    shiny::actionButton(paste0(input_id, "_select"),   label = "Select all"),
+    shiny::actionButton(paste0(input_id, "_deselect"), label = "Deselect All"),
     shiny::tags$div(
       align = "justify",
       style = css_style,
