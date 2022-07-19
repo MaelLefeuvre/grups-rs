@@ -20,4 +20,3 @@ Imports:
   zoo,
   stringr,
   reshape2
-  genomicFeatures,

@@ -9,7 +9,7 @@ plot_or_confidence <- function(or_matrix, predictor = NULL) {
     odds <- or_matrix[, predictor]
     odds <- odds[!(names(odds) %in% predictor)] # remove predictor auto-comparison
 
-    odds <- sort(abs(odds))  # sort according to increasing values of ORs
+    odds <- odds[order(abs(odds))]  # sort according to increasing values of ORs
     odds <- reshape2::melt(odds)
 
     fig  <- plotly::plot_ly(type = "scatter", mode = "markers")
@@ -23,7 +23,9 @@ plot_or_confidence <- function(or_matrix, predictor = NULL) {
         fig <<- fig %>% plotly::add_trace(x=this_log_odds, y = rel, name=rel)
     })
     # add invidible marker (ensure x-axis zero line is displayed)
-    fig <- fig %>% plotly::layout(shapes = list(
+    fig <- fig %>% plotly::layout(
+        title = list(text=paste0("Odds ratio of obs. within most likely relationship (", predictor,") vs. others")),
+        shapes = list(
            list(type = "line",
                y0   = 0,
                y1   = 1,
@@ -34,6 +36,7 @@ plot_or_confidence <- function(or_matrix, predictor = NULL) {
               )
     ))
 
+    print(predictor)
 
     fig
 }

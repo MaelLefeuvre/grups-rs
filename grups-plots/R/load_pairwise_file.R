@@ -18,13 +18,20 @@ load_pairwise_file <- function(path, min_overlap = 0, norm_method = "Raw", norm_
     pairs   = pwd_data[, 1],
     overlap = pwd_data[, 2]
   )
-
+  colnames(plot_data) <- c("avg", "ci", "pairs", "overlap")
   # Comparisons are considered as self-comparisons if both individuals share
-  # the same name.
-  plot_data$self <- lapply(
-    strsplit(as.character(plot_data$pairs), "-"),
-    FUN = function(x) x[1] == x[2]
-  )
+  # the same name. This is determined by searching for a name pattern, and ensuring:
+  # - the name pattern is found twice
+  # - both matches are only separated by a dash
+  # - the match spans the entire string.
+  # i.e. : ^([A-Za-z0-9]+([-0-9]+){0,1})-(\1)$
+  plot_data$self <- stringr::str_detect(plot_data$pairs, "^([A-Za-z0-9]+([-0-9]+){0,1})-(\\1)$")
+  #plot_data$self <- lapply(
+  #  strsplit(as.character(plot_data$pairs), "-"),
+  #  FUN = function(x) x[1] == x[2]
+  #)
+
+  
 
   # Order pairs according to their avg pwd.
   plot_data$pairs <- factor(

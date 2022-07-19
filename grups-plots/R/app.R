@@ -259,17 +259,28 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
   })
 
 
+    load_results_file <- shiny::reactive({
+      grups.plots::load_res_file(res_files[1])
+    })
 
     # ---- 1. Load results  summary dataframe
-    output$simulation_results_df <- DT::renderDataTable(
+    output$simulation_results_df <- DT::renderDataTable({
+      # Add overlap.
+      # @ TODO: Simply add overlap as a direct output of grups.....
+      merged <- merge(
+        load_results_file(),
+        load_pairwise_dataframe()$data[,c("pairs","overlap")],
+        by.x = "Pair_name",
+        by.y = "pairs"
+      )
       DT::datatable(
-        grups.plots::load_res_file(res_files[1]),
+        merged,
         style = "bootstrap5",
         options = list(ordering = TRUE, scrollX = FALSE),
         class = "table-condensed",
         filter = "top",
       )
-    )
+  })
 
     # ---- 1a. Load / Update pairwise dataframe.
     load_pairwise_dataframe <- shiny::reactive(
@@ -470,7 +481,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       fig <- grups.plots::plot_bc_matrix(
         bc_matrix = grups.plots::get_odds_matrix(
                       sims_data        = load_sims_dataframe(),
-                      observed_results = grups.plots::load_res_file(res_files[1]),
+                      observed_results = load_results_file(),
                       pair             = input$sim_pair,
                       labels_to_keep   = input$violin_labels
                     ),
@@ -496,11 +507,11 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       grups.plots::plot_or_confidence(
         or_matrix = grups.plots::get_odds_matrix(
                       sims_data        = load_sims_dataframe(),
-                      observed_results = grups.plots::load_res_file(res_files[1]),
+                      observed_results = load_results_file(),
                       pair             = input$sim_pair,
                       labels_to_keep = input$violin_labels
         ),
-        predictor = "Unrelated"
+        predictor = load_results_file()[which(load_results_file()[, 1]== input$sim_pair),2]  # WARN there's a trailing dot. remove this asap. 
       )
     )
 
