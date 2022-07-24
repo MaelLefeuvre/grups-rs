@@ -48,8 +48,7 @@ impl JackknifeBlocks {
     /// Search for a given block, using an SNPCoord struct.
     /// Return the block which contains the SNPCoord position. 
     pub fn find_block(&mut self, coordinate: &SNPCoord) -> Option<&mut JackknifeBlock> {
-        self.blocks.get_mut(&coordinate.chromosome)
-            .unwrap()
+        self.blocks.get_mut(&coordinate.chromosome)?
             .iter_mut()
             .find(|block| block.range.contains(&coordinate.position))
     }
@@ -149,7 +148,7 @@ mod tests{
                     {: <COUNT_FORMAT_LEN$} - \
                     {: <COUNT_FORMAT_LEN$}",
                     chr.name, start, end, 0, 0
-                ).unwrap();
+                ).expect("Jackknife Blocks 'display()' test error while writing line");
             }
         }
         assert_eq!(expected_output, format!("{blocks}"));
@@ -163,7 +162,9 @@ mod tests{
 
         let coord = SNPCoord{chromosome: 1, position: 651_000, reference: None, alternate: None};
 
-        let block = blocks.find_block(&coord).unwrap();
+        let block = blocks
+            .find_block(&coord)
+            .expect("Jackknife Blocks search_block() test error. Failed to find block");
         assert_eq!(block.chromosome, coord.chromosome);
         assert!(block.range.start <= coord.position);
         assert!(block.range.end > coord.position);

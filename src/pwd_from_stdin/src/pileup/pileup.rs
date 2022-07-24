@@ -4,6 +4,8 @@ use std::{iter::Peekable, collections::HashMap};
 use std::error::Error;
 use itertools::Itertools;
 
+use crate::io::SNPReaderError;
+
 use super::{Nucleotide, PileupError};
 
 
@@ -36,7 +38,7 @@ impl Pileup {
         let mut chars = bases.chars().peekable();
         while let Some(n) = chars.by_ref().next() {
             match n {
-                '+'|'-' => {Self::skip_indel(&mut chars); continue},   //Skip indels
+                '+'|'-' => {Self::skip_indel(&mut chars)?; continue},   //Skip indels
                 '^'     => {chars.next(); continue},                   //Skip starts
                 '$'     => {continue},                                 //Skip end
                 '*'     => if ignore_dels {continue},                  //Skip deletion if required
@@ -78,12 +80,17 @@ impl Pileup {
     /// 
     /// TODO : Better error handling for known_variant unwrapping.
     ///        => Do .ok() -> early return if None
-    pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) {
-        let (reference, alternate) = (known_variant.reference.unwrap(), known_variant.alternate.unwrap());
+    pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) -> Result<(), SNPReaderError> {
+        use crate::io::SNPReaderError::MissingAltRef;
+        let (reference, alternate) = (
+            known_variant.reference.ok_or(MissingAltRef(*known_variant))?,
+            known_variant.alternate.ok_or(MissingAltRef(*known_variant))?
+        );
         self.nucleotides.retain(|nucleotide| {
             vec!['.', reference, alternate].contains(&nucleotide.base)
         });
         self.update_depth();
+        Ok(())
     }
 
     /// Return a string of nucleotides. Mainly for Tests and Debug.
@@ -113,14 +120,26 @@ impl Pileup {
     ///               |   + Length of Sequence
     ///               + Identifier ('-' = deletion , '+' = insertion=
     /// 
-    /// TODO : Better error handling for numeric checking. Remove those nasty `.unwrap()`
-    fn skip_indel<I: Iterator<Item = char>>(chars: &mut Peekable<I>){
+    fn skip_indel<I: Iterator<Item = char>>(chars: &mut Peekable<I>) -> Result<(), String> {
         let mut digit: String = "".to_string();
-        while chars.peek().unwrap().is_numeric() {
-            digit.push(chars.next_if(|&x| x.is_numeric()).unwrap());
+        let err_msg = "Error while skipping indels: characters following indel identifier are not numeric.";
+        while chars.peek().ok_or(err_msg)?.is_numeric() {
+            digit.push(
+                chars.next_if(|&x| x.is_numeric())
+                    .ok_or(err_msg)?
+            );
         }
-        let skip = digit.parse::<usize>().unwrap() -1 ;
+
+        // Convert digit from string to numeric. Throw an error if this fails.
+        let digit = digit.parse::<usize>().or_else(|e| {
+            return Err(format!("Invalid indel identifier within the pileup file. \
+                                Got [{}] while attempting to skip indel",
+                                e.to_string()
+            )).into()
+        })?;
+        let skip = digit -1 ;
         chars.nth(skip);
+        Ok(())
     }
 
     /// Refresh the depth after quality filtration.
@@ -142,58 +161,63 @@ mod tests {
     }
 
     #[test]
-    fn pileup_mutate_for_rev_reference() {
+    fn pileup_mutate_for_rev_reference() -> Result<(), Box<dyn Error>> {
         println!("Testing reverse to forward conversion: ',' -> '.'");
         let line_input   = "...,..,.,...,.";
         let line_expect  = "..............";
         let scores_input = "JEJEEECc$cagGg";
-        let pileup = create_dummy_pileup(line_input, scores_input, false).unwrap();
+        let pileup = create_dummy_pileup(line_input, scores_input, false)?;
         println!("{:?}\n{:?}", pileup.get_nucleotides(), line_expect);
         assert_eq!(pileup.get_nucleotides(), line_expect);
+        Ok(())
     }
 
     #[test]
-    fn pileup_mutate_for_rev_alternate() {
+    fn pileup_mutate_for_rev_alternate() -> Result<(), Box<dyn Error>> {
         println!("Testing reverse to forward conversion: [atcgn] -> [ATCGN] ");
         let line_input   = ",.actgn,.NGTCA,.";
         let line_expect  = "..ACTGN..NGTCA..";
         let scores_input = "JEJEEECc$cacJgGg";
-        let pileup = create_dummy_pileup(line_input, scores_input, false).unwrap();
+        let pileup = create_dummy_pileup(line_input, scores_input, false)?;
         println!("{:?}\n{:?}", pileup.get_nucleotides(), line_expect);
         assert_eq!(pileup.get_nucleotides(), line_expect);
+        Ok(())
     }
 
     #[test]
-    fn pileup_filter_start_stop() {
+    fn pileup_filter_start_stop() -> Result<(), Box<dyn Error>> {
         println!("Testing start/stop filtering");
         let line_input   = ",.$ac.N^JTA$^AC,.";
         let line_expect  = "..AC.NTAC..";
         let scores_input = "JEECc$cagGg";
-        let pileup = create_dummy_pileup(line_input, scores_input, false).unwrap();
+        let pileup = create_dummy_pileup(line_input, scores_input, false)?;
         println!("{:?}\n{:?}", pileup.get_nucleotides(), line_expect);
         assert_eq!(pileup.get_nucleotides(), line_expect);
+        Ok(())
     }
 
     #[test]
-    fn pileup_filter_missing() {
+    fn pileup_filter_missing() -> Result<(), Box<dyn Error>> {
         println!("Testing missing base filtering");
         let line_input   = ",.$a*c.N^JTA*C,.";
         let line_expect  = "..AC.NTAC..";
         let scores_input = "JEECc$cagGg";
-        let pileup = create_dummy_pileup(line_input, scores_input, true).unwrap();
+        let pileup = create_dummy_pileup(line_input, scores_input, true)?;
         println!("{:?}\n{:?}", pileup.get_nucleotides(), line_expect);
         assert_eq!(pileup.get_nucleotides(), line_expect);
+        Ok(())
     }
 
     #[test]
-    fn pileup_filter_indels() {
+    fn pileup_filter_indels() -> Result<(), Box<dyn Error>> {
         println!("Testing indel filtering");
         let line_input   = ",..,,+4ACTAGca,,.,-2AT..,.+15ATCGCCCCGCCCTAGc";
         let line_expect  = ".....GCA........C";
         let scores_input = "JEEeCCeCCc$cagGgc";
-        let pileup = create_dummy_pileup(line_input, scores_input, true).unwrap();
+        let pileup = create_dummy_pileup(line_input, scores_input, true)?;
         println!("{:?}\n{:?}", pileup.get_nucleotides(), line_expect);
         assert_eq!(pileup.get_nucleotides(), line_expect);
+        Ok(())
     }
 
     #[test]

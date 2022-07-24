@@ -1,5 +1,5 @@
 use genome::SNPCoord;
-use crate::comparisons::Individual;
+use crate::{comparisons::Individual, io::SNPReaderError};
 use std::error::Error;
 use rand::seq::SliceRandom;
 
@@ -60,10 +60,11 @@ impl Line {
 
     /// Apply known_variant filtering on each individual pileup, according to a given treshold.
     /// See: Pileup::filter_known_variant()
-    pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) {
+    pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) -> Result<(), SNPReaderError> {
         for individual in &mut self.individuals {
-            individual.filter_known_variants(known_variant);
+            individual.filter_known_variants(known_variant)?;
         }
+        Ok(())
     }
 
     /// Apply random sampling on a single individual for self-comparison.
@@ -75,26 +76,29 @@ impl Line {
 
     /// Apply random sampling on a a pair of individuals for pairwise-comparison.
     /// One nucleotide sampled per individual (without replacement).
-    pub fn random_sample_pair(&self, pair: &[Individual; 2]) -> Vec<&Nucleotide> {
+    /// @TODO: rng should not be initialized within function.
+    pub fn random_sample_pair(&self, pair: &[Individual; 2]) -> Option<Vec<&Nucleotide>> {
         let mut rng = &mut rand::thread_rng();
-        vec![
-            self.individuals[pair[0].index].nucleotides.choose(&mut rng).unwrap(),
-            self.individuals[pair[1].index].nucleotides.choose(&mut rng).unwrap(),
-        ]
+        Some(vec![
+            self.individuals[pair[0].index].nucleotides.choose(&mut rng)?,
+            self.individuals[pair[1].index].nucleotides.choose(&mut rng)?,
+        ])
     }
 
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::pileup;
+    use std::error::Error;
+
+    use crate::{pileup};
     use genome::SNPCoord;
 
     #[test]
-    fn line_filter_base_qualities() {
+    fn line_filter_base_qualities() -> Result<(), Box<dyn Error>>{
         println!("Testing Line base_quality filtering.");
         let raw_line="22\t51057923\tC\t6\tTTTTtt\tJEJEEE\t0\t*\t*\t1\tT\tJ";
-        let mut line = pileup::Line::new(&raw_line, true).unwrap();
+        let mut line = pileup::Line::new(&raw_line, true)?;
 
         line.filter_base_quality(&30);
         assert_eq!(line.individuals[0].get_nucleotides(), "TTTTTT");
@@ -103,31 +107,34 @@ mod tests {
         line.filter_base_quality(&40);
         assert_eq!(line.individuals[0].get_nucleotides(), "TT");
         assert_eq!(line.individuals[0].get_scores_ascii(), "JJ");
+        Ok(())
     }
 
     #[test]
-    fn line_filter_known_variant_1() {
+    fn line_filter_known_variant_1() -> Result<(), Box<dyn Error>> {
         println!("Testing Line known_variant filtration.");
         let raw_line="2\t21303470\tN\t0\t*\t*\t8\tTTcTTtt^Ft\tEEJEEEEE\t0\t*\t*";
-        let mut line = pileup::Line::new(&raw_line, true).unwrap();
+        let mut line = pileup::Line::new(&raw_line, true)?;
 
         let known_variant = SNPCoord { chromosome: 2, position: 21303470, reference: Some('C'), alternate: Some('A') };
-        line.filter_known_variants(&known_variant);
+        line.filter_known_variants(&known_variant)?;
         assert_eq!(line.individuals[1].get_nucleotides(), String::from('C'));
         assert_eq!(line.individuals[1].get_scores_ascii(), String::from('J'));
         assert_eq!(line.individuals[1].depth, 1);
+        Ok(())
     }
 
     #[test]
-    fn line_filter_known_variant_2() {
+    fn line_filter_known_variant_2() -> Result<(), Box<dyn Error>> {
         println!("Testing Line known_variant filtration.");
         let raw_line="2\t21303470\tT\t0\t*\t*\t8\t..c..,,^F,\tEEJEEEEE\t0\t*\t*";
-        let mut line = pileup::Line::new(&raw_line, true).unwrap();
+        let mut line = pileup::Line::new(&raw_line, true)?;
 
         let known_variant = SNPCoord { chromosome: 2, position: 21303470, reference: Some('T'), alternate: Some('A') };
-        line.filter_known_variants(&known_variant);
+        line.filter_known_variants(&known_variant)?;
         assert_eq!(line.individuals[1].get_nucleotides(),  String::from("......."));
         assert_eq!(line.individuals[1].get_scores_ascii(), String::from("EEEEEEE"));
         assert_eq!(line.individuals[1].depth, 7);
+        Ok(())
     }
 }

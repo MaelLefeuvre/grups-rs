@@ -79,6 +79,8 @@ impl DerefMut for Comparisons {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
+
     use super::*;
     use crate::comparisons::tests::common;
     use super::super::UNDEFINED_LABEL_PREFIX;
@@ -177,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn display() {
+    fn display() -> Result<(), Box<dyn Error>> {
         use std::fmt::Write;
         use super::super::{PAIRS_FORMAT_LEN, COUNT_FORMAT_LEN, AVERG_FORMAT_LEN, DISPL_SEP, FLOAT_FORMAT_PRECISION};
 
@@ -195,10 +197,11 @@ mod tests {
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}",
                 expected_pair_name, 0, 0.0, f64::NAN, f64::NAN, 0.00000, f64::NAN
-            ).unwrap();
+            )?;
         }
 
         assert_eq!(format!("{comparisons}"), expected_output);
+        Ok(())
     }
 
 }

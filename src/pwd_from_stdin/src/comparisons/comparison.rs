@@ -198,36 +198,44 @@ mod tests {
     }
 
     #[test]
-    fn satisfiable_depth_both() {
+    fn satisfiable_depth_both() -> Result<(), Box<dyn Error>> {
         // If both individual has depth >= pileup.depth ==> return false. 
 
         let comparison = common::mock_comparison(false);
-        let pileups = common::mock_pileups(&[2,2], 30, false);
+        let pileups = common::mock_pileups(&[2,2], 30, false)?;
         assert!(comparison.satisfiable_depth(&pileups[..]));
+        Ok(())
     }
 
     #[test]
-    fn satisfiable_depth_one() {
+    fn satisfiable_depth_one() -> Result<(), Box<dyn Error>> {
         // If one or the other individual has depth < pileup.depth ==> return false. 
         let comparison = common::mock_comparison(false);
-        let pileups = common::mock_pileups(&[3,1], 30, false);
+        let pileups = common::mock_pileups(&[3,1], 30, false)?;
         assert!( !comparison.satisfiable_depth(&pileups[..]));
 
-        let pileups = common::mock_pileups(&[1,3], 30, false);
+        let pileups = common::mock_pileups(&[1,3], 30, false)?;
         assert!( !comparison.satisfiable_depth(&pileups[..]));
-
+        Ok(())
     }
 
     #[test]
-    fn satisfiable_depth_none() {
+    fn satisfiable_depth_none() -> Result<(), Box<dyn Error>> {
         // If both individual has depth < pileup.depth ==> return false. 
         let comparison = common::mock_comparison(false);
-        let pileups = common::mock_pileups(&[1,1], 30, false);
+        let pileups = common::mock_pileups(&[1,1], 30, false)?;
         assert!( !comparison.satisfiable_depth(&pileups[..]));
+        Ok(())
     }
 
 
-    fn test_compare(comparison: &mut Comparison, positions: &[u32], ref_base: char, nucs: [&str; 2], quals: [&str; 2]) {
+    fn test_compare(
+        comparison: &mut Comparison,
+        positions : &[u32],
+        ref_base  : char,
+        nucs      : [&str; 2],
+        quals     : [&str; 2]
+    ) -> Result<(), Box<dyn Error>> {
         for pos in positions {
             let raw_line=format!("22\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 *pos,
@@ -235,56 +243,60 @@ mod tests {
                 nucs[0].len(), nucs[0], quals[0],
                 nucs[1].len(), nucs[1], quals[1])
             ;
-            let line = pileup::Line::new(&raw_line.as_str(), true).unwrap();
-            comparison.compare(&line).unwrap();
+            let line = pileup::Line::new(&raw_line.as_str(), true)?;
+            comparison.compare(&line)?;
         }
+        Ok(())
     }
 
     #[test]
-    fn test_compare_pairwise_no_pwd() {
+    fn test_compare_pairwise_no_pwd() -> Result<(), Box<dyn Error>> {
         let mut mock_comparison = common::mock_comparison(false);
-        test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "TT"], ["JJ", "AA"]);
+        test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "TT"], ["JJ", "AA"])?;
 
         assert_eq!(mock_comparison.sum_phred, 73.0);                 // ('J'  +  'A')
         assert_eq!(mock_comparison.get_avg_phred(), 73.0 / 2.0);
         assert_eq!(mock_comparison.pwd, 0.0);                        // ('T' <-> 'T') * 2
         assert_eq!(mock_comparison.get_avg_pwd(), 0.0);
         assert_eq!(mock_comparison.positions.len(), 2);
+        Ok(())
     }
 
     #[test]
-    fn test_compare_self_no_pwd() {
+    fn test_compare_self_no_pwd() -> Result<(), Box<dyn Error>> {
         let mut mock_comparison = common::mock_comparison(true);
-        test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "TT"], ["JJ", "AA"]);
+        test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "TT"], ["JJ", "AA"])?;
 
         assert_eq!(mock_comparison.sum_phred, 82.0);               // ('J'  +  'J')
         assert_eq!(mock_comparison.get_avg_phred(), 82.0 / 2.0);
         assert_eq!(mock_comparison.pwd, 0.0);                      // ('T' <-> 'T') * 2
         assert_eq!(mock_comparison.get_avg_pwd(), 0.0);          
         assert_eq!(mock_comparison.positions.len(), 2);         
+        Ok(())
     }
 
 
     #[test]
-    fn test_compare_pairwise_pwd() {
+    fn test_compare_pairwise_pwd() -> Result<(), Box<dyn Error>> {
         let mut mock_comparison = common::mock_comparison(false);
-        test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "CC"], ["JJ", "AA"]);
+        test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "CC"], ["JJ", "AA"])?;
 
         assert_eq!(mock_comparison.sum_phred, 73.0);               // ('J'  +  'A')
         assert_eq!(mock_comparison.get_avg_phred(), 73.0 / 2.0);
         assert_eq!(mock_comparison.pwd, 2.0);                      // ('T' <-> 'C')
         assert_eq!(mock_comparison.get_avg_pwd(), 1.0);
         assert_eq!(mock_comparison.positions.len(), 2);
+        Ok(())
     }
 
     #[test]
-    fn test_phred_increment() {
+    fn test_phred_increment() -> Result<(), Box<dyn Error>> {
         let mut mock_comparison = common::mock_comparison(false);
         let mut expected_sum_phred: u32 = 0;
         let test_quals = ["5", "?"];
         let avg_test_qual = 25; // '5' + '?' /2
         for pos in 1..1000u32 {
-            test_compare(&mut mock_comparison, &[pos], 'C', ["T", "T"], test_quals);
+            test_compare(&mut mock_comparison, &[pos], 'C', ["T", "T"], test_quals)?;
 
 
             // comparison.sum_phred represent the average of two given nucleotide's scores. i.e. (J + A) / 2
@@ -295,6 +307,7 @@ mod tests {
 
             assert_eq!(mock_comparison.get_avg_phred(), avg_test_qual as f64); // Avg. pwd should stay the same. 
         }
+        Ok(())
     }
 
     #[test]

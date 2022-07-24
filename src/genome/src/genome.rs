@@ -16,7 +16,8 @@ use log::{warn, info, debug};
 pub enum FastaIndexReaderError {
     FileNotFound(String, String),
     ParseInt(String, u8, String),
-    InvalidFileFormat(String)
+    InvalidFileFormat(String),
+    ParseLine(usize, std::io::Error)
 }
 impl Error for FastaIndexReaderError {}
 
@@ -32,6 +33,9 @@ impl std::fmt::Display for FastaIndexReaderError {
             Self::InvalidFileFormat(ext)  => {
                 write!(f, "Invalid fasta file format:\n - expected [.fa |.fa.fai |.fasta | .fasta.fai]\n - got '{}'", ext)
             },
+            Self::ParseLine(idx, err)  => {
+                write!(f, "At line {idx}: Failed to parse fasta index line - got [{}]", err.to_string())
+            }
         }
     }
 }
@@ -83,7 +87,7 @@ impl Genome {
     ///   target directory
     /// - returns `FastaIndexReaderError::ParseInt` if there is an invalid length value at column 1
     pub fn from_fasta_index(path: &str) -> Result<Genome,FastaIndexReaderError> {
-        use FastaIndexReaderError::{InvalidFileFormat, FileNotFound, ParseInt};
+        use FastaIndexReaderError::{InvalidFileFormat, FileNotFound, ParseInt, ParseLine};
         info!("Parsing reference genome: {}", path);
 
         // ---- Extract the  file extention of `path` and format the expected `.fai` file if necessary.
@@ -107,7 +111,7 @@ impl Genome {
     
         let mut skipped_chrs = Vec::new();
         for (index,line) in file.lines().enumerate() {
-            let line = line.unwrap();
+            let line = line.or_else(|err|{return Err(ParseLine(index, err))})?;
             let split_line: Vec<&str> = line.split('\t').collect();
             match split_line[0].replace("chr", "").parse::<u8>() {
                 Ok(result) =>{ 

@@ -14,16 +14,38 @@ use log::{info, trace};
 
 #[derive(Debug)]
 pub enum SNPReaderError {
-    InvalidFileFormatError(String),
-    FileNotFoundError(String, String),
+    InvalidFileFormat(String, Vec<&'static str>),
+    FileNotFound(String, String),
+    MissingExtension(Vec<&'static str>),
+    MissingAltRef(SNPCoord),
 }
 impl Error for SNPReaderError {}
 
 impl std::fmt::Display for SNPReaderError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            SNPReaderError::InvalidFileFormatError(ext) => write!(f, "Cannot handle targetfile format: {}", ext),
-            SNPReaderError::FileNotFoundError(path, err) => write!(f, "{}: {}",path, err)
+            Self::InvalidFileFormat(ext, file_formats) => {
+                write!(f, "Cannot handle target file format: {ext} \
+                    Please provide '--targets' with either one of the accepted file formats: {file_formats:?}"
+                )
+            },
+            Self::FileNotFound(path, err) => {
+                write!(f, "{}: {}", path, err)
+            },
+            Self::MissingExtension(file_formats) => {
+                write!(f, "The provided targets file is missing a file extension. \
+                    Please provide '--targets' with a file ending with one of the accepted file formats: \n
+                    {file_formats:?}"
+                )
+            },
+            Self::MissingAltRef(nuc) => {
+                write!(f, "Target SNP Coordinate [{} {}] is missing its reference and/or alternate allele \
+                    information when it is required.",
+                    nuc.chromosome, nuc.position
+                )
+            }
+
+
         }
     }
 }
@@ -53,6 +75,7 @@ pub struct SNPReader<'a> {
 
 impl<'a> SNPReader<'a> {
     pub fn new(path: &str) -> Result<SNPReader<'a>, SNPReaderError> {
+        use SNPReaderError::FileNotFound;
         let (columns, sep): (Vec<usize>, String) = Self::get_file_format(path)?;
 
         match File::open(path).map(|file| SNPReader {
@@ -60,7 +83,7 @@ impl<'a> SNPReader<'a> {
             columns,
             sep
         }) {
-            Err(e) => Err(SNPReaderError::FileNotFoundError(path.to_string(), e.to_string())),
+            Err(e) => Err(FileNotFound(path.to_string(), e.to_string())),
             Ok(reader) => Ok(reader)
         }
     }
@@ -71,15 +94,20 @@ impl<'a> SNPReader<'a> {
     /// 
     /// TODO: convert separators from String -> &str
     fn get_file_format(path: &str) -> Result<(Vec<usize>,String), SNPReaderError> {
-        let file_type: &str = path.split('.').collect::<Vec<&str>>().last().unwrap();
+        use SNPReaderError::{InvalidFileFormat, MissingExtension};
+        let accepted_file_formats = ["snp", "vcf", "txt", "csv", "tsv"];
+        let file_type: &str = path.split('.')
+            .collect::<Vec<&str>>()
+            .last()
+            .ok_or(MissingExtension(accepted_file_formats.to_vec()))?;
         let output = match file_type {
             // ([CHR, POS, REF, ALT], SEP)
-            "snp" => {(vec![1,3,4,5]," ".to_string())}
-            "vcf" => {(vec![0,1,3,4],"\t".to_string())}
-            "txt" => {(vec![0,1,2,3]," ".to_string())}
-            "csv" => {(vec![0,1,2,3],",".to_string())}
-            "tsv" => {(vec![0,1,2,3],"\t".to_string())}
-            t => return Err(SNPReaderError::InvalidFileFormatError(t.to_string()))
+            "snp" => (vec![1,3,4,5], " ".to_string() ),
+            "vcf" => (vec![0,1,3,4], "\t".to_string()),
+            "txt" => (vec![0,1,2,3], " ".to_string() ),
+            "csv" => (vec![0,1,2,3], ",".to_string() ),
+            "tsv" => (vec![0,1,2,3], "\t".to_string()),
+            t => return Err(InvalidFileFormat(t.to_string(), accepted_file_formats.to_vec()))
         };
         Ok(output)
     }
@@ -105,7 +133,7 @@ impl<'a> SNPReader<'a> {
 
             if exclude_transitions && !coordinate.has_known_alleles() {
                 return Err("Cannot filter-out transitions if reference and alternate alleles is unknown. \
-                Please provide a --targets file with known reference and alternate alleles.".into())
+                Please provide '--targets' with a file containing known reference and alternate alleles.".into())
             }
 
             target_positions.insert(coordinate);
@@ -116,7 +144,10 @@ impl<'a> SNPReader<'a> {
             info!("Filtering transitions from targets file.");
             let before = target_positions.len();
             target_positions.retain(|nuc| {
-                !transitions.contains(&[nuc.reference.unwrap(), nuc.alternate.unwrap()])
+                !transitions.contains(&[
+                    nuc.reference.unwrap(), 
+                    nuc.alternate.unwrap()
+                ])
             });
             let after = target_positions.len();
             info!("{} transitions filtered out. (Before: {} - After: {})", before-after, before, after);

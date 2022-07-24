@@ -33,6 +33,8 @@ impl Individual {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
+
     use super::*;
     #[test]
     fn new_undefined_name() {
@@ -49,9 +51,9 @@ mod tests {
     }
 
     #[test]
-    fn satisfiable_depth() {
+    fn satisfiable_depth() -> Result<(), Box<dyn Error>>{
         let (bases, scores) = ("AATA", "JEEJ");
-        let pileup = [Pileup::new(bases.len() as u16, bases, scores, true).unwrap()];
+        let pileup = [Pileup::new(bases.len() as u16, bases, scores, true)?];
 
         // ind.min_depth < pileup.depth   -> true
         let ind = Individual::new(None, 0, 1);
@@ -64,6 +66,7 @@ mod tests {
         // ind.min_depth > pileup.depth  -> false
         let ind = Individual::new(None, 0, 8);
         assert!(!ind.satisfiable_depth(&pileup));
+        Ok(())
     }
 }
 

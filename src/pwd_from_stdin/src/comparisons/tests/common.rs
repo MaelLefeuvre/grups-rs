@@ -1,4 +1,6 @@
 
+use std::error::Error;
+
 use super::super::comparison::Comparison;
 use crate::comparisons::Individual;
 use crate::pileup::Pileup;
@@ -22,30 +24,30 @@ pub fn mock_comparison(self_comparison: bool) -> Comparison {
 }
 
 
-fn mock_pileup_strings<'a>(depth: u16, min_qual: u8) -> (String, String) {
+fn mock_pileup_strings<'a>(depth: u16, min_qual: u8) -> Result<(String, String), Box<dyn Error>> {
     let mut rng = rand::thread_rng();
 
     let nucleotides = vec!['A', 'C', 'G', 'T'];
-    let quals: Vec<char> = std::str::from_utf8( &(min_qual+33..33+33).collect::<Vec<u8>>()).unwrap().chars().collect();
+    let quals: Vec<char> = std::str::from_utf8( &(min_qual+33..33+33).collect::<Vec<u8>>())?.chars().collect();
 
     let mut bases = String::new();
     let mut scores = String::new();
     for _ in 0..depth+1 {
-        bases.push(*nucleotides.choose(&mut rng).unwrap());
-        scores.push(*quals.choose(&mut rng).unwrap()      );
+        bases.push(*nucleotides.choose(&mut rng).ok_or("Empty nucleotide vector in 'mock_pileup_strings'")?);
+        scores.push(*quals.choose(&mut rng).ok_or("Empty quals vector in 'mock_pileup_strings'")?);
     }
 
-    return (bases, scores)
+    return Ok((bases, scores))
 }
 
 
-pub fn mock_pileups(min_depths: &[u16], min_qual: u8, ignore_dels: bool) -> Vec<Pileup> {
+pub fn mock_pileups(min_depths: &[u16], min_qual: u8, ignore_dels: bool) -> Result<Vec<Pileup>, Box<dyn Error>> {
     let mut pileups = Vec::new();
     for depth in min_depths {
-        let (bases, scores) = mock_pileup_strings(*depth, min_qual);
-        let pileup = Pileup::new(*depth, bases.as_str(), scores.as_str(), ignore_dels).unwrap();
+        let (bases, scores) = mock_pileup_strings(*depth, min_qual)?;
+        let pileup = Pileup::new(*depth, bases.as_str(), scores.as_str(), ignore_dels)?;
         pileups.push(pileup);
     }
 
-    return pileups
+    return Ok(pileups)
 }

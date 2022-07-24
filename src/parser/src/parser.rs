@@ -58,7 +58,11 @@ impl<'a> Cli{
     pub fn serialize(&self) -> Result<(), Box<dyn Error>> {
 
         // Parse arguments to yaml and print to console.
-        let serialized = serde_yaml::to_string(&self).unwrap();
+        let serialized = serde_yaml::to_string(&self)
+            .or_else(|err|{
+                return Err(format!("Failed to serialize command line arguments. got [{}]", err.to_string()))
+        })?;
+        
         info!("\n---- Command line args ----\n{}\n---", serialized);
 
         // Fetch the appropriate output-directory and parse the name of the output file.
@@ -412,9 +416,14 @@ impl Common {
     /// If the user used stdin, this will become a generic name -> "pwd_from_stdin-output" 
     ///
     /// # TODO: This function should be the one responsible of defining the default filename. Stay dry.
-    pub fn get_file_prefix(&self, subdir: Option<&str>) -> Option<PathBuf> {
+    pub fn get_file_prefix(&self, subdir: Option<&str>) -> Result<PathBuf, &str> {
         let default_prefix = String::from("pwd_from_stdin-output");
-        let file_prefix = Path::new(self.pileup.as_ref().unwrap_or(&default_prefix)).file_stem()?;
+        let file_prefix = Path::new(self.pileup.as_ref()
+            .unwrap_or(&default_prefix))
+            .file_stem()
+            .ok_or("Failed to generate an output file prefix. \
+                Note that file prefixes are generated from the input pileup filestem"
+            )?;
 
         // Get the path/filename-prefix of all of our outputs.
         let mut parsed_file = PathBuf::new();
@@ -422,7 +431,7 @@ impl Common {
         parsed_file.push(subdir.unwrap_or(""));
         parsed_file.push(file_prefix);
 
-        Some(parsed_file)
+        Ok(parsed_file)
     }
 
     /// Check if a given file already exists ; raise an error if such is the case, and the user did not explicitly 

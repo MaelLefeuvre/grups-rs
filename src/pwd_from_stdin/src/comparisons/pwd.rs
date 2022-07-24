@@ -173,13 +173,15 @@ impl Borrow<Coordinate> for Pwd {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
+
     use super::*;
     use crate::pileup::Line;
 
     #[test]
-    pub fn deterministic_pairwise(){
+    pub fn deterministic_pairwise() -> Result<(), Box<dyn Error>> {
         let raw_line="22\t51057923\tC\t6\tTTTTtt\tJEJJEE\t4\t.,TT\tJJJJ";
-        let line = Line::new(&raw_line, true).unwrap();
+        let line = Line::new(&raw_line, true)?;
         let pair = [
             Individual::new(None, 0, 1),
             Individual::new(None, 1, 1),
@@ -187,12 +189,13 @@ mod tests {
         let pwd = Pwd::deterministic_pairwise(&line, &pair);
         assert_eq!(pwd.pwd, 0.5);
         assert_eq!(pwd.phreds, [38.5, 41.0]);
+        Ok(())
     }
 
     #[test]
-    pub fn deterministic_self(){
+    pub fn deterministic_self() -> Result<(), Box<dyn Error>> {
         let raw_line="22\t51057923\tC\t4\tTTT...\tJJJEEE";
-        let line = Line::new(&raw_line, true).unwrap();
+        let line = Line::new(&raw_line, true)?;
         let pair = [
             Individual::new(None, 0, 2),
             Individual::new(None, 0, 2),
@@ -200,6 +203,7 @@ mod tests {
         let pwd = Pwd::deterministic_self(&line, &pair);
         assert_eq!(pwd.pwd, 0.6);
         assert_eq!(pwd.phreds, [40.0, 37.0]);
+        Ok(())
     }
 
 }

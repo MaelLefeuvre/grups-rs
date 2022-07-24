@@ -44,7 +44,7 @@ pub fn run<'a>(
     // ----------------------------- Prepare output files
     // ---- Add pwd files.
     let mut output_files = io::get_output_files(
-        &mut com_cli.get_file_prefix(None).unwrap(),    // extract the user requested file prefix
+        &mut com_cli.get_file_prefix(None)?,    // extract the user requested file prefix
         com_cli.overwrite,                                  // Should we allow file overwriting ?
         FileKey::Ext,         // What key are we using to hash these files ?
         &["".to_string()],// Vector of filename suffixes.
@@ -54,7 +54,7 @@ pub fn run<'a>(
     // ---- Add blocks files.
     output_files.extend(
         io::get_output_files(
-            &mut com_cli.get_file_prefix(Some("blocks/")).unwrap(),
+            &mut com_cli.get_file_prefix(Some("blocks/"))?,
             com_cli.overwrite,
             FileKey::Suffix,
             &comparisons.get_pairs(),
@@ -90,14 +90,15 @@ pub fn run<'a>(
     info!("Opening pileup...");   
     let pileup_reader: Box<dyn BufRead> = match &com_cli.pileup {
         None => Box::new(BufReader::new(std::io::stdin())),
-        Some(filename) => Box::new(BufReader::new(fs::File::open(filename).unwrap()))
+        Some(filename) => Box::new(BufReader::new(fs::File::open(filename)?))
     };
 
     // ---------------------------- Read Pileup
     info!("Parsing pileup...");   
     for entry in pileup_reader.lines() {
         // ----------------------- Parse line.
-        let mut line: pileup::Line = match pileup::Line::new(entry.as_ref().unwrap(), pwd_cli.ignore_dels){
+        let entry = entry?;
+        let mut line: pileup::Line = match pileup::Line::new(&entry, pwd_cli.ignore_dels){
             Ok(line) => line,
             Err(e) => {error!("Error: {}", e); process::exit(1);},
         };
@@ -120,7 +121,7 @@ pub fn run<'a>(
                 Some(coordinate) => coordinate,
                 None => panic!("Cannot filter known variants when REF/ALT allele are unknown! Please use a different file format."),
             };
-            line.filter_known_variants(current_coord);
+            line.filter_known_variants(current_coord)?;
         }
 
         // ----------------------- Compute PWD (or simplys print the line if there's an existing overlap)        
@@ -129,7 +130,7 @@ pub fn run<'a>(
                 if ! pwd_cli.filter_sites {
                     comparison.compare(&line)?;
                 } else {
-                    println!("{}", entry.as_ref().unwrap());
+                    println!("{}", &entry);
                 }
             }
         }
