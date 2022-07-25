@@ -79,8 +79,20 @@ impl<'a> VCFPanelReader<'a> {
             let contam_pop = &contam_pop[*num % std::cmp::min(contam_num_ind.len(), contam_pop.len())];
 
             // ---- Randomly sample n sampletags
+            // ---- @TODO: This type of error handling is performed multiple times. stay DRY.
             for _ in 0..*num {
-                let contam_sample_tag = self.random_sample(contam_pop, None)?.unwrap().clone();
+                let contam_sample_tag = self.random_sample(contam_pop, None)?
+                    .ok_or_else(||{
+                        let err: Box<dyn Error> = format!(
+                            "While fetching contaminating individuals: Failed to retrieve a valid random SampleTag from \
+                            our panel, using population tag {contam_pop}. Note that this error can happen when providing \
+                            '--contam-pop' with a population identifier that is invalid and/or missing from the panel \
+                            definition file."
+                        ).into();
+                        return err
+                    })?
+                    .clone();
+
                 contam_ind_tags.push(contam_sample_tag);
             }
             samples_contam_tags.push(contam_ind_tags);

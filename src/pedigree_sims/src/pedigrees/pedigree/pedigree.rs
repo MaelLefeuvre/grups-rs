@@ -88,9 +88,19 @@ impl Pedigree {
 
         // ---- Fill the genotypes of all this pedigree's founder individuals. 
         for mut founder in self.founders_mut() {
+
+            // ---- Extract founder tag ; raise an error if None is returned.
+            let founder_tag = founder.get_tag().ok_or_else(|| {
+                let err: Box<dyn Error> = format!(
+                    "While attempting to update founder alleles : missing SampleTag for founder individual {}",
+                    founder.label
+                ).into();
+                return err
+            })?;
+
             // ---- Perform allele fixation at random, according to this pedigrees af_downsampling_rate.
             founder.alleles = match rng.gen::<f64>() < af_downsampling_rate { 
-                false => reader.get_alleles(founder.get_tag().unwrap()),
+                false => {reader.get_alleles(founder_tag)},
                 true  => Some([0, 0]),
             };
         }
@@ -253,11 +263,26 @@ impl Pedigree {
         self.pop = Some(pop.to_owned());
 
         // ---- Contaminating individual are excluded from pedigree individuals.
-        let mut exclude_tags = contaminants.map(|cont| cont.as_flat_list()).unwrap();
+        let mut exclude_tags = contaminants.map(|cont| cont.as_flat_list())
+            .ok_or_else(|| {
+                let err = format!("While setting pedigree SampleTags: Invalid contaminants list");
+                return err
+            })?;
 
         // ---- For each founder, pick and assign a random SampleTag using our panel (without replacement)
         for mut founder in self.founders_mut() {
-            let random_tag = panel.random_sample(pop, Some(&exclude_tags))?.unwrap();
+
+            // ---- Pick a random SampleTag from our panel.
+            let random_tag = panel.random_sample(pop, Some(&exclude_tags))?
+                .ok_or_else(||{
+                    let err: Box<dyn Error> = format!(
+                        "While setting pedigree SampleTags: Failed to retrieve a valid random sample from \
+                        our panel, using population tag {pop}. Note that this error can happen when providing \
+                        '--pedigree-pop' with an invalid and/or missing population identifier."
+                    ).into();
+                    return err
+                })?;
+            
             founder.set_tag(random_tag.clone());
             exclude_tags.push(random_tag); // Exclude this pedigree individual for other iterations.
         };

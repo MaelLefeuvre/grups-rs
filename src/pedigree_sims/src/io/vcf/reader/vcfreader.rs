@@ -48,13 +48,15 @@ impl InfoField {
     }
 
     /// return `true` if InfoField contains the "VT=SNP" tag. (i.e. is an SNP)
-    pub fn is_snp(&self) -> bool {
+    pub fn is_snp(&self) -> Result<bool, String> {
         let vtype = self.iter()
             .find(|&field| field.starts_with("VT="))
-            .unwrap()
+            .ok_or_else(||{
+                return format!("INFO field does not contain any 'VT=' tag.")
+            })?
             .split('=')
             .collect::<Vec<&str>>()[1];
-        vtype == "SNP"
+        Ok(vtype == "SNP")
     }
 
     /// Return the annotated population allele frequency for a given population.
@@ -64,13 +66,18 @@ impl InfoField {
     /// # Behavior: 
     /// for a given `pop` raw string slice, this method will search for any field matching "{pop}_AF="
     /// and return its value.
-    pub fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, std::num::ParseFloatError> {
+    pub fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, String> {
+        let pop_af_regex = format!("{}_AF", pop);
         self.iter()
-            .find(|&field| field.starts_with(&format!("{}_AF", pop)))
-            .unwrap()
-            .split('=')
+            .find(|&field| field.starts_with(&pop_af_regex))
+            .map(|x| x.split('='))
+            .ok_or_else(|| {
+                return format!("INFO field does not contain any '{pop_af_regex}' tag.")
+            })?
             .collect::<Vec<&str>>()[1]
-            .parse::<f64>()
+            .parse::<f64>().or_else(|err|{
+                return Err(format!("Failed to parse population allele frequency to a float using '{pop_af_regex}'. Got ['{err}']"))
+            })
     }
 }
 
@@ -92,7 +99,7 @@ impl InfoField {
 /// # Implemented Traits: 
 /// - `GenotypeReader`
 pub struct VCFReader<'a> {
-    pub source           : Box<BufReader<Box<dyn Read + 'a>>>,
+    pub source           : Box<dyn BufRead + 'a>,
     samples              : Vec<String>,
     info                 : InfoField,
     buf                  : Vec<u8>,
@@ -146,7 +153,7 @@ impl<'a> VCFReader<'a> {
     }
 
     /// Return `true` if the `INFO` field of the current line contains a `VT=SNP` tag.
-    pub fn is_snp(&self) -> bool {
+    pub fn is_snp(&self) -> Result<bool, String> {
         self.info.is_snp()
     }
 
@@ -166,8 +173,12 @@ impl<'a> VCFReader<'a> {
     /// - if `self.idx` != 0 (i.e. we're not currently at the beginning at the line.)
     pub fn parse_coordinate(&mut self) -> Result<(u8, u32), Box<dyn Error>> {
         if self.idx == 0 {
-            let chromosome : u8  = self.next_field()?.parse().unwrap(); // 1
-            let position   : u32 = self.next_field()?.parse().unwrap(); // 2
+            let chromosome : u8  = self.next_field()?.parse().or_else(|err|{
+                return Err(format!("'{err}' While attempting to parse chromosome coordinate."))
+            })?; // 1
+            let position   : u32 = self.next_field()?.parse().or_else(|err|{
+                return Err(format!("'{err}' While attempting to parse position coordinate."))
+            })?; // 2
             Ok((chromosome, position))
         } else {
             Err(format!("VCFReader line index is greater than 0: {}", self.idx).into())
@@ -227,17 +238,32 @@ impl<'a> VCFReader<'a> {
     /// - `path`   : path leading to the targeted vcf file.
     /// - `threads`: number of user-provided decompression threads for the BGZF decompressor.
     ///              (Only relevant if the file extension ends with `.gz`)
-    fn get_reader(path: &Path, threads: usize) -> std::io::Result<Box<BufReader<Box<dyn Read>>>> {
-        let source: Box<dyn Read> = match path.extension().unwrap().to_str(){
-            Some("vcf") => Box::new(File::open(path)?),
+    fn get_reader(path: &Path, threads: usize) -> std::io::Result<Box<dyn BufRead>> {
+        let path_ext = path.extension().ok_or_else(||{
+            return std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Invalid or missing file extension for vcf file: '{}'", path.display())
+            )
+        })?;
+        let source: Result<Box<dyn Read>, std::io::Error> = match path_ext.to_str(){
+            Some("vcf") => Ok(Box::new(File::open(path)?)),
             Some("gz")  => {
                 let reader = File::open(path)?;
-                let builder = ParDecompressBuilder::<Bgzf>::new().maybe_num_threads(threads).maybe_par_from_reader(reader);
-                Box::new(builder)
+                let builder = ParDecompressBuilder::<Bgzf>::new()
+                    .maybe_num_threads(threads)
+                    .maybe_par_from_reader(reader);
+                Ok(builder)
+            },
+            _           => {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Invalid file extension for vcf file: '{}'. \
+                        Accepted format are ['vcf', 'vcf.gz']", path.display()
+                    )
+                ))
             }
-            _           => panic!()
         };
-        Ok(Box::new(BufReader::new(source)))
+        Ok(Box::new(BufReader::new(source?)))
     }
 
     /// Skip all vcf description lines until the header line has been found (i.e. the line starts with '#CHROM').
@@ -247,7 +273,7 @@ impl<'a> VCFReader<'a> {
     /// 
     /// # Panics:
     /// - If the reader reads all the file contents without encountering any line starting with the '#CHROM' pattern.
-    fn parse_samples_id(reader: &mut Box<BufReader<Box<dyn Read>>>) -> std::io::Result<Vec<String>>{
+    fn parse_samples_id(reader: &mut Box<dyn BufRead + 'a>) -> std::io::Result<Vec<String>>{
         let mut samples = Vec::new();
         for line in reader.lines() {
             let line = line?;
@@ -266,7 +292,7 @@ impl<'a> VCFReader<'a> {
 impl<'a> GenotypeReader for VCFReader<'a> {
         // Return the alleles for a given SampleTag. Search is performed using `sample_tag.idx()`;
     fn get_alleles(&self, sample_tag: &SampleTag ) -> Option<[u8; 2]> {
-        let geno_idx=sample_tag.idx().unwrap() * 4;
+        let geno_idx = sample_tag.idx().as_ref()? * 4;
         let haplo1 = self.buf[geno_idx]   - 48;
         let haplo2 = self.buf[geno_idx+2] - 48;
         Some([haplo1, haplo2])

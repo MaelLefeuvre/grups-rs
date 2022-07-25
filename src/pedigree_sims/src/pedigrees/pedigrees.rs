@@ -108,7 +108,14 @@ impl Pedigrees {
 
             // ---- Assign contaminating individuals to the pedigree vector.
             pedigree_reps.set_contaminants(&samples_contam_tags, pair_indices);
-            debug!("Contaminant set for {comparison_label}:\n{}", pedigree_reps.contaminants.as_ref().unwrap());
+
+            // ---- Debug print.
+            debug!("Contaminant set for {comparison_label}:\n{}", 
+                match pedigree_reps.contaminants.as_ref() {
+                    Some(cont) => cont.to_string(),
+                    None => String::from("None")
+                }
+            );
 
             // ---- Initialize pedigree replicates.
             pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel)?;
@@ -182,7 +189,15 @@ impl Pedigrees {
         trace!("SNP candidate for {comparison_label} - [{chromosome:<2} {position:>9}] - recomb_prob: {interval_prob_recomb:<8.6}");
 
 
-        let pedigree_vec = self.pedigrees.get_mut(comparison_label).unwrap();
+        // ---- Extract the vector of pedigrees that'll get updated.
+        //      @TODO: This error handling is performed multiple times. Stay DRY & wrap this in a public method.
+        let pedigree_vec = self.pedigrees.get_mut(comparison_label)
+            .ok_or_else(|| {
+                let err: Box<dyn Error> = format!(
+                    "Attempting to mutably access a missing pedigree vector \
+                    using the comparison label '{comparison_label}' as a key.").into();
+                return err
+            })?;
 
         // -------------------- Get the contaminating population allele frequency
         let cont_af = pedigree_vec.contaminants.as_ref().ok_or("Empty contaminants.")?.compute_local_cont_af(reader)?;
@@ -218,20 +233,42 @@ impl Pedigrees {
     #[allow(unused_labels)]
     pub fn pedigree_simulations_fst(&mut self, comparisons: &mut Comparisons, input_fst_path: &Path, maf: f64) -> Result<(), Box<dyn Error>> {
         // --------------------- Read and store FST index into memory.
-        let mut fst_reader = io::fst::FSTReader::new(input_fst_path.to_str().unwrap());
 
-        //// Get a list of which chromosomes are found within the FST index.
-        let contained_chromosomes = fst_reader.find_chromosomes();
+        // ---- Check the input_fst_path validity and Initialize a new FSTReader.
+        let mut fst_reader = io::fst::FSTReader::new(
+            &input_fst_path.to_str().ok_or_else(|| { 
+                let err: Box<dyn Error> = format!("Invalid .fst filename and path '{}'. \
+                    Note that input filenames should only contain unicode characters.",
+                    input_fst_path.display()
+                    ).into();
+                return err
+            })?
+        )?;
+
+        // ---- Get a list of which chromosomes are found within the FST index. 
+        let contained_chromosomes = fst_reader.find_chromosomes()?;
+
+        // ---- Extract the minimum and maximum values.
+        let max = *contained_chromosomes.last().ok_or_else(|| {
+            let err: Box<dyn Error> = format!(
+                "Could not find any valid chromosome within the current FST index file. \
+                Got ['{contained_chromosomes:?}']"
+                ).into();
+            return err
+        })?;
+        let min = contained_chromosomes[0];
+
+        // ---- Convert these values as a range of valid coordinates.
+        let start = Coordinate::new(min, std::u32::MIN);
+        let stop  = Coordinate::new(max, std::u32::MAX);
 
         // Keep a record of positions that should get filtered out after maf < treshold.
         let mut positions_to_delete = HashMap::new();
         'comparison: for comparison in comparisons.iter() {
             info!("Performing simulations for : {}", comparison.get_pair());
 
-            //// Extract positions matching the FST index chromosome(s)
-            //// NOTE: Here we're using range(). But what we'd ideally like is drain_filter() . [Nightly only]
-            let start = Coordinate::new(*contained_chromosomes.iter().min().unwrap(), std::u32::MIN);
-            let stop  = Coordinate::new(*contained_chromosomes.iter().max().unwrap(), std::u32::MAX);
+            // ---- Extract positions matching the FST index chromosome(s)
+            // ---- NOTE: Here we're using range(). But what we'd ideally like is drain_filter() . [Nightly only]
             let relevant_positions = comparison.positions.range(start..stop);
             //
             // Get the number of typed positions for these chromosomes (this .clone() is quite expensive for just a fancy progress estimation...)
@@ -337,7 +374,7 @@ impl Pedigrees {
                             vcf_reader.parse_info_field()?;
 
                             // ---- Check if this coordinate is a biallelic SNP and skip line if not.
-                            if vcf_reader.is_multiallelic() || ! vcf_reader.is_snp() {
+                            if vcf_reader.is_multiallelic() || ! vcf_reader.is_snp()? {
                                 vcf_reader.next_line()?;
                                 continue 'line
                             }
@@ -382,7 +419,18 @@ impl Pedigrees {
         // --------------------- Print pedigree simulation results.
         for comparison in comparisons.iter() {
             let comparison_label = comparison.get_pair();
-            let pedigree_vec = self.pedigrees.get(&comparison_label).unwrap();
+
+            // ---- Extract Vector of pedigrees
+            //      @TODO: This error handling is performed multiple times. Stay DRY & wrap this in a public method.
+            let pedigree_vec = self.pedigrees.get(&comparison_label).ok_or_else(|| {
+                let err: Box<dyn Error> = format!(
+                    "While writing simulations results to file: \
+                    Attempting to access a missing pedigree vector by \
+                    using the comparison label '{comparison_label}' as a key."
+                    ).into();
+                return err
+            })?;
+
 
             let mut writer = pwd_from_stdin::io::Writer::new(Some(output_files[&comparison_label].clone()))?;
             writer.write_iter(vec![&pedigree_vec])?;
@@ -412,10 +460,20 @@ impl Pedigrees {
         // ---- loop across our pileup comparisons and assign a most-likely relationship, using our simulations.
         for comparison in comparisons.iter() {
             let comparison_label    = comparison.get_pair();
-            let pedigree_vec = self.pedigrees.get(&comparison_label).unwrap();
+
+            // ---- Gain access to pedigree vector.
+            //      @TODO: This error handling is performed multiple times. Stay DRY & wrap this in a public method.
+            let pedigree_vec = self.pedigrees.get(&comparison_label).ok_or_else(|| {
+                let err: Box<dyn Error> = format!(
+                    "While attempting to compute simulations results : \
+                    Attempting to access a missing pedigree vector by \
+                    using the comparison label '{comparison_label}' as a key."
+                    ).into();
+                return err
+            })?;
     
             // ---- Aggregate the sum of avg. PWD for each relatedness scenario.
-            let sum_simulated_stats = pedigree_vec.compute_sum_simulated_stats();
+            let sum_simulated_stats = pedigree_vec.compute_sum_simulated_stats()?;
     
             // ---- Select the scenario having the least amount of Z-score with our observed avg.PWD
             let observed_avg_pwd        : f64 = comparison.get_avg_pwd();

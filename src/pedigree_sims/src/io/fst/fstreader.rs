@@ -31,22 +31,43 @@ impl FSTReader {
     /// The companion `.fst.frq` file must be located within the same directory and display the same file-stem.
     /// # Arguments:
     /// - `path`: path leading to the targeted `.fst` file.
-    pub fn new(path: &str) -> Self {
-        let genotypes_set = Self::get_set_memory(path);
-        let frequency_set = Self::get_set_memory(&format!("{path}.frq"));
-        Self{genotypes_set, frequency_set, genotypes: HashMap::new(), frequencies: HashMap::new()}
+    pub fn new(path: &str) -> std::io::Result<Self> {
+        let genotypes_set = Self::get_set_memory(path)?;
+        let frequency_set = Self::get_set_memory(&format!("{path}.frq"))?;
+        Ok(Self{genotypes_set, frequency_set, genotypes: HashMap::new(), frequencies: HashMap::new()})
     }
 
     /// Load a raw fst-set into memory and store it as a raw vector of bytes.
     /// # Arguments:
     /// - `path`: path leading to the targeted `.fst` file.
     #[allow(dead_code)]
-    fn get_set_memory(path: &str) -> Set<Vec<u8>> {
+    fn get_set_memory(path: &str) -> std::io::Result<Set<Vec<u8>>> {
         info!("Loading in memory : {path}");
-        let mut file_handle = File::open(path).unwrap();
+        // ---- Open FST file in ro mode.
+        let mut file_handle = match File::open(path) {
+            Ok(file) => file,
+            Err(err) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Failed to open FST file '{path}' : got ['{err}']")
+                ))
+            }
+        };
+
+        // ---- Load FST set into memory.
         let mut bytes = vec![];
-        std::io::Read::read_to_end(&mut file_handle, &mut bytes).unwrap();
-        Set::new(bytes).unwrap()
+        std::io::Read::read_to_end(&mut file_handle, &mut bytes)?;
+
+        // ---- Generate FST set
+        let fst_set = Set::new(bytes)
+            .or_else(|err|{
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Failed to construct a valid FST set from the file '{path}'. Got [{err}]")
+                ))
+            })?;
+
+        Ok(fst_set)
     }
 
     /// Load a raw fst-set as a memory-mapped file.
@@ -59,13 +80,15 @@ impl FSTReader {
         Set::new(mmap).unwrap()
     }
 
-    /// public wrapper for `find_chromosome()`. returns the list of chromosomes contained within the set.
-    pub fn find_chromosomes(&self) -> Vec<u8> {
+    /// Public wrapper for `find_chromosome()`. returns a sorted, unduplicated list of chromosomes contained within the set.
+    pub fn find_chromosomes(&self) -> std::io::Result<Vec<u8>> {
         let root = self.genotypes_set.as_fst().root();
         let mut string = Vec::new();
         let mut chromosomes = Vec::new();
-        self.find_chromosome(root, &mut string, &mut chromosomes);
-        chromosomes
+        self.find_chromosome(root, &mut string, &mut chromosomes)?;
+        chromosomes.sort();
+        chromosomes.dedup();
+        Ok(chromosomes)
     }
 
 
@@ -75,19 +98,36 @@ impl FSTReader {
     /// - `string`     : raw byte-string. This vector is passed and constructed upon each recursion step.
     /// - `chromosomes`: vector of chromosomes names (in u8) form. This is the final desired output.
     ///                  Each entry of `chromosomes` is constructed from `string`.
-    fn find_chromosome(&self, node: fst::raw::Node, string: &mut [u8], chromosomes: &mut Vec<u8>) {
+    fn find_chromosome(&self, node: fst::raw::Node, string: &mut [u8], chromosomes: &mut Vec<u8>) -> std::io::Result<()> {
         let sep = b' '; // FST-set fields are space-separated. 
         for transition in node.transitions() {
             if transition.inp != sep { // If the next character is not a space, add the current character to the string being constructed.
                 let mut local_string = string.to_owned();
                 local_string.push(transition.inp); 
-                self.find_chromosome(self.genotypes_set.as_fst().node(transition.addr), &mut local_string, chromosomes);
+                self.find_chromosome(self.genotypes_set.as_fst().node(transition.addr), &mut local_string, chromosomes)?;
             }
             else { // If we've found a separator character, the current string is fully defined. -> add this string to our chromosome list.
-                let chromosome = std::str::from_utf8(string).unwrap().parse::<u8>().unwrap();
+                
+                // ---- Parse the string into a valid chromosome u8 value.
+                let chromosome: Result<u8, Box<dyn Error>> = std::str::from_utf8(string)
+                    .map_err(|err|Box::new(err) as Box<dyn Error>)
+                    .and_then(|x| x.parse::<u8>().map_err(|err|Box::new(err) as Box<dyn Error>));
+
+                let chromosome = match chromosome {
+                    Ok(integer) => integer,
+                    Err(err) => {
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, 
+                            format!(
+                                "Failed to determine which chromosome(s) were contained within the current FST-set \
+                                This might be due to a corrupted file. Got [{err}]. "
+                            )
+                        ))
+                    }
+                };
                 chromosomes.push(chromosome);
             }
         }
+        Ok(())
 
     }
 

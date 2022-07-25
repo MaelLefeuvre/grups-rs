@@ -28,7 +28,7 @@ use pwd_from_stdin::comparisons::Comparisons;
 //   + [ DONE  ][CRUCIAL] Document pedigree_sims::* libraries.
 //
 pub fn run(
-    _com_cli          : parser::Common,
+    com_cli          : parser::Common,
     ped_cli           : parser::PedigreeSims,
     comparisons       : &mut Comparisons,
 ) -> Result<(), Box<dyn Error>>
@@ -51,9 +51,9 @@ pub fn run(
     // ----------------------------- Prepare output files
     // ---- Add final_results files.
     let mut output_files = pwd_from_stdin::io::get_output_files(
-        &mut _com_cli.get_file_prefix(None).unwrap(),    // extract the user requested file prefix
-        _com_cli.overwrite,                                  // Should we allow file overwriting ?
-        pwd_from_stdin::io::FileKey::Ext,         // What key are we using to hash these files ?
+        &mut com_cli.get_file_prefix(None)?, // extract the user requested file prefix
+        com_cli.overwrite,                       // Should we allow file overwriting ?
+        pwd_from_stdin::io::FileKey::Ext,                   // What key are we using to hash these files ?
         &["".to_string()],   // Vector of filename suffixes.
         &["result"]          // Vector of file extensions.
     )?;
@@ -61,8 +61,8 @@ pub fn run(
     // ---- Add blocks files.
     output_files.extend(
         pwd_from_stdin::io::get_output_files(
-            &mut _com_cli.get_file_prefix(Some("simulations/")).unwrap(),
-            _com_cli.overwrite,
+            &mut com_cli.get_file_prefix(Some("simulations/"))?,
+            com_cli.overwrite,
             pwd_from_stdin::io::FileKey::Suffix,
             &comparisons.get_pairs(),
             &["sims"]

@@ -226,7 +226,7 @@ impl Individual {
 
                     // ---- Assign parent genome if not previously generated.
                     if parent.borrow().alleles.is_none() {
-                        parent.borrow_mut().assign_alleles(recombination_prob, i).unwrap();
+                        parent.borrow_mut().assign_alleles(recombination_prob, i)?;
                     }
 
                     // ---- Check if recombination occured for each parent and update recombination tracker if so.
@@ -258,14 +258,15 @@ mod tests {
     use crate::pedigrees::pedigree::tests::common;
 
 
-    fn perform_allele_asignment(offspring: &mut Individual, parents_alleles: [[u8;2];2], recombination_prob: f64) {
-        let parents = offspring.parents.as_ref().unwrap();
+    fn perform_allele_asignment(offspring: &mut Individual, parents_alleles: [[u8;2];2], recombination_prob: f64) -> Result<(), Box<dyn Error>> {
+        let parents = offspring.parents.as_ref().expect("Missing parents");
         parents[0].borrow_mut().alleles = Some(parents_alleles[0]);
         parents[1].borrow_mut().alleles = Some(parents_alleles[1]);        
-        offspring.assign_alleles(recombination_prob, 0).unwrap();
+        offspring.assign_alleles(recombination_prob, 0)?;
+        Ok(())
     }
 
-    fn run_all_allele_assignment_cases(recombination_prob: f64) {
+    fn run_all_allele_assignment_cases(recombination_prob: f64) -> Result<(), Box<dyn Error>> {
         let mut offspring = common::mock_offspring("offspring", None);
         let valid_alleles = vec![[0,0], [0,1], [1,0], [1,1]];
         let mut valid_strands = vec![[0,0], [0,1], [1,0], [1,1]];
@@ -274,7 +275,7 @@ mod tests {
             for parent_1_alleles in valid_alleles.iter() {
                 for strands in valid_strands.iter_mut() {
                     offspring.strands = Some(*strands);
-                    perform_allele_asignment(&mut offspring, [*parent_0_alleles, *parent_1_alleles], recombination_prob);
+                    perform_allele_asignment(&mut offspring, [*parent_0_alleles, *parent_1_alleles], recombination_prob)?;
 
                     // If the individual's parent is 'recombining', we expect strand assignment to be inverted. 0 becomes 1 ; 1 becomes 0
                     for i in [0,1]{
@@ -283,25 +284,29 @@ mod tests {
                         }
                     }
 
+                    let got = offspring.alleles.expect("Missing alleles within offspring.");
                     let want = [parent_0_alleles[strands[0]], parent_1_alleles[strands[1]]];
-                    assert_eq!(offspring.alleles.unwrap(), want);
+
+                    assert_eq!(got, want);
                     offspring.alleles = None;
                 }
             }
         }
+        Ok(())
     }
 
      #[test]
-    fn alleles_getter_filled(){
+    fn alleles_getter_filled() -> Result<(), Box<dyn Error>> {
         let mut ind = common::mock_founder("offspring");
         let alt_ref = [0,1];
         for i in alt_ref {
             for j in alt_ref {
                let alleles = [i, j];
                ind.set_alleles(alleles);
-               assert_eq!(ind.get_alleles().unwrap(), alleles);
+               assert_eq!(ind.get_alleles()?, alleles);
             }
         }
+        Ok(())
     }
 
     #[test]
@@ -361,15 +366,16 @@ mod tests {
 
 
     #[test]
-    fn strand_setter_offspring() {
+    fn strand_setter_offspring() -> Result<(), Box<dyn Error>> {
         let valid_strands = vec![[0,0], [0,1], [1,0], [1,1]];
         let mut ind = common::mock_offspring("offspring", None);
 
         for _ in 0..1000 {
-            ind.assign_strands().unwrap();
-            let rng_strands = ind.strands.unwrap();
+            ind.assign_strands()?;
+            let rng_strands = ind.strands.expect("Missing individual strands.");
             assert!(valid_strands.contains(&rng_strands));
         }
+        Ok(())
     }
 
     #[test]
@@ -434,26 +440,25 @@ mod tests {
     }
 
     #[test]
-    fn alleles_assignment_offspring_no_recombination() {
-        run_all_allele_assignment_cases(0.0);
+    fn alleles_assignment_offspring_no_recombination() -> Result<(), Box<dyn Error>> {
+        run_all_allele_assignment_cases(0.0)
     }
     #[test]
-    fn alleles_assignment_offspring_full_recombination() {
-        run_all_allele_assignment_cases(1.0);
+    fn alleles_assignment_offspring_full_recombination() -> Result<(), Box<dyn Error>> {
+        run_all_allele_assignment_cases(1.0)
     }
 
     #[test]
-    fn allele_assignment_updates_recombination_status(){
+    fn allele_assignment_updates_recombination_status() -> Result<(), Box<dyn Error>> {
         let mut offspring = common::mock_offspring("offspring", None);
         offspring.strands = Some([0,0]);
         let parents_alleles = [[0,1], [0,1]];
         let recombination_prob = 1.0;
 
         assert_eq!(offspring.currently_recombining, [false, false]);
-        perform_allele_asignment(&mut offspring, parents_alleles, recombination_prob);
+        perform_allele_asignment(&mut offspring, parents_alleles, recombination_prob)?;
         assert_eq!(offspring.currently_recombining, [true, true]);
-
-
+        Ok(())
     }
 
     #[test]

@@ -86,7 +86,7 @@ impl PedComparison {
     /// - `contam_pop_af` : allele frequency of the contaminating population for the current SNP coordinate.
     /// - `seq_error_rate`: sequencing error rate required for the simulation.
     /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
-    fn simulate_observed_reads(n: u8, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Vec<u8> {
+    fn simulate_observed_reads(n: u8, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>, String> {
         let mut reads = Vec::with_capacity(n as usize);
         let mut rng = rand::thread_rng();
 
@@ -98,20 +98,26 @@ impl PedComparison {
                     true  => 1,  // Becomes the alternative reference allele, if contam_rate * contam_pop_af
                     false => 0,  // otherwise, pick the reference allele.
                 }
-                false => *alleles.choose(&mut rng).unwrap(),
+                false => *alleles.choose(&mut rng)
+                    .ok_or_else(|| return format!("While simulating observed reads: failed to select a random allele"))?
             };
 
             // ---- Simulate sequencing error rate.
             let seqerror_choices: Vec<[u8; 3]> = vec![[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
             if rng.gen::<f64>() < seq_error_rate {
-                let wrong_base: u8 = *seqerror_choices[chosen_base as usize].choose(&mut rng).unwrap();
+                let wrong_base: u8 = *seqerror_choices[chosen_base as usize].choose(&mut rng)
+                    .ok_or_else(|| {
+                        format!("While simulating observed reads: failed to select a random \
+                        erroneous base when simulating sequencing error.")
+                })?;
+
                 reads.push(wrong_base);
             }
             else {
                 reads.push(chosen_base);
             }
         }
-        reads
+        Ok(reads)
     }
 }
 
@@ -173,22 +179,23 @@ mod tests {
 
 
     #[test]
-    fn simulate_observed_reads_contam() {
+    fn simulate_observed_reads_contam() -> Result<(), Box<dyn Error>> {
         let binary_rates = [0.0, 1.0];
         let binary_alleles = [[0,0], [1,1]];
         for contam_rate in binary_rates {
             for contam_pop_af in binary_rates {
                 for alleles in binary_alleles {
                     let want = get_expected_simulated_allele(alleles[0], contam_rate, contam_pop_af);
-                    let got = PedComparison::simulate_observed_reads(1, contam_rate, contam_pop_af, 0.0, alleles);
+                    let got = PedComparison::simulate_observed_reads(1, contam_rate, contam_pop_af, 0.0, alleles)?;
                     assert_eq!(want, got[0]);
                 }
             }
         }
+        Ok(())
     }
 
     #[test]
-    fn allele_comparison(){
+    fn allele_comparison() -> Result<(), Box<dyn Error>> {
         let ref_alt = [0, 1];
 
         let binary_rates = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]];
@@ -200,7 +207,7 @@ mod tests {
                         let mut comp = common::mock_pedcomparison();
                         let alleles = [[allele_ind_0, allele_ind_0], [allele_ind_1, allele_ind_1]];
                         comp.pair.iter().zip(alleles.iter()).for_each(|(ind, all)| ind.borrow_mut().set_alleles(*all));
-                        comp.compare_alleles(contam_rate, contam_pop_af, [0.0,0.0]).unwrap();
+                        comp.compare_alleles(contam_rate, contam_pop_af, [0.0,0.0])?;
 
                         let mut want = [0, 0];
                         izip!(&mut want, [allele_ind_0, allele_ind_1], contam_rate, contam_pop_af)
@@ -213,6 +220,7 @@ mod tests {
                 }
             }
         }
+        Ok(())
     }
 
     #[test]

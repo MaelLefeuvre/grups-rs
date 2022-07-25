@@ -65,7 +65,15 @@ impl Contaminant {
             // ---- For each individual contaminating our compared individual...
             for tag in contaminant.iter() { 
                 // ---- Extract the alleles of the contaminant from the reader, and dynamically compute the allele frequency.
-                reader.get_alleles(tag).unwrap().into_iter().for_each(|allele| {
+                let contaminant_alleles = reader.get_alleles(tag)
+                    .ok_or_else(|| {
+                        let err: Box<dyn Error> = format!(
+                            "While attempting to compute local contaminating allele frequencies : \
+                            Failed to retrieve alleles from reader for contaminating individual '{tag}'"
+                        ).into();
+                        return err
+                })?;
+                contaminant_alleles.iter().for_each(|allele: &u8| {
                     match allele {
                         0          => ref_allele_count += 1,
                         1          => alt_allele_count += 1,
@@ -143,11 +151,13 @@ mod tests {
         mock_reader.expect_get_alleles() // Expected output -> [0.75, 0.25]
             .times(dummy_alleles.len())
             .returning(move |_| {
-                dummy_alleles.pop().unwrap() // pop() -> remember we're iterating in reverse.
+                dummy_alleles.pop() // pop() -> remember we're iterating in reverse.
+                    .expect("Missing dummy alleles!")
             });
 
         let want = [0.75, 0.25];
-        let got = contaminant.compute_local_cont_af(&mock_reader).unwrap();
+        let got = contaminant.compute_local_cont_af(&mock_reader)
+            .expect("Failed to obtain contaminant allele frequencies.");
 
         assert_eq!(want, got)
     }
