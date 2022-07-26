@@ -8,8 +8,8 @@ use super::super::Individual;
 
 use crate::io::vcf::SampleTag; 
 
-use rand::Rng;
-use rand::seq::SliceRandom;
+use fastrand;
+
 
 /// Track a pedigree genetic relatedness comparison
 /// # Fields:
@@ -69,10 +69,10 @@ impl PedComparison {
     ///                     Entry[i] of the array corresponds to `self.pair[i]`.
     /// - `seq_error_rate`: Size-two array of the simulated sequencing error rate.
     ///                     Entry[i] of the array corresponds to `self.pair[i]`.
-    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2]) -> Result<(), Box<dyn Error>> {
+    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2], rng: &mut fastrand::Rng) -> Result<(), Box<dyn Error>> {
         self.add_overlap();
-        let random_sample0 = Self::simulate_observed_reads(1, contam_rate[0], contam_pop_af[0], seq_error_rate[0], self.pair[0].borrow().get_alleles()?);
-        let random_sample1 = Self::simulate_observed_reads(1, contam_rate[1], contam_pop_af[1], seq_error_rate[1], self.pair[1].borrow().get_alleles()?);
+        let random_sample0 = Self::simulate_observed_reads(1, rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], self.pair[0].borrow().get_alleles()?);
+        let random_sample1 = Self::simulate_observed_reads(1, rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], self.pair[1].borrow().get_alleles()?);
         if random_sample0 != random_sample1 {
             self.add_pwd();
         }
@@ -86,29 +86,30 @@ impl PedComparison {
     /// - `contam_pop_af` : allele frequency of the contaminating population for the current SNP coordinate.
     /// - `seq_error_rate`: sequencing error rate required for the simulation.
     /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
-    fn simulate_observed_reads(n: u8, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>, String> {
+    // #[inline(always)]
+    fn simulate_observed_reads(n: u8, rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>, String> {
         let mut reads = Vec::with_capacity(n as usize);
-        let mut rng = rand::thread_rng();
 
         // ---- Simulate n pileup observations.
         for _ in 0..n {
             // ---- Simulate modern human contamination. 
-            let chosen_base: u8 = match rng.gen::<f64>() < contam_rate {
-                true  => match rng.gen::<f64>() < contam_pop_af {
+            let chosen_base: u8 = match rng.f64() < contam_rate {
+                true  => match rng.f64() < contam_pop_af {
                     true  => 1,  // Becomes the alternative reference allele, if contam_rate * contam_pop_af
                     false => 0,  // otherwise, pick the reference allele.
                 }
-                false => *alleles.choose(&mut rng)
-                    .ok_or_else(|| return format!("While simulating observed reads: failed to select a random allele"))?
+                false => *alleles.get(rng.usize(0..=1))
+                    .ok_or_else(|| String::from("While simulating observed reads: failed to select a random allele"))?
             };
 
             // ---- Simulate sequencing error rate.
-            let seqerror_choices: Vec<[u8; 3]> = vec![[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
-            if rng.gen::<f64>() < seq_error_rate {
-                let wrong_base: u8 = *seqerror_choices[chosen_base as usize].choose(&mut rng)
-                    .ok_or_else(|| {
-                        format!("While simulating observed reads: failed to select a random \
-                        erroneous base when simulating sequencing error.")
+            const SEQ_ERROR_CHOICES: [[u8; 3]; 4] = [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
+            if rng.f64() < seq_error_rate {
+                let wrong_base: u8 = *SEQ_ERROR_CHOICES[chosen_base as usize].get(rng.usize(0..=SEQ_ERROR_CHOICES.len()))
+                    .ok_or_else(|| {String::from(
+                        "While simulating observed reads: failed to select a random \
+                        erroneous base when simulating sequencing error."
+                    )
                 })?;
 
                 reads.push(wrong_base);
@@ -119,6 +120,7 @@ impl PedComparison {
         }
         Ok(reads)
     }
+
 }
 
 impl std::fmt::Display for PedComparison {
@@ -182,11 +184,12 @@ mod tests {
     fn simulate_observed_reads_contam() -> Result<(), Box<dyn Error>> {
         let binary_rates = [0.0, 1.0];
         let binary_alleles = [[0,0], [1,1]];
+        let mut rng = fastrand::Rng::new();
         for contam_rate in binary_rates {
             for contam_pop_af in binary_rates {
                 for alleles in binary_alleles {
                     let want = get_expected_simulated_allele(alleles[0], contam_rate, contam_pop_af);
-                    let got = PedComparison::simulate_observed_reads(1, contam_rate, contam_pop_af, 0.0, alleles)?;
+                    let got = PedComparison::simulate_observed_reads(1, &mut rng, contam_rate, contam_pop_af, 0.0, alleles)?;
                     assert_eq!(want, got[0]);
                 }
             }
@@ -196,10 +199,11 @@ mod tests {
 
     #[test]
     fn allele_comparison() -> Result<(), Box<dyn Error>> {
+
+        let mut rng = fastrand::Rng::new();
+
         let ref_alt = [0, 1];
-
         let binary_rates = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]];
-
         for allele_ind_0 in ref_alt {
             for allele_ind_1 in ref_alt {
                 for contam_rate in binary_rates {
@@ -207,7 +211,7 @@ mod tests {
                         let mut comp = common::mock_pedcomparison();
                         let alleles = [[allele_ind_0, allele_ind_0], [allele_ind_1, allele_ind_1]];
                         comp.pair.iter().zip(alleles.iter()).for_each(|(ind, all)| ind.borrow_mut().set_alleles(*all));
-                        comp.compare_alleles(contam_rate, contam_pop_af, [0.0,0.0])?;
+                        comp.compare_alleles(contam_rate, contam_pop_af, [0.0,0.0], &mut rng)?;
 
                         let mut want = [0, 0];
                         izip!(&mut want, [allele_ind_0, allele_ind_1], contam_rate, contam_pop_af)

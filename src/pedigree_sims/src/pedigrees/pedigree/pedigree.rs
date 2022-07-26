@@ -13,7 +13,7 @@ use crate::io::{
     vcf::reader::VCFPanelReader,
 };
 
-use rand::{Rng, prelude::ThreadRng};
+use fastrand;
 
 use std::{
     cell::{RefCell, RefMut},
@@ -53,7 +53,7 @@ impl Pedigree {
     /// # Errors:
     /// - if `self.params` is `None`
     /// - if an individual being compared carries `None` alleles.
-    pub fn compare_alleles(&mut self, cont_af: [f64; 2], pileup_error_probs: &[f64; 2]) -> Result<(), Box<dyn Error>> {
+    pub fn compare_alleles(&mut self, cont_af: [f64; 2], pileup_error_probs: &[f64; 2], rng: &mut fastrand::Rng) -> Result<(), Box<dyn Error>> {
         // ---- Extract the user-defined contamination rate of this pedigree .
         let contam_rate = self.get_params()?.contam_rate;
 
@@ -66,7 +66,7 @@ impl Pedigree {
 
         // ---- update the PWD of all comparisons at the current position.
         for comparison in &mut self.comparisons.iter_mut() {
-            comparison.compare_alleles(contam_rate, cont_af, seq_error_rate)?;
+            comparison.compare_alleles(contam_rate, cont_af, seq_error_rate, rng)?;
         }
         Ok(())
     }
@@ -81,7 +81,7 @@ impl Pedigree {
     /// 
     /// # Panics
     /// - if any founder's tag is set to `None`
-    pub fn update_founder_alleles(&mut self, reader: &dyn GenotypeReader, rng: &mut ThreadRng) -> Result<(), Box<dyn Error>> {
+    pub fn update_founder_alleles(&mut self, reader: &dyn GenotypeReader, rng: &mut fastrand::Rng) -> Result<(), Box<dyn Error>> {
 
         // ---- Extract this pedigree allele frequency downsampling rate.
         let af_downsampling_rate = self.get_params()?.af_downsampling_rate;
@@ -95,11 +95,11 @@ impl Pedigree {
                     "While attempting to update founder alleles : missing SampleTag for founder individual {}",
                     founder.label
                 ).into();
-                return err
+                err
             })?;
 
             // ---- Perform allele fixation at random, according to this pedigrees af_downsampling_rate.
-            founder.alleles = match rng.gen::<f64>() < af_downsampling_rate { 
+            founder.alleles = match rng.f64() < af_downsampling_rate { 
                 false => {reader.get_alleles(founder_tag)},
                 true  => Some([0, 0]),
             };
@@ -119,9 +119,9 @@ impl Pedigree {
     /// 
     /// # Panics
     /// - if any individual's `self.parents` is set to none `None` (i.e. Individual is a founder.)
-    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize) -> Result<(), Box<dyn Error>> {
+    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, rng: &fastrand::Rng) -> Result<(), Box<dyn Error>> {
         for mut offspring in self.offsprings_mut() {
-            offspring.assign_alleles(interval_prob_recomb, pedigree_index)?;
+            offspring.assign_alleles(interval_prob_recomb, pedigree_index, rng)?;
         }
         Ok(())
     }
@@ -231,24 +231,22 @@ impl Pedigree {
     ///    - offsprings_mut : !ind.is_founder()
     ///  - collecting the iterator is useless, since we're always calling this method to iterate over the items.
     ///    --> return an iterator!!
-    pub fn founders_mut(&mut self) -> Vec<RefMut<Individual>> {
+    pub fn founders_mut(&mut self) -> impl Iterator<Item = RefMut<Individual>> {
         self.individuals
             .values_mut()
             .filter(|ind| RefCell::borrow(ind).is_founder())
             .map(|x| x.borrow_mut())
-            .collect()
     }
 
     /// Obtain a vector of mutable references leading to the offsprings of this pedigree.
     /// # @TODO:
     /// - collecting the iterator is useless, since we're always calling this method to iterate over the items.
     ///   --> return an iterator!!
-    pub fn offsprings_mut(&mut self) -> Vec<RefMut<Individual>> {
+    pub fn offsprings_mut(&mut self) -> impl Iterator<Item = RefMut<Individual>> {
         self.individuals
             .values_mut()
             .filter(|ind| !RefCell::borrow(ind).is_founder())
             .map(|x| x.borrow_mut())
-            .collect()
     }
 
     /// Set the population tags, and assign random SampleTag for each founder individual within this pedigree.
@@ -264,10 +262,7 @@ impl Pedigree {
 
         // ---- Contaminating individual are excluded from pedigree individuals.
         let mut exclude_tags = contaminants.map(|cont| cont.as_flat_list())
-            .ok_or_else(|| {
-                let err = format!("While setting pedigree SampleTags: Invalid contaminants list");
-                return err
-            })?;
+            .ok_or_else(|| String::from("While setting pedigree SampleTags: Invalid contaminants list."))?;
 
         // ---- For each founder, pick and assign a random SampleTag using our panel (without replacement)
         for mut founder in self.founders_mut() {
@@ -280,7 +275,7 @@ impl Pedigree {
                         our panel, using population tag {pop}. Note that this error can happen when providing \
                         '--pedigree-pop' with an invalid and/or missing population identifier."
                     ).into();
-                    return err
+                    err
                 })?;
             
             founder.set_tag(random_tag.clone());
@@ -331,19 +326,20 @@ mod tests {
     fn meiosis_assign_alleles_empty_strands(){
         let mut pedigree = test_pedigree().expect("Cannot generate test pedigree");
         let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
-        offspr.assign_alleles(0.0, 0).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, &fastrand::Rng::new()).expect("Failed to assign alleles");
     }
 
     #[test]
     fn meiosis_assign_alleles_filled_strands(){
+        let rng = fastrand::Rng::new();
         let mut pedigree = test_pedigree().expect("Cannot generate test pedigree");
         let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands= Some([0,0]);
 
-        let output = offspr.assign_alleles(0.0, 0).expect("Failed to assign alleles");
+        let output = offspr.assign_alleles(0.0, 0, &rng).expect("Failed to assign alleles");
         assert_eq!(output, true);
 
-        let output = offspr.assign_alleles(0.0, 0).expect("Failed to assign alleles");
+        let output = offspr.assign_alleles(0.0, 0, &rng).expect("Failed to assign alleles");
         assert_eq!(output, false);
     }
 
@@ -353,7 +349,7 @@ mod tests {
 
         let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands= Some([0,0]);
-        offspr.assign_alleles(0.0, 0).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, &fastrand::Rng::new()).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([0, 1]))
     }
 
@@ -363,7 +359,7 @@ mod tests {
         let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands= Some([1,1]);
 
-        offspr.assign_alleles(0.0, 0).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, &fastrand::Rng::new()).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([1, 0]));
         assert_eq!(offspr.currently_recombining, [false, false]);
 
@@ -374,7 +370,7 @@ mod tests {
         let mut pedigree = test_pedigree().expect("Cannot generate test pedigree");
         let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands= Some([0,1]);
-        offspr.assign_alleles(1.0, 0).expect("Failed to assign alleles");
+        offspr.assign_alleles(1.0, 0, &fastrand::Rng::new()).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([1, 1]));
         assert_eq!(offspr.currently_recombining, [true, true]);
 

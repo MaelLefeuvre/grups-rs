@@ -99,7 +99,7 @@ impl<'a> SNPReader<'a> {
         let file_type: &str = path.split('.')
             .collect::<Vec<&str>>()
             .last()
-            .ok_or(MissingExtension(accepted_file_formats.to_vec()))?;
+            .ok_or_else(|| MissingExtension(accepted_file_formats.to_vec()))?;
         let output = match file_type {
             // ([CHR, POS, REF, ALT], SEP)
             "snp" => (vec![1,3,4,5], " ".to_string() ),

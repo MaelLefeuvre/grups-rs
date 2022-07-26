@@ -9,7 +9,8 @@ use std::{
 use super::Parents;
 use crate::io::vcf::SampleTag;
 
-use rand::{Rng};
+use fastrand;
+
 use log::{trace};
 
 /// Space padding lengths used for `std::fmt::Display` of Individual
@@ -146,14 +147,14 @@ impl Individual {
     /// # Errors:
     /// - if `self.parents` is `None`
     pub fn assign_strands(&mut self) -> Result<bool, String> {
-        if self.parents == None {
+        if self.parents.is_none() {
             return Err("Assigning strands is meaningless, as this individual has no parents.".to_owned())
         }
-        if self.strands != None {
+        if self.strands.is_some() {
             return Ok(false)
         }
-        let mut rng = rand::thread_rng();
-        self.strands = Some([rng.gen_range(0, 2), rng.gen_range(0, 2)]);
+        let rng = fastrand::Rng::new();
+        self.strands = Some([rng.usize(0..=1), rng.usize(0..=1)]);
         Ok(true)
     }
 
@@ -175,8 +176,9 @@ impl Individual {
     }
 
     /// Check whether or not this individual is a founder individual. Returns `true` if `self.parents == None`
+    //#[inline(always)]
     pub fn is_founder(&self) -> bool {
-        self.parents == None
+        self.parents.is_none()
     }
 
     /// Manually set the individuals SampleTag. meaningless for offsprings.*
@@ -211,7 +213,7 @@ impl Individual {
     /// # @ TODO
     /// - Instantiating a new Rng for each individual might not be very efficient...
     ///   Passing a &ThreadRng reference around might be better.
-    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize) -> Result<bool, Box<dyn Error>> {
+    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize, rng: &fastrand::Rng) -> Result<bool, Box<dyn Error>> {
         // ---- Ensure this method call is non-redundant.
         if self.alleles != None {
             return Ok(false)
@@ -220,17 +222,17 @@ impl Individual {
         match &self.parents {
             None => panic!("Cannot generate genome, as parents are missing."),
             Some(parents) => {
-                let mut rng = rand::thread_rng(); 
+                //let mut rng = rand::thread_rng(); 
                 // ---- Perform allele assignment for each parent.
                 for (i, parent) in parents.iter().enumerate() {
 
                     // ---- Assign parent genome if not previously generated.
                     if parent.borrow().alleles.is_none() {
-                        parent.borrow_mut().assign_alleles(recombination_prob, i)?;
+                        parent.borrow_mut().assign_alleles(recombination_prob, i, rng)?;
                     }
 
                     // ---- Check if recombination occured for each parent and update recombination tracker if so.
-                    if rng.gen::<f64>() < recombination_prob {
+                    if rng.f64() < recombination_prob {
                         trace!("- Cross-over occured in ped: {:<5} - ind: {}", ped_idx, self.label);
                         self.currently_recombining[i] = ! self.currently_recombining[i];
                     }
@@ -259,10 +261,11 @@ mod tests {
 
 
     fn perform_allele_asignment(offspring: &mut Individual, parents_alleles: [[u8;2];2], recombination_prob: f64) -> Result<(), Box<dyn Error>> {
+        let rng = fastrand::Rng::new();
         let parents = offspring.parents.as_ref().expect("Missing parents");
         parents[0].borrow_mut().alleles = Some(parents_alleles[0]);
         parents[1].borrow_mut().alleles = Some(parents_alleles[1]);        
-        offspring.assign_alleles(recombination_prob, 0)?;
+        offspring.assign_alleles(recombination_prob, 0, &rng)?;
         Ok(())
     }
 
@@ -428,7 +431,7 @@ mod tests {
     #[should_panic]
     fn alleles_assignment_founder() {
         let mut ind = common::mock_founder("parent");
-        let _result = ind.assign_alleles(0.0, 0);
+        let _result = ind.assign_alleles(0.0, 0, &fastrand::Rng::new());
         //assert!(result.is_err());
     }
 
@@ -436,7 +439,7 @@ mod tests {
     #[should_panic]
     fn alleles_assignments_unnassigned_parent_alleles(){
         let mut ind = common::mock_offspring("offspring", None);
-        let _result = ind.assign_alleles(0.0, 0);
+        let _result = ind.assign_alleles(0.0, 0, &fastrand::Rng::new());
     }
 
     #[test]

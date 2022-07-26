@@ -2,3 +2,4 @@
 manual-test-data/
 /grups-output
 lcov.info
+Cargo.lock

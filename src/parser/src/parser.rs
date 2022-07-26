@@ -1,15 +1,17 @@
-use std::error::Error;
-use std::fs::File;
-use std::num::ParseFloatError;
-use std::path::PathBuf;
+use std::{
+    error::Error,
+    fs::File,
+    num::ParseFloatError,
+    path::{Path, PathBuf},
+    str::FromStr
+};
 use clap::{Parser, Subcommand, Args, ArgEnum};
 
 use serde::{Serialize, Deserialize};
 
 use log::{info};
 
-use std::str::FromStr;
-use std::path::{Path};
+
 use core::ops::{Add, Range};
 use num::One;
 
@@ -59,9 +61,7 @@ impl<'a> Cli{
 
         // Parse arguments to yaml and print to console.
         let serialized = serde_yaml::to_string(&self)
-            .or_else(|err|{
-                return Err(format!("Failed to serialize command line arguments. got [{}]", err.to_string()))
-        })?;
+            .map_err(|err| format!("Failed to serialize command line arguments. got [{err}]"))?;
         
         info!("\n---- Command line args ----\n{}\n---", serialized);
 
@@ -103,7 +103,7 @@ pub enum Commands {
         #[clap(flatten)]
         pwd: PwdFromStdin,
         #[clap(flatten)]
-        ped: PedigreeSims
+        ped: Box<PedigreeSims> // Box<T> to mitigate the large size difference between variants.
 
     },
     PwdFromStdin {
@@ -342,11 +342,15 @@ pub struct PedigreeSims {
     // #[clap(short='@', long, default_value("1"))]
     // pub threads: usize,
 
-    ///Number of additional parallel decompression threads.
+    /// Number of additional parallel decompression threads.
     /// 
     /// Can increase performance when working with BGZF compressed vcf files.
     #[clap(short='#', long, default_value("0"))]
-    pub decompression_threads: usize
+    pub decompression_threads: usize,
+
+    /// Provide the RNG with a set seed.
+    #[clap(long, required(false), default_value_t=fastrand::u64(u64::MIN..=u64::MAX))]
+    pub seed: u64
 
 }
 

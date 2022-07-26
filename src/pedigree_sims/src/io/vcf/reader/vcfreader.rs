@@ -52,7 +52,7 @@ impl InfoField {
         let vtype = self.iter()
             .find(|&field| field.starts_with("VT="))
             .ok_or_else(||{
-                return format!("INFO field does not contain any 'VT=' tag.")
+                String::from("INFO field does not contain any 'VT=' tag.")
             })?
             .split('=')
             .collect::<Vec<&str>>()[1];
@@ -75,8 +75,9 @@ impl InfoField {
                 return format!("INFO field does not contain any '{pop_af_regex}' tag.")
             })?
             .collect::<Vec<&str>>()[1]
-            .parse::<f64>().or_else(|err|{
-                return Err(format!("Failed to parse population allele frequency to a float using '{pop_af_regex}'. Got ['{err}']"))
+            .parse::<f64>()
+            .map_err(|err|{
+                format!("Failed to parse population allele frequency to a float using '{pop_af_regex}'. Got ['{err}']")
             })
     }
 }
@@ -173,11 +174,11 @@ impl<'a> VCFReader<'a> {
     /// - if `self.idx` != 0 (i.e. we're not currently at the beginning at the line.)
     pub fn parse_coordinate(&mut self) -> Result<(u8, u32), Box<dyn Error>> {
         if self.idx == 0 {
-            let chromosome : u8  = self.next_field()?.parse().or_else(|err|{
-                return Err(format!("'{err}' While attempting to parse chromosome coordinate."))
+            let chromosome : u8  = self.next_field()?.parse().map_err(|err|{
+                format!("'{err}' While attempting to parse chromosome coordinate.")
             })?; // 1
-            let position   : u32 = self.next_field()?.parse().or_else(|err|{
-                return Err(format!("'{err}' While attempting to parse position coordinate."))
+            let position   : u32 = self.next_field()?.parse().map_err(|err|{
+                format!("'{err}' While attempting to parse position coordinate.")
             })?; // 2
             Ok((chromosome, position))
         } else {

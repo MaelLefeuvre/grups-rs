@@ -34,7 +34,7 @@ impl std::fmt::Display for FastaIndexReaderError {
                 write!(f, "Invalid fasta file format:\n - expected [.fa |.fa.fai |.fasta | .fasta.fai]\n - got '{}'", ext)
             },
             Self::ParseLine(idx, err)  => {
-                write!(f, "At line {idx}: Failed to parse fasta index line - got [{}]", err.to_string())
+                write!(f, "At line {idx}: Failed to parse fasta index line - got [{err}]")
             }
         }
     }
@@ -111,7 +111,7 @@ impl Genome {
     
         let mut skipped_chrs = Vec::new();
         for (index,line) in file.lines().enumerate() {
-            let line = line.or_else(|err|{return Err(ParseLine(index, err))})?;
+            let line = line.map_err(|err| ParseLine(index, err))?;
             let split_line: Vec<&str> = line.split('\t').collect();
             match split_line[0].replace("chr", "").parse::<u8>() {
                 Ok(result) =>{ 

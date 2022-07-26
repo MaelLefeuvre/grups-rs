@@ -9,7 +9,8 @@ use crate::{io::vcf::reader::vcfreader::VCFReader};
 use crate::io::vcf::sampletag::SampleTag;
 
 use log::{warn};
-use rand::seq::SliceRandom;
+
+use fastrand;
 
 /// Input sample panel definition file reader (`.panel` extension)
 /// ### File characteristics:
@@ -49,7 +50,7 @@ impl<'a> VCFPanelReader<'a> {
             let split_line = line.split('\t').collect::<Vec<&str>>();
             let (id, pop) = (split_line[0], split_line[1]);
             if self.samples.get(pop).unwrap_or(&Vec::new()).contains(&SampleTag::new(id, None)) {
-                writer.write(format!("{line}\n").as_bytes())?;
+                writer.write_all(format!("{line}\n").as_bytes())?;
             }
         }
         Ok(())
@@ -89,7 +90,7 @@ impl<'a> VCFPanelReader<'a> {
                             '--contam-pop' with a population identifier that is invalid and/or missing from the panel \
                             definition file."
                         ).into();
-                        return err
+                        err
                     })?
                     .clone();
 
@@ -113,19 +114,15 @@ impl<'a> VCFPanelReader<'a> {
             None => return Err(format!("Could not fetch random sample using population tag: \"{pop}\"").into())
         };
 
-        let candidate = match exclude {
-            // If there are sample tags to exclude, pre-filter out these SampleTags from `self.samples` before random sampling.
-            Some(tag_vec) => {
-                candidates.iter()
-                    .filter(|sample| ! tag_vec.contains(sample))
-                    .collect::<Vec<&SampleTag>>()
-                    .choose(&mut rand::thread_rng())
-                    .copied()
-            },
-            // If there are no sampleTag to exclude, directly proceed to random sampling.
-            None => candidates.choose(&mut rand::thread_rng())
-        };
-        Ok(candidate)
+
+        // If there are sample tags to exclude, pre-filter out these SampleTags from `self.samples` before random sampling.
+        let candidate = candidates.iter()
+            .filter(|sample| !exclude.unwrap_or(&vec![]).contains(sample))
+            .collect::<Vec<&SampleTag>>();
+
+        // ---- Return a random sample
+        let rng = fastrand::Rng::new();   
+        Ok(candidate.get(rng.usize(0..candidate.len())).copied())
     }
 
     /// Subset `self.samples` with entries matching the provided `subset_pops`.
@@ -194,5 +191,35 @@ impl<'a> VCFPanelReader<'a> {
         }
         
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn random_sampletag(){
+        let mut samples = HashMap::new();
+        let pop = String::from("EUR");
+        samples.insert(pop.to_owned(), vec![
+            SampleTag::new("HG00096", Some(0)),
+            SampleTag::new("NA06984", Some(1)),
+        ]);
+        let exclude = vec![
+            SampleTag::new("NA06984", Some(1)),
+            SampleTag::new("HO0000", Some(2)),
+            SampleTag::new("HO0001", Some(3))
+        ];
+        samples.insert(String::from("HO"), exclude.clone());
+
+        let source_file = std::path::Path::new("/dev/null");
+        let panel = VCFPanelReader{samples, source_file};
+
+        // Since "NA06984" is part of the excluded inds, it's expected he'll never be sampled.
+        for _ in 0..1000 {
+            let random = panel.random_sample(&pop, Some(&exclude.iter().map(|x| x).collect()));
+            assert_eq!(random.unwrap().unwrap().id(), "HG00096");
+        }
     }
 }

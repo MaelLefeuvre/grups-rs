@@ -1,4 +1,7 @@
 use genome::Genome;
+use log::info;
+use std::collections::HashMap;
+use std::error::Error;
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 
@@ -6,6 +9,7 @@ use itertools::Itertools;
 
 use super::comparison::Comparison;
 use super::individual::Individual;
+use crate::io::Writer;
 
 /// Vector of all the user-requested comparisons
 #[derive(Debug, Default)]
@@ -37,7 +41,28 @@ impl Comparisons {
     Comparisons(comparisons)
     }
 
-    ///How many pairs are we comparing? 
+    pub fn write_pwd_results(&self, print_blocks: bool, output_files: &HashMap<String, String>) -> Result<(), Box<dyn Error>> {
+        let mut pwd_writer = Writer::new(Some(output_files["pwd"].to_owned()))?;
+        
+        info!("Printing results...");
+        let header = format!("{: <20} - Overlap - Sum PWD  - Avg. Pwd - 95-CI.   - JK. Var. - Avg. Phred", "Name");
+        println!("{}", header);
+        pwd_writer.write_iter(&vec![header])?;       // Print PWD results to file.
+        pwd_writer.write_iter(self.iter())?;  // 
+
+        println!("{}", self);                 // Print PWD results to console
+
+        if print_blocks {
+            for comparison in self.iter() {
+                let pair = comparison.get_pair();
+                let mut block_writer = Writer::new(Some(output_files[&pair].clone()))?;
+                block_writer.write_iter(vec![&comparison.blocks])?;
+            }
+        }
+        Ok(())
+    }
+
+    /// How many pairs are we comparing? 
     pub fn len(&self) -> usize {
         self.0.len()
     }

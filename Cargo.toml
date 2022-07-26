@@ -5,6 +5,13 @@
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+  # Enable link-time optimization. ~+10-20 faster runtime at the cost of greater compile time. 
+  lto = true  
+
+  ## Don't split compilation across several compilation units.
+  #codegen-units = 1
+
 [workspace]
   members = ["src/pwd_from_stdin", "src/pedigree_sims", "src/genome", "src/parser", "src/logger", "src/vcf-fst"]
 
@@ -26,23 +33,28 @@
 #  path = "src/vcf-fst/src/main.rs"
 
 [dependencies]
-  rust-htslib    = "0.38.0"
-  bincode        = "1.3.3"
-  serde          = { version = "1.0", features = ["derive", "rc"] }
   pwd_from_stdin = {path = "src/pwd_from_stdin" }
   pedigree_sims  = {path = "src/pedigree_sims" }
   genome         = {path = "src/genome"}
   logger         = {path = "src/logger"}
   parser         = {path = "src/parser"}
   vcf-fst        = {path = "src/vcf-fst"}
-  fst            = "0.4.7" 
-  memmap         = "0.7.0"
-  log            = "0.4.16"
+  
   clap           = {version = "3.1.2", features = ["derive"]}
-  tokio          = { version = "1.17.0", features = ["full"] }
-  rayon          = "1.5.2"
-  serde_yaml = "0.8"
+  log            = "0.4.16"
+  fastrand       = "1.8.0"
+
+  serde_yaml     = "0.8"
 
 
 [dev-dependencies]
-  tempfile        = "3.3.0"
+  tempfile       = "3.3.0"
+  criterion      = "0.3"
+
+  rand           = "0.8.5"
+  nanorand       = "0.7.0"
+  fastrand       = "1.8.0"
+
+[[bench]]
+  name = "pedigree_sims_bench"
+  harness = false

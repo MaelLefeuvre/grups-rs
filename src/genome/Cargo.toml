@@ -8,12 +8,11 @@ edition = "2021"
 [dependencies]
   itertools    = "0.10.3"
   rust-lapper  = "1.0.0"
-  rand         = "0.8.5"
   log          = "0.4.16"
 
 [dev-dependencies]
   float-cmp    = "0.9.0"
-
+  rand         = "0.8.5"
 
 
 

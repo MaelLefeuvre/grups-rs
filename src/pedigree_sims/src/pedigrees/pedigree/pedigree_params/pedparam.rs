@@ -71,7 +71,7 @@ struct PedParamRange<T> {
 impl<T: SampleUniform + PartialOrd + Copy + Debug> PedParam<T> for PedParamRange<T> {
     /// Return a randomly generated rate, within the user-provided range.
     fn value(&mut self) -> T {
-        self.inner.gen_range(self.range.start, self.range.end)
+        self.inner.gen_range(self.range.start..=self.range.end)
     }
 }
 

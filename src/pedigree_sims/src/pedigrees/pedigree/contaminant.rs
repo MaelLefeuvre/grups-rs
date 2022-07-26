@@ -71,7 +71,7 @@ impl Contaminant {
                             "While attempting to compute local contaminating allele frequencies : \
                             Failed to retrieve alleles from reader for contaminating individual '{tag}'"
                         ).into();
-                        return err
+                        err
                 })?;
                 contaminant_alleles.iter().for_each(|allele: &u8| {
                     match allele {

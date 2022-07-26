@@ -1,6 +1,7 @@
 use log::LevelFilter;
-use env_logger::{Builder, Env};
-
+use log::Level;
+use env_logger::{Builder, Env, fmt::Color};
+use std::io::Write;
 pub struct Logger;
 
 impl Logger {
@@ -10,7 +11,44 @@ impl Logger {
         let env = Env::default()
             .filter("GRUPS_LOG");
 
-        Builder::new().filter_level(log_level).parse_env(env).init();
+        Builder::new().filter_level(log_level)
+            .format(|buf, record| {
+                
+                let traceback: String;
+                let set_intensity: bool;
+                if record.level() == LevelFilter::Error {
+                    traceback = format!("(@ {}:{}) ", record.file().unwrap_or("unknown"), record.line().unwrap_or(0));
+                    set_intensity = true;
+                } else {
+                    traceback = String::from("");
+                    set_intensity = false;
+                };
+
+                let mut arg_style = buf.style();
+                arg_style.set_intense(set_intensity);
+
+
+                let mut level_style = buf.style();
+                let color = match record.level() {
+                    Level::Error => Color::Red,
+                    Level::Warn  => Color::Yellow, 
+                    Level::Info  => Color::Green,
+                    Level::Debug => Color::Blue,
+                    Level::Trace => Color::Cyan
+                };
+                level_style.set_color(color).set_bold(true);
+
+                writeln!(
+                    buf,
+                    "[{} {: <5} {}] {traceback}{}",
+                    chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+                    level_style.value(record.level()),
+                    record.target(),
+                    arg_style.value(record.args())
+                )
+            })
+            .parse_env(env)
+            .init();
         Self
     }
 

@@ -61,7 +61,7 @@ impl Pileup {
             sum_phred += nucleotide.phred as u32;
         }
         for count in set.values_mut() {
-            *count = *count / self.nucleotides.len() as f64;
+            *count /= self.nucleotides.len() as f64;
         }
         let avg_phred = sum_phred as f64 / self.nucleotides.len() as f64 ;
         (set, avg_phred)
@@ -131,11 +131,11 @@ impl Pileup {
         }
 
         // Convert digit from string to numeric. Throw an error if this fails.
-        let digit = digit.parse::<usize>().or_else(|e| {
-            return Err(format!("Invalid indel identifier within the pileup file. \
-                                Got [{}] while attempting to skip indel",
-                                e.to_string()
-            )).into()
+        let digit = digit.parse::<usize>()
+            .map_err(|err| {
+                format!("Invalid indel identifier within the pileup file. \
+                    Got [{err}] while attempting to skip indel"
+            )
         })?;
         let skip = digit -1 ;
         chars.nth(skip);

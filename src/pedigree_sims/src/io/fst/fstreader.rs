@@ -1,8 +1,9 @@
 use std::{
     fs::File,
-    collections::HashMap,
     error::Error
 };
+
+use ahash::AHashMap;
 
 use fst::{
     Set,
@@ -21,8 +22,8 @@ use memmap::Mmap;
 pub struct FSTReader {
     genotypes_set: Set<Vec<u8>>,
     frequency_set: Set<Vec<u8>>,
-    genotypes: HashMap<String, [u8; 2]>,
-    frequencies: HashMap<String, f64>,
+    genotypes: AHashMap<String, [u8; 2]>,
+    frequencies: AHashMap<String, f64>,
 }
 
 impl FSTReader {
@@ -34,7 +35,7 @@ impl FSTReader {
     pub fn new(path: &str) -> std::io::Result<Self> {
         let genotypes_set = Self::get_set_memory(path)?;
         let frequency_set = Self::get_set_memory(&format!("{path}.frq"))?;
-        Ok(Self{genotypes_set, frequency_set, genotypes: HashMap::new(), frequencies: HashMap::new()})
+        Ok(Self{genotypes_set, frequency_set, genotypes: AHashMap::new(), frequencies: AHashMap::new()})
     }
 
     /// Load a raw fst-set into memory and store it as a raw vector of bytes.
@@ -60,12 +61,11 @@ impl FSTReader {
 
         // ---- Generate FST set
         let fst_set = Set::new(bytes)
-            .or_else(|err|{
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("Failed to construct a valid FST set from the file '{path}'. Got [{err}]")
-                ))
-            })?;
+            .map_err(|err|{ std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Failed to construct a valid FST set from the file '{path}'. Got [{err}]")
+            )
+        })?;
 
         Ok(fst_set)
     }
@@ -86,7 +86,7 @@ impl FSTReader {
         let mut string = Vec::new();
         let mut chromosomes = Vec::new();
         self.find_chromosome(root, &mut string, &mut chromosomes)?;
-        chromosomes.sort();
+        chromosomes.sort_unstable();
         chromosomes.dedup();
         Ok(chromosomes)
     }
@@ -155,7 +155,7 @@ impl FSTReader {
     /// - `pos`: 0-based chromosome position
     pub fn search_coordinate_genotypes(&mut self, chr: u8, pos: u32) {
         // ---- Create a new fst-matcher, matching any entry starting with our chromosome coordinates.
-        //----- genotype-fst index fields are '{chr} {pos} {id} {alleles}'
+        // ---- genotype-fst index fields are '{chr} {pos} {id} {alleles}'
         let regex = format!("{chr} {pos:0>9}");
         let matcher = Str::new(&regex).starts_with();
 

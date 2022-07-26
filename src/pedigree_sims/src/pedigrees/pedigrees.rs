@@ -28,7 +28,7 @@ use pwd_from_stdin::{
     },
 };
 
-use rand::{Rng, prelude::ThreadRng};
+use fastrand;
 use log::{info, trace, debug};
 
 
@@ -50,7 +50,7 @@ pub struct Pedigrees {
     pedigree_pop: String,
     genetic_map: GeneticMap,
     previous_positions: HashMap<String, u32>,
-    rng: ThreadRng,
+    rng: fastrand::Rng,
 }
 
 /// @TODO! : Right now we're reading the pedigree definition file for each replicate. Which isn't very efficient.
@@ -81,7 +81,7 @@ impl Pedigrees {
             previous_positions.insert(key.to_owned(), 0);
         }
         // --------------------- Initialize RNG
-        let rng = rand::thread_rng();
+        let rng = fastrand::Rng::new();
 
         Ok(Pedigrees{pedigrees, pedigree_pop, previous_positions, genetic_map, rng})
     }
@@ -180,6 +180,7 @@ impl Pedigrees {
     /// # Panics:
     ///  - if `comparison_label` does not match any key within `self.pedigrees`
     ///  - whenever a contaminating individual carries multi-allelic alternate allele (i.e. alt allele is > 1)
+    // #[inline(always)]
     fn update_pedigrees(&mut self, reader: &dyn GenotypeReader, chromosome:u8, position: u32, comparison_label: &String, pileup_error_probs: &[f64;2]) -> Result<(), Box<dyn Error>>{
 
         // ---- Compute the interval between current and previous position, search trough the genetic map interval tree,
@@ -196,7 +197,7 @@ impl Pedigrees {
                 let err: Box<dyn Error> = format!(
                     "Attempting to mutably access a missing pedigree vector \
                     using the comparison label '{comparison_label}' as a key.").into();
-                return err
+                err
             })?;
 
         // -------------------- Get the contaminating population allele frequency
@@ -204,16 +205,16 @@ impl Pedigrees {
 
         'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
             // --------------------- Perform SNP downsampling if necessary
-            if self.rng.gen::<f64>() < pedigree.get_params()?.snp_downsampling_rate {continue 'pedigree}
+            if self.rng.f64() < pedigree.get_params()?.snp_downsampling_rate {continue 'pedigree}
 
             // --------------------- Update founder alleles. Perform Allele Frequency downsampling if necessary.
             pedigree.update_founder_alleles(reader, &mut self.rng)?;
 
             // --------------------- Compute offspring genomes
-            pedigree.compute_offspring_alleles(interval_prob_recomb, i)?;
+            pedigree.compute_offspring_alleles(interval_prob_recomb, i, &self.rng)?;
 
             // --------------------- Compare genomes.
-            pedigree.compare_alleles(cont_af, pileup_error_probs)?;
+            pedigree.compare_alleles(cont_af, pileup_error_probs, &mut self.rng)?;
             // --------------------- Clear genotypes before the next line!
             pedigree.clear_alleles();
         }
@@ -236,12 +237,12 @@ impl Pedigrees {
 
         // ---- Check the input_fst_path validity and Initialize a new FSTReader.
         let mut fst_reader = io::fst::FSTReader::new(
-            &input_fst_path.to_str().ok_or_else(|| { 
+            input_fst_path.to_str().ok_or_else(|| { 
                 let err: Box<dyn Error> = format!("Invalid .fst filename and path '{}'. \
                     Note that input filenames should only contain unicode characters.",
                     input_fst_path.display()
-                    ).into();
-                return err
+                ).into();
+                err
             })?
         )?;
 
@@ -254,7 +255,7 @@ impl Pedigrees {
                 "Could not find any valid chromosome within the current FST index file. \
                 Got ['{contained_chromosomes:?}']"
                 ).into();
-            return err
+            err
         })?;
         let min = contained_chromosomes[0];
 
@@ -428,7 +429,7 @@ impl Pedigrees {
                     Attempting to access a missing pedigree vector by \
                     using the comparison label '{comparison_label}' as a key."
                     ).into();
-                return err
+                err
             })?;
 
 
@@ -469,7 +470,7 @@ impl Pedigrees {
                     Attempting to access a missing pedigree vector by \
                     using the comparison label '{comparison_label}' as a key."
                     ).into();
-                return err
+                err
             })?;
     
             // ---- Aggregate the sum of avg. PWD for each relatedness scenario.

@@ -14,7 +14,7 @@ use io::*;
 
 use std::fs;
 use std::error::Error;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::io::{BufReader, BufRead};
 
 use log::{error, warn, info, debug};
@@ -27,7 +27,7 @@ pub fn run<'a>(
     pwd_cli           : &'a parser::PwdFromStdin,
     requested_samples : &'a [usize],
     genome            : &'a Genome,
-) -> Result<(Comparisons, HashSet<SNPCoord>), Box<dyn Error>>{
+) -> Result<(Comparisons, HashMap<String, String>), Box<dyn Error>>{
 
     // ----------------------------- Sanity checks.
     //pwd_cli.check_depth()?; // Ensure min_depths are > 2 when allowing self-comparisons
@@ -138,23 +138,23 @@ pub fn run<'a>(
     
 
     // ----------------------------- Print results
-    let mut pwd_writer = Writer::new(Some(output_files["pwd"].clone()))?;
-    if ! pwd_cli.filter_sites {
-        info!("Printing results...");
-        let header = format!("{: <20} - Overlap - Sum PWD  - Avg. Pwd - 95-CI.   - JK. Var. - Avg. Phred", "Name");
-        println!("{}", header);
-        pwd_writer.write_iter(&vec![header])?;       // Print PWD results to file.
-        pwd_writer.write_iter(comparisons.iter())?;  // 
+    //let mut pwd_writer = Writer::new(Some(output_files["pwd"].clone()))?;
+    //if ! pwd_cli.filter_sites {
+    //    info!("Printing results...");
+    //    let header = format!("{: <20} - Overlap - Sum PWD  - Avg. Pwd - 95-CI.   - JK. Var. - Avg. Phred", "Name");
+    //    println!("{}", header);
+    //    pwd_writer.write_iter(&vec![header])?;       // Print PWD results to file.
+    //    pwd_writer.write_iter(comparisons.iter())?;  // 
 
-        println!("{}", comparisons);                 // Print PWD results to console
+    //    println!("{}", comparisons);                 // Print PWD results to console
 
-        if pwd_cli.print_blocks {
-            for comparison in comparisons.iter() {
-                let pair = comparison.get_pair();
-                let mut block_writer = Writer::new(Some(output_files[&pair].clone()))?;
-                block_writer.write_iter(vec![&comparison.blocks])?;
-            }
-        }
-    }
-    Ok((comparisons, target_positions))
+    //    if pwd_cli.print_blocks {
+    //        for comparison in comparisons.iter() {
+    //            let pair = comparison.get_pair();
+    //            let mut block_writer = Writer::new(Some(output_files[&pair].clone()))?;
+    //            block_writer.write_iter(vec![&comparison.blocks])?;
+    //        }
+    //    }
+    //}
+    Ok((comparisons, output_files))
 }
