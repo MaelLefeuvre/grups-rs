@@ -6,8 +6,8 @@
 #' @export
 app <- function(ui, server, data_dir = "./grups_output", ...) {
 
-  spinner_int = 8
-  spinner_col = "#0dc5c1"
+  # ---- 0a. Configure loading spinner animation
+  options(spinner.type = 8, spinner.color = "#0dc5c1")
 
   # ---- 1. Search for .result file(s)
   res_files <- list.files(
@@ -23,35 +23,35 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     pattern = "\\.pwd$"
   )
 
-  # ---- 3a. Search for blk_file(s)                                          [A FUNCTION]
+  # ---- 3a. Search for blk_file(s)                                   [A FUNC]
   blk_files <- list.files(
     path = paste(data_dir, "blocks", sep = "/"),
     full.names = TRUE,
     pattern = "\\.blk$"
   )
 
-  # ---- 3b. Extract block pair names, parse all that data into a df.        [B FUNCTION]
+  # ---- 3b. Extract block pair names, parse all that data into a df. [B FUNC]
   blk_files <- data.frame(
     path      = blk_files,
     row.names = stringr::str_extract(  # Extract pair names
       blk_files,
-      "(?<=-)([A-Za-z0-9]+([-0-9]+){0,1}-[A-Za-z0-9]+([-0-9]+){0,1})(?=.blk$)" #"(?<=-)([^-]+)-([^-]+)(?=.blk$)"
+      "(?<=-)([A-Za-z0-9]+([-0-9]+){0,1}-[A-Za-z0-9]+([-0-9]+){0,1})(?=.blk$)"
     ),
     stringsAsFactors = FALSE
   )
 
-  # ---- 4a. Search for simulation files                                     [A FUNCTION]
+  # ---- 4a. Search for simulation files                              [A FUNC]
   sim_files <- list.files(
     path = paste(data_dir, "simulations", sep = "/"),
     full.names = TRUE,
     pattern = "\\.sims$"
   )
-  # ---- 4b. Extract simulations. pair names, parse everything into a df.    [B FUNCTION]
+  # ---- 4b. Extract simulations, pair names, parse them into a df. [B FUNC]
   sim_files <- data.frame(
     path = sim_files,
     row.names = stringr::str_extract( # Extract pair names
       sim_files,
-      "(?<=-)([A-Za-z0-9]+([-0-9]+){0,1}-[A-Za-z0-9]+([-0-9]+){0,1})(?=.sims$)" #"(?<=-)([^-]+)-([^-]+)(?=.sims$)"
+      "(?<=-)([A-Za-z0-9]+([-0-9]+){0,1}-[A-Za-z0-9]+([-0-9]+){0,1})(?=.sims$)"
     ),
     stringsAsFactors = FALSE
   )
@@ -63,7 +63,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     pattern = "\\.yaml$"
   )
 
-  # ---- 5b. order them in decreasing order. The last yaml file will be the first.
+  # ---- 5b. order them in decreasing order. -> last yaml becomes the first.
   config_files <- config_files[order(config_files, decreasing = TRUE)]
 
 
@@ -71,17 +71,20 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
   shiny::validate(
     shiny::need(
       length(pwd_files) == 1,
-      "[ERROR]: Exactly one `.pwd` file must exist within `data_dir`. Exiting."
+      "[ERROR]: Exactly one `.pwd` file must exist within `data_dir`. \
+       Exiting."
     ),
 
     shiny::need(
       length(res_files) == 1,
-      "[ERROR]: Exactly one `.result` file must exist within `data_dir`. Exiting."
+      "[ERROR]: Exactly one `.result` file must exist within `data_dir`. \
+       Exiting."
     ),
 
     shiny::need(
       length(config_files) >= 1,
-      "[ERROR]: At least one `.yaml` configuration file must exist within `data_dir`. Exiting"
+      "[ERROR]: At least one `.yaml` configuration file must exist within \
+       `data_dir`. Exiting"
     )
   )
 
@@ -90,7 +93,8 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     shiny::navbarPage("GRUPS-plots",
       # ---- 1. Render summary table.
       shiny::tabPanel("Summary",
-        DT::dataTableOutput("simulation_results_df") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+        DT::dataTableOutput("simulation_results_df") %>%
+          shinycssloaders::withSpinner()
       ),
       # ---- 1. Render pwd barplots tab.
       shiny::tabPanel("Raw Pairwise differences.",
@@ -98,52 +102,80 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
           shiny::sidebarLayout(
             shiny::sidebarPanel(
               shiny::fluidRow(
-                shiny::column(5,
+                shiny::column(6,
+                  shiny::checkboxInput("norm_request",
+                    label = "Normalize"
+                  )
+                ),
+                shiny::column(6,
+                  shiny::checkboxInput("hide_self_comparisons",
+                    label = "Hide self-comparisons"
+                  )
+                )
+              ),
+
+              shiny::fluidRow(
+                shiny::column(6,
                   shiny::radioButtons("norm_method",
-                    "Normalization method",
-                    c("Raw", "Self-comparisons", "All", "Value"),
-                    selected = "Raw",
+                    "Normalization subset",
+                    choiceNames  = c("Pairwise-comparisons (2Ms)",
+                                     "Self-comparisons (Ms)",
+                                     "Value (2Ms)"
+                                    ),
+                    choiceValues = c("Pairwise", "Self", "Value"),
+                    selected = "Pairwise",
                     width = "100%"
                   )
                 ),
-                shiny::column(5,
+                shiny::column(6,
                   shiny::conditionalPanel(
-                    condition = "input.norm_method != 'Raw' && input.norm_method != 'Value'",
+                    condition = "input.norm_method != 'Value'",
                     shiny::radioButtons("norm_metric",
-                      "Normalization metric",
-                      c("Median", "Mean", "Min", "Max")
+                      label    = "Normalization metric",
+                      choices  = c("Median", "Mean", "Min", "Max"),
+                      selected = "Median"
                     )
                   ),
                   shiny::conditionalPanel(
                     condition = "input.norm_method == 'Value'",
                     shiny::numericInput("norm_value",
-                      "Normalization value",
-                      0.25,
-                      min = 0.01,
-                      max = 2,
-                      step = 0.01
+                      label = "Normalization value",
+                      value = 0.25,
+                      min   = 0.01,
+                      max   = 2,
+                      step  = 0.01
                     )
                   )
                 )
               ),
-              shiny::numericInput("min_overlap",
-                "Minimum SNP overlap treshold",
-                0,
-                min = 0,
-                max = .Machine$integer.max,
-                step = 10000
-              ),
-              shiny::checkboxInput("hide_self_comparisons",
-                "Hide self-comparisons",
+              shiny::fluidRow(
+                shiny::column(6,
+                  shiny::numericInput("min_overlap",
+                    label = "Minimum SNP overlap treshold",
+                    value = 0,
+                    min   = 0,
+                    max   = .Machine$integer.max,
+                    step  = 10000
+                  ),
+                ),
+                shiny::column(6,
+                  shiny::radioButtons("norm_avg_type",
+                    label = "Type",
+                    choiceNames = c("Raw Average PWD", "Corrected Average PWD"),
+                    choiceValues = c("Raw", "Corr"),
+                  )
+                )
               )
             ),
             shiny::mainPanel(
               shiny::tabsetPanel(
                 shiny::tabPanel("Plot",
-                  plotly::plotlyOutput("pwd_barplot") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+                  plotly::plotlyOutput("pwd_barplot") %>%
+                    shinycssloaders::withSpinner()
                 ),
                 shiny::tabPanel("Raw data",
-                  shiny::tableOutput("pwd_dataframe") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+                   DT::dataTableOutput("pwd_dataframe") %>%
+                    shinycssloaders::withSpinner()
                 )
               )
             )
@@ -172,16 +204,18 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
                 min = 1,
                 max = 50
               ),
-              shiny::uiOutput("chromosome_subset_checkboxgroup") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+              shiny::uiOutput("chromosome_subset_checkboxgroup") %>%
+                shinycssloaders::withSpinner()
             ),
             shiny::mainPanel(
               shiny::tabsetPanel(
                 shiny::tabPanel("Plot",
-                  plotly::plotlyOutput("block_scatterplot", reportTheme = TRUE
-) %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+                  plotly::plotlyOutput("block_scatterplot") %>%
+                    shinycssloaders::withSpinner()
                 ),
                 shiny::tabPanel("Raw data",
-                  shiny::tableOutput("block_dataframe") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+                  shiny::tableOutput("block_dataframe") %>%
+                    shinycssloaders::withSpinner()
                 )
               )
             )
@@ -198,7 +232,8 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
                 "Pair name",
                 rownames(sim_files)
               ),
-              shiny::uiOutput("simulation_labels_checkboxgroup") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col),
+              shiny::uiOutput("simulation_labels_checkboxgroup") %>%
+                shinycssloaders::withSpinner(),
               shiny::numericInput("ks_alpha",
                 "Kolmogorov-Smirnov alpha treshold",
                 min   = 0,
@@ -210,22 +245,27 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
             shiny::mainPanel(
               shiny::tabsetPanel(
                 shiny::tabPanel("Plot",
-                  plotly::plotlyOutput("sims_violinplot") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col),
-                  DT::dataTableOutput("ks_normality_test") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col),
+                  plotly::plotlyOutput("sims_violinplot") %>%
+                    shinycssloaders::withSpinner(),
+                  DT::dataTableOutput("ks_normality_test") %>%
+                    shinycssloaders::withSpinner(),
                   shiny::hr(),
                   shiny::fluidRow(
                     shiny::column(6,
-                      plotly::plotlyOutput("bc_matrix_plot") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+                      plotly::plotlyOutput("bc_matrix_plot") %>%
+                        shinycssloaders::withSpinner()
                     ),
                     shiny::column(6,
-                      plotly::plotlyOutput("plot_or_matrix") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+                      plotly::plotlyOutput("plot_or_matrix") %>%
+                        shinycssloaders::withSpinner()
                     )
                   ),
                   shiny::hr(),
                   plotly::plotlyOutput("OR_confidence")
                 ),
                 shiny::tabPanel("Raw data",
-                  shiny::tableOutput("sims_dataframe") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+                  shiny::tableOutput("sims_dataframe") %>%
+                    shinycssloaders::withSpinner()
                 )
               )
             )
@@ -235,7 +275,8 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
 
       # ---- 4. Render yaml configuration file:
       shiny::tabPanel("Configuration",
-        shiny::verbatimTextOutput("config_file") %>% shinycssloaders::withSpinner(spinner_int, color=spinner_col)
+        shiny::verbatimTextOutput("config_file") %>%
+          shinycssloaders::withSpinner()
       )
     )
   )
@@ -243,7 +284,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
 
   # 0 ---- Update block slider inputs
   shiny::observe({
-    max_blockstep_value <- input$block_width -1
+    max_blockstep_value <- input$block_width - 1
     new_step_value <- ifelse(
       input$block_step < max_blockstep_value,
       input$block_step,
@@ -263,18 +304,13 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       grups.plots::load_res_file(res_files[1])
     })
 
-    # ---- 1. Load results  summary dataframe
+    # ---- 1a. Load results  summary dataframe
     output$simulation_results_df <- DT::renderDataTable({
-      # Add overlap.
-      # @ TODO: Simply add overlap as a direct output of grups.....
-      merged <- merge(
-        load_results_file(),
-        load_pairwise_dataframe()$data[,c("pairs","overlap")],
-        by.x = "Pair_name",
-        by.y = "pairs"
-      )
       DT::datatable(
-        merged,
+        grups.plots::merge_pwd_results(
+          pwd_df = load_pairwise_dataframe(),
+          res_df = load_results_file()
+        ),
         style = "bootstrap5",
         options = list(ordering = TRUE, scrollX = FALSE),
         class = "table-condensed",
@@ -282,33 +318,43 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       )
   })
 
-    # ---- 1a. Load / Update pairwise dataframe.
+    # ---- 1b. Load / Update pairwise dataframe.
     load_pairwise_dataframe <- shiny::reactive(
       grups.plots::load_pairwise_file(
         path = pwd_files[1],
-        min_overlap = input$min_overlap,
-        norm_method = input$norm_method,
-        norm_metric = input$norm_metric,
-        norm_value = input$norm_value
+        res_data = load_results_file(),
+        norm_avg_type = input$norm_avg_type,
+        min_overlap  = input$min_overlap,
+        norm_request = input$norm_request,
+        norm_method  = input$norm_method,
+        norm_metric  = input$norm_metric,
+        norm_value   = input$norm_value
       )
     )
 
-    # ---- 1b. Render pairwise difference barplot.
+    # ---- 2a. Render pairwise difference barplot.
     output$pwd_barplot <- plotly::renderPlotly(
       grups.plots::plot_pairwise_diff(
-        data = load_pairwise_dataframe(),
+        data                  = load_pairwise_dataframe(),
         hide_self_comparisons = input$hide_self_comparisons,
-        norm_method = input$norm_method,
-        norm_metric = input$norm_metric,
+        norm_method           = input$norm_method,
+        norm_metric           = input$norm_metric,
       )
     )
 
-    # ---- 1c. Render pairwise dataframe
-    output$pwd_dataframe <- shiny::renderTable(
-      load_pairwise_dataframe()$data
+    # ---- 2b. Render pairwise dataframe
+    output$pwd_dataframe <- DT::renderDataTable(
+      DT::datatable(
+        load_pairwise_dataframe()$data,
+        style = "bootstrap5",
+        options = list(ordering = TRUE, scrollX = TRUE),
+        class = "table-condensed",
+        filter = "top",
+      )
+
     )
 
-    # ---- 2a. Load / Update block dataframe
+    # ---- 3a. Load / Update block dataframe
     load_block_dataframe <- shiny::reactive(
       grups.plots::load_blockfile(
         path  = blk_files[input$block_pair, ],
@@ -317,7 +363,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       )
     )
 
-    # ---- 2b. Output chromosome subset checkbox group
+    # ---- 3b. Output chromosome subset checkbox group
     output$chromosome_subset_checkboxgroup <- shiny::renderUI({
       chromosomes <- levels(as.factor(load_block_dataframe()$chr))
       grups.plots::shiny_reactive_checkbox(
@@ -328,7 +374,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       )
     })
 
-    # ---- 2c. Render block-scatterplot
+    # ---- 3c. Render block-scatterplot
     output$block_scatterplot <- plotly::renderPlotly({
       grups.plots::plot_sliding_window(
         load_block_dataframe(),
@@ -336,14 +382,14 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       )
     })
 
-    ## WIP: Updates traces without loading up the entire plotly widget. Ugly, finicky, and most likely
-    ## error prone code at the moment.
+    ## WIP: Updates traces without loading up the entire plotly widget.
+    ## Ugly, finicky, and most likely error prone code at the moment.
     #shiny::observeEvent(input$block_width, {
     #  plotly::plotlyProxy("block_scatterplot", session) %>%
     #  plotly::plotlyProxyInvoke("addTraces",
     #    lapply(1:22, FUN = function(x) {
     #      data=load_block_dataframe()
-    #      list(x = data[which(data$chr == x),]$start, 
+    #      list(x = data[which(data$chr == x),]$start,
     #           y = data[which(data$chr == x),]$avg_pwd,
     #           color = ~as.factor(x),
     #           #colors = RColorBrewer::brewer.pal(n=22, "Set2"),
@@ -356,17 +402,33 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     #  ) %>%
     #  plotly::plotlyProxyInvoke("deleteTraces", as.integer(0:21))
     #})
-    # ---- 2d. Filter out chromosome which were not requested by the user.
+    # ---- 3d. Filter out chromosome which were not requested by the user.
     shiny::observeEvent(input$chromosome_labels, {
-      chr_to_hide <- unique(load_block_dataframe()$chr[!(load_block_dataframe()$chr %in% input$chromosome_labels)] -1)
-      chr_to_keep <- unique(load_block_dataframe()$chr[(load_block_dataframe()$chr %in% input$chromosome_labels)] -1)
-      plotly::plotlyProxy("block_scatterplot", session) %>%
-      plotly::plotlyProxyInvoke("restyle", list(visible = FALSE), chr_to_hide) %>%
-      plotly::plotlyProxyInvoke("restyle", list(visible = TRUE), chr_to_keep)
+      chr_to_hide <- unique(
+        load_block_dataframe()$chr[
+          !(load_block_dataframe()$chr %in% input$chromosome_labels)
+        ] - 1
+      )
+      chr_to_keep <- unique(
+        load_block_dataframe()$chr[
+          (load_block_dataframe()$chr %in% input$chromosome_labels)
+        ] - 1
+      )
+      plotly::plotlyProxy("block_scatterplot",
+        session
+      ) %>%
+      plotly::plotlyProxyInvoke("restyle",
+        list(visible = FALSE),
+        chr_to_hide
+      ) %>%
+      plotly::plotlyProxyInvoke("restyle",
+        list(visible = TRUE),
+        chr_to_keep
+      )
 
     })
 
-    # ---- 2e. Reset User-selected chromosome if he used select/deselect All.
+    # ---- 3e. Reset user-selected chromosome if he used select/deselect All.
     shiny::observeEvent(input$chromosome_labels_select, {
       shiny::updateCheckboxGroupInput(
         session  = session,
@@ -384,19 +446,19 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       )
     })
 
-    # ---- 2e. Render block dataframe
+    # ---- 3f. Render block dataframe
     output$block_dataframe <- shiny::renderTable(
       load_block_dataframe()
     )
 
-    # ---- 3a. Load / Update simulations dataframe
+    # ---- 4a. Load / Update simulations dataframe
     load_sims_dataframe <- shiny::reactive(
       grups.plots::load_simfile(
         path = sim_files[input$sim_pair, ]
       )
     )
 
-    # ---- 3b. Output simulation labels checkbox group.
+    # ---- 4b. Output simulation labels checkbox group.
     output$simulation_labels_checkboxgroup <- shiny::renderUI({
       sim_labels <- levels(load_sims_dataframe()$label)
       grups.plots::shiny_reactive_checkbox(
@@ -407,17 +469,17 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       )
     })
 
-    # ---- 3c. Render simulations violin plot
+    # ---- 4c. Render simulations violin plot
     output$sims_violinplot <- plotly::renderPlotly({
       grups.plots::plot_pedigree_sims(
         sims_dataframe = load_sims_dataframe(),
-        pwd_path       = pwd_files[1],
+        results_data   = load_results_file(),
         pair           = input$sim_pair,
         labels_to_plot = input$violin_labels
       )
     })
 
-    # ---- 2e. Reset User-selected chromosome if he used select/deselect All.
+    # ---- 4f. Reset User-selected chromosome if he used select/deselect All.
     shiny::observeEvent(input$violin_labels_select, {
       shiny::updateCheckboxGroupInput(
         session  = session,
@@ -435,12 +497,12 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       )
     })
 
-    # ---- 3d. Render simulations dataframe
+    # ---- 4g. Render simulations dataframe
     output$sims_dataframe <- shiny::renderTable(
       load_sims_dataframe()
     )
 
-    # ---- 3e. Render KS normality test
+    # ---- 4h. Render KS normality test
     output$ks_normality_test <- DT::renderDataTable(
       grups.plots::test_normality(
         sims_file = load_sims_dataframe(),
@@ -456,12 +518,16 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       ) %>%
       DT::formatStyle(1:999,
                       rows  = "p.val",
-                      color = DT::JS(paste("value  < ", input$ks_alpha," ? 'red' : ''"))
+                      color = DT::JS(paste("value  < ",
+                                           input$ks_alpha,
+                                           " ? 'red' : ''"
+                                          )
+                                    )
       ),
       rownames = TRUE
     )
 
-    # ---- 3f. Render BC matrix plot
+    # ---- 4i. Render BC matrix plot
     output$bc_matrix_plot <- plotly::renderPlotly(
       grups.plots::plot_bc_matrix(
         bc_matrix = grups.plots::get_bc_matrix(
@@ -476,7 +542,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
       )
     )
 
-    # ---- 3g. Render  OR matrix
+    # ---- 4j. Render  OR matrix
     output$plot_or_matrix <- plotly::renderPlotly({
       fig <- grups.plots::plot_bc_matrix(
         bc_matrix = grups.plots::get_odds_matrix(
@@ -494,15 +560,15 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
         absolute_values = TRUE
       )
 
-      # Dirty trick to obtain a proper marker text annotation. 
-      fig[["x"]][["attrs"]][[1]][["text"]] = ~paste(
+      # Dirty trick to obtain a proper marker text annotation.
+      fig[["x"]][["attrs"]][[1]][["text"]] <- ~paste(
         "<b>Odds Ratio:</b>", exp(value), "<br>",
         "<b>Log(OR):</b>", value
       )
       fig
     })
 
-    # ---- 3h. Render OR confidence
+    # ---- 4k. Render OR confidence
     output$OR_confidence <- plotly::renderPlotly(
       grups.plots::plot_or_confidence(
         or_matrix = grups.plots::get_odds_matrix(
@@ -511,11 +577,13 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
                       pair             = input$sim_pair,
                       labels_to_keep = input$violin_labels
         ),
-        predictor = load_results_file()[which(load_results_file()[, 1]== input$sim_pair),2]  # WARN there's a trailing dot. remove this asap. 
+        predictor = load_results_file()[
+          which(load_results_file()[, 1] == input$sim_pair), 2
+        ]
       )
     )
 
-    # ---- 4 Render yaml config file
+    # ---- 5a. Render yaml config file
     output$config_file <- shiny::renderText(
       readChar(config_files[1], file.info(config_files[1])$size)
     )

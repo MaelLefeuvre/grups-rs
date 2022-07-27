@@ -452,8 +452,8 @@ impl Pedigrees {
         let mut writer = pwd_from_stdin::io::Writer::new(Some(output_file.to_owned()))?;
 
         // ---- Print header and write to output_file
-        let simulation_header = format!("{: <20} - {: <20} - {: <10} - {: <10} - {: <10}",
-            "Pair_name", "Most_Likely_rel.", "Corr.avg-PWD", "Sim.avg-PWD", "Min_Z-Score"
+        let simulation_header = format!("{: <20} - {: <20} - {: <10} - {: <10} - {: <10} - {: <12} - {: <14} - {: <10} - {: <10}",
+            "Pair_name", "Most_Likely_rel", "Corr.Overlap", "Corr.Sum.PWD", "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred", "Sim.Avg.PWD", "Min.Z_Score"
         );
         println!("{simulation_header}");
         simulations_results.push(simulation_header);
@@ -497,8 +497,25 @@ impl Pedigrees {
             let min_z_score = if min_z_score == f64::MAX {f64::NAN} else {min_z_score};
             let pair_name = comparison.get_pair();
 
+            // ---- Get the "corrected" observed pwd summary statistics. 
+            let corrected_sum_pwd = comparison.get_sum_pwd();
+            let corrected_overlap = comparison.get_overlap();
+            let corrected_ci = comparison.get_confidence_interval();
+            let corrected_phred = comparison.get_avg_phred();
+
             // ---- Preformat and log result to console.
-            let simulation_result = format!("{pair_name: <20} - {most_likely_rel: <20} - {observed_avg_pwd: >12.6} - {most_likely_avg_pwd: >12.6} - {min_z_score: <12.6}");
+            //"Pair_name", "Most_Likely_rel", "Corr.Overlap", "Corr.Sum.PWD", "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred", "Sim.Avg.PWD", "Min.Z_Score", 
+            let simulation_result = format!(
+                "{pair_name: <20} - \
+                 {most_likely_rel: <20} - \
+                 {corrected_overlap: <12.6} - \
+                 {corrected_sum_pwd: <12.6} - \
+                 {observed_avg_pwd: <12.6} - \
+                 {corrected_ci: <12.6} - \
+                 {corrected_phred: <14.6} - \
+                 {most_likely_avg_pwd: <11.6} - \
+                 {min_z_score: >11.6}"
+            );
             println!("{simulation_result}");
             simulations_results.push(simulation_result);
         }

@@ -15,7 +15,6 @@ plot_sliding_window <- function(block_dataframe, pair) {
     )
 
     # Filter out chromosome which were not requested by the user.
-    #block_dataframe <- block_dataframe[which(block_dataframe$chr %in% chromosomes),]
     plot_title <- paste("Average mismatch rate for", pair)
     plotly::plot_ly(
         type  = "scatter",
@@ -35,9 +34,9 @@ plot_sliding_window <- function(block_dataframe, pair) {
                       yref = "paper"
                      ),
         xaxis  = list(title = "Position (Mb)"),
-        yaxis  = list(title="Average mismatch rate", range = c(0,1)),
-        legend = list(title       = list(text = '<b> Chromosome </b>'),
-                      orientation = 'h',
+        yaxis  = list(title = "Average mismatch rate", range = c(0, 1)),
+        legend = list(title       = list(text = "<b> Chromosome </b>"),
+                      orientation = "h",
                       y            = -0.2,
                       yref         = "paper"
                      )
@@ -45,7 +44,8 @@ plot_sliding_window <- function(block_dataframe, pair) {
     plotly::config(editable    = TRUE,
                    displaylogo = FALSE,
                    scrollZoom  = TRUE
-                  ) #%>% filter(chr %in% input$chromosome_labels) %>% group_by(chr) %>% plotly::add_lines()
-
-
+                  ) # %>%
+    # filter(chr %in% input$chromosome_labels) %>%
+    # group_by(chr) %>%
+    # plotly::add_lines()
 }

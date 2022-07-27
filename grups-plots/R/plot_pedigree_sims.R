@@ -5,7 +5,7 @@
 #' @param block_dataframe dataframe of raw simulation results
 #' @param pair Pairwise comparison identifier, or label.
 #' @return plotly violin plot
-plot_pedigree_sims <- function(sims_dataframe, pwd_path, labels_to_plot, pair) {
+plot_pedigree_sims <- function(sims_dataframe, results_data, labels_to_plot, pair) {
 
   # remove labels which were not requested by the user:
   sims_dataframe <- sims_dataframe[which(sims_dataframe$label %in% labels_to_plot),]
@@ -20,11 +20,11 @@ plot_pedigree_sims <- function(sims_dataframe, pwd_path, labels_to_plot, pair) {
 
 
   # Load observed pairwise_difference data.
-  pwd_data <- read.table(pwd_path, sep = "\t", header = TRUE)
-  pwd_data <- pwd_data[which(pwd_data$Name == pair), ]
+  #pwd_data <- read.table(pwd_path, sep = "\t", header = TRUE)
+  pwd_data <- results_data[which(results_data$Pair_name == pair), ]
   # extract mean and 95%CI.
-  plotdist_mean <- pwd_data[1, 4]
-  plotdist_std  <- pwd_data[1, 5]
+  plotdist_mean <- pwd_data$Corr.Avg.PWD[1]
+  plotdist_std  <- pwd_data$Corr.CI.95[1]
   # ---- Prepare observed pwd lines.
   fin_rel <- list(type = "line",
                  line = list(color="black"),

@@ -141,9 +141,17 @@ impl Comparison {
         nuc[0].base != nuc[1].base
     }
 
+    pub fn get_sum_pwd(&self) -> f64 {
+        self.pwd
+    }
+
     // Getter for the average pairwise difference across our overlapping snps.
     pub fn get_avg_pwd(&self) -> f64 {
-        self.pwd as f64 / self.positions.len() as f64
+        self.pwd / self.positions.len() as f64
+    }
+
+    pub fn get_overlap(&self) -> usize {
+        self.positions.len()
     }
 
     // Getter for the average pairwise phred score across our overlapping snps.
@@ -159,17 +167,19 @@ impl Comparison {
     pub fn get_jackknife_estimates(&self) -> JackknifeEstimates {
         self.blocks.compute_unequal_delete_m_pseudo_values(self.pwd, self.positions.len() as u32)
     }
+
+    pub fn get_confidence_interval(&self) -> f64 {
+        self.variance.confidence_interval()
+    }
 }
 
 
 impl fmt::Display for Comparison {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let jackknife_estimates = self.get_jackknife_estimates();
         write!(f,
             "{: <PAIRS_FORMAT_LEN$}{DISPL_SEP}\
              {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$.1}{DISPL_SEP}\
-             {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}",
@@ -177,8 +187,7 @@ impl fmt::Display for Comparison {
             self.positions.len(),
             self.pwd,
             self.get_avg_pwd(),
-            self.variance.confidence_interval(),
-            jackknife_estimates.variance,
+            self.get_confidence_interval(),
             self.get_avg_phred()
         )
     }
@@ -338,9 +347,8 @@ mod tests {
              {: <AVERG_FORMAT_LEN$.1}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
-             {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}",
-             expected_pair_name, 0, 0.0, f64::NAN, f64::NAN, 0.00000, f64::NAN
+             expected_pair_name, 0, 0.0, f64::NAN, f64::NAN, f64::NAN
         );
         assert_eq!(expect_out, format!("{mock_comparison}"));
     }

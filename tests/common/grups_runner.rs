@@ -86,7 +86,7 @@ pub fn test_grups_run(mode: parser::Mode, data_dir: &str) {
 
     let output_pwd            = format!("{output_dir}/{FILESTEM}.pwd");
     let expected_overlap   = vec!["107"     , "86"      , "31"      ];
-    let expected_avg_pwd   = vec!["0.18692" , "0.19767" , "0.32258" ];
+    let expected_avg_pwd   = vec!["0.186916" , "0.197674" , "0.322581" ];
     assert_pwd_matches(&output_pwd, expected_overlap, expected_avg_pwd);
 
     let output_results            = format!("{output_dir}/{FILESTEM}.result");

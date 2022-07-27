@@ -11,6 +11,9 @@ use super::comparison::Comparison;
 use super::individual::Individual;
 use crate::io::Writer;
 
+use super::{PAIRS_FORMAT_LEN, COUNT_FORMAT_LEN, AVERG_FORMAT_LEN, DISPL_SEP};
+
+
 /// Vector of all the user-requested comparisons
 #[derive(Debug, Default)]
 pub struct Comparisons (Vec<Comparison>);
@@ -45,7 +48,14 @@ impl Comparisons {
         let mut pwd_writer = Writer::new(Some(output_files["pwd"].to_owned()))?;
         
         info!("Printing results...");
-        let header = format!("{: <20} - Overlap - Sum PWD  - Avg. Pwd - 95-CI.   - JK. Var. - Avg. Phred", "Name");
+        let header = format!(
+            "{: <PAIRS_FORMAT_LEN$}{DISPL_SEP}\
+             {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
+             {: <AVERG_FORMAT_LEN$}{DISPL_SEP}\
+             {: <AVERG_FORMAT_LEN$}{DISPL_SEP}\
+             {: <AVERG_FORMAT_LEN$}{DISPL_SEP}\
+             {: <AVERG_FORMAT_LEN$}",
+             "Pair_name", "Raw.Overlap", "Raw.Sum.PWD", "Raw.Avg.PWD", "Raw.CI.95", "Raw.Avg.Phred");
         println!("{}", header);
         pwd_writer.write_iter(&vec![header])?;       // Print PWD results to file.
         pwd_writer.write_iter(self.iter())?;  // 
@@ -219,9 +229,8 @@ mod tests {
                 {: <AVERG_FORMAT_LEN$.1}{DISPL_SEP}\
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
-                {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}{DISPL_SEP}\
                 {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}",
-                expected_pair_name, 0, 0.0, f64::NAN, f64::NAN, 0.00000, f64::NAN
+                expected_pair_name, 0, 0.0, f64::NAN, f64::NAN, f64::NAN
             )?;
         }
 
