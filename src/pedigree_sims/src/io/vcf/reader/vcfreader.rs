@@ -292,15 +292,21 @@ impl<'a> VCFReader<'a> {
 
 impl<'a> GenotypeReader for VCFReader<'a> {
         // Return the alleles for a given SampleTag. Search is performed using `sample_tag.idx()`;
-    fn get_alleles(&self, sample_tag: &SampleTag ) -> Option<[u8; 2]> {
-        let geno_idx = sample_tag.idx().as_ref()? * 4;
-        let haplo1 = self.buf[geno_idx]   - 48;
-        let haplo2 = self.buf[geno_idx+2] - 48;
-        Some([haplo1, haplo2])
+    fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2], String> {
+        let geno_idx = sample_tag.idx()
+            .as_ref()
+            .ok_or_else(|| {
+                format!("Failed to obtain column index of sample {} while attempting to retrieve its alleles.", sample_tag.id())
+            })? * 4;
+            
+        let retrieve_err = || format!("Failed to retrieve the alleles of sample {} within the current VCF.", sample_tag.id());
+        let haplo1 = self.buf.get(geno_idx  ).ok_or_else(retrieve_err).map(|all| all - 48)?;
+        let haplo2 = self.buf.get(geno_idx+2).ok_or_else(retrieve_err).map(|all| all - 48)?;
+        Ok([haplo1, haplo2])
     }
     
     // Return the alleles frequencies for a given population id.
-    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, Box<dyn Error>> {
+    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, String> {
         Ok(self.info.get_pop_allele_frequency(pop)?)
     }
 }

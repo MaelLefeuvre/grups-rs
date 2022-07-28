@@ -53,30 +53,24 @@ impl Contaminant {
     /// - whenever a contaminating individual carries multi-allelic alternate allele (i.e. alt allele is > 1)
     /// - if the output array's len() != 2
     pub fn compute_local_cont_af(&self, reader: &dyn GenotypeReader) -> Result<[f64; 2], Box<dyn Error>> {
-        let mut output = Vec::with_capacity(2);
+        let mut output : [f64; 2] = [0.0, 0.0];
 
         // ---- For each individual being compared....
-        for contaminant in self.0.iter() {
+        for (i, contaminant) in self.0.iter().enumerate() {
 
             // ---- Count the sum of observed REF and ALT alleles when looking through the contaminants genotypes.
-            let mut ref_allele_count = 0;
-            let mut alt_allele_count = 0;
+            let mut ref_allele_count = 0.0;
+            let mut alt_allele_count = 0.0;
 
             // ---- For each individual contaminating our compared individual...
             for tag in contaminant.iter() { 
                 // ---- Extract the alleles of the contaminant from the reader, and dynamically compute the allele frequency.
-                let contaminant_alleles = reader.get_alleles(tag)
-                    .ok_or_else(|| {
-                        let err: Box<dyn Error> = format!(
-                            "While attempting to compute local contaminating allele frequencies : \
-                            Failed to retrieve alleles from reader for contaminating individual '{tag}'"
-                        ).into();
-                        err
-                })?;
+                let contaminant_alleles = reader.get_alleles(tag)?;
+
                 contaminant_alleles.iter().for_each(|allele: &u8| {
                     match allele {
-                        0          => ref_allele_count += 1,
-                        1          => alt_allele_count += 1,
+                        0          => ref_allele_count += 1.0,
+                        1          => alt_allele_count += 1.0,
                         other => panic!("Contaminating individual is multiallelic: {other}")
                     }
                 })
@@ -84,10 +78,10 @@ impl Contaminant {
 
             // ---- Contaminating allele frequency is a ratio of all the observed ALT alleles 
             //      found within the genotypes of our contaminating individuals.
-            let af = (alt_allele_count as f64) /(alt_allele_count as f64 + ref_allele_count as f64);
-            output.push(af);
+            let af = alt_allele_count / (alt_allele_count + ref_allele_count);
+            output[i] = af;
         }
-        Ok(output.try_into().unwrap_or_else(|v: Vec<f64>| panic!("Expected a Vec of length {} but it was {}", 2, v.len())))
+        Ok(output)
     }
 }
 
@@ -142,10 +136,10 @@ mod tests {
         let mut mock_reader = MockGenotypeReader::default();
 
         let mut dummy_alleles = vec![
-            Some([0,0]), // Alleles of ind 2 - sampletag 2 | -> exp_af = 0.25
-            Some([0,1]), // Alleles of ind 2 - sampletag 1 | 
-            Some([1,0]), // Alleles of ind 1 - sampletag 2 | -> exp_af = 0.75
-            Some([1,1])  // Alleles of ind 1 - sampletag 1 | 
+            Ok([0,0]), // Alleles of ind 2 - sampletag 2 | -> exp_af = 0.25
+            Ok([0,1]), // Alleles of ind 2 - sampletag 1 | 
+            Ok([1,0]), // Alleles of ind 1 - sampletag 2 | -> exp_af = 0.75
+            Ok([1,1])  // Alleles of ind 1 - sampletag 1 | 
         ]; 
 
         mock_reader.expect_get_alleles() // Expected output -> [0.75, 0.25]

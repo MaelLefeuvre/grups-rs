@@ -106,7 +106,7 @@ impl<'a> VCFPanelReader<'a> {
     /// - `pop`: (super-)Population-id string
     /// - `exclude`: Optional vector of sample tags to exclude from our sampling batch.
     ///    Thus, any provided sample tag cannot become a return value.
-    pub fn random_sample(&self, pop: &String, exclude: Option<&Vec<&SampleTag>>) -> Result<Option<&SampleTag>, Box<dyn Error>> {
+    pub fn random_sample(&self, pop: &str, exclude: Option<&Vec<&SampleTag>>) -> Result<Option<&SampleTag>, Box<dyn Error>> {
         // Extract the vector of candidate SampleTags using the provided population-id.
         // Bailout if `pop` does not match anything.
         let candidates = match self.samples.get(pop) {

@@ -12,20 +12,24 @@ pub struct Nucleotide {
 }
 
 impl Nucleotide {
+    /// Instantiate a new `Nucleotide` struct, from a parsed pileup `base` and associated PHRED-33 `score` 
+    #[must_use]
     pub fn new(base: char, score: char) -> Nucleotide {
         let phred = Nucleotide::to_phred(score);       
         Nucleotide {base, phred}
     }
 
     /// Convert the BQ score back to the ASCII format
+    #[must_use]
     pub fn get_score_ascii(&self) -> char {
         (self.phred + PHRED_ASCII_BASE) as char 
     }
 
     /// Convert phred score to sequencing error probability
+    #[must_use]
     pub fn error_prob(&self) -> f64 {
         // P = 10^(-Q/10)
-        f64::powf(10.0, -1.0 * (self.phred as f64)/10.0)
+        f64::powf(10.0, -1.0 * f64::from(self.phred) / 10.0)
     }
 
     /// Convert an ASCII BQ score to phred-33.

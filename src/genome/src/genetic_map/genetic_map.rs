@@ -11,9 +11,9 @@ use rust_lapper::{Interval, Lapper};
 
 use super::recomb_range::RecombinationRange;
 
-/// HashMap of Genetic Maps, in the form of a BITS Tree
-/// See: https://doi.org/10.1093/bioinformatics/bts652
-/// Key = chromosome name | Value = Interval Tree 
+/// `HashMap` of Genetic Maps, in the form of a BITS Tree (Key = chromosome name | Value = Interval Tree)
+/// 
+/// See: <https://doi.org/10.1093/bioinformatics/bts652>
 #[derive(Default)]
 pub struct GeneticMap(HashMap<u8, Lapper<u32, RecombinationRange>>);
 
@@ -32,7 +32,7 @@ impl DerefMut for GeneticMap {
 }
 
 impl GeneticMap {
-    /// Instantiate a GeneticMap from an OS directory.
+    /// Instantiate a `GeneticMap` from an OS directory.
     /// 
     /// # Arguments
     /// - `dir`: path leading to a directory containing genetic recombination maps (`.txt`)
@@ -45,7 +45,7 @@ impl GeneticMap {
             let dir_str = dir.to_str().expect("Failed to parse genetic-map directory to string.");
             return Err(format!("Failed to find or parse any genetic-map in provided directory: {dir_str}", ).into())
         }
-        for map in map_paths.iter() {
+        for map in &map_paths {
             self.from_map(map)?;
         }
         Ok(self)
@@ -53,10 +53,15 @@ impl GeneticMap {
 
     /// Parse a BITS tree from a given genetic recombination map file, and add it to `self.0`
     /// Expected fields of a recombination map file are:
-    ///  <Chromosome>    <Position(bp)>    <Recombination_rate (cM/Mb)>    <Map(cM)>
+    ///  <Chromosome>    <Position(bp)>    <Recomb. rate (cM/Mb)>    <Map(cM)>
     /// 
     /// # Arguments
     /// - `path`: path leading to a genetic recombination map
+    /// 
+    /// # Errors
+    /// - when the value of `path` is not found and/or does not have read permissions
+    /// - can return either `ParseIntError` or `ParseFloatError` if one of the fields
+    ///   contains invalid information. 
     pub fn from_map(&mut self, path: &Path) -> Result<(), Box<dyn Error>> {
         // ---- Open the genetic recombination file and initialize HashMap
         let source = BufReader::new(File::open(path)?);
@@ -80,7 +85,7 @@ impl GeneticMap {
         }
 
         // ---- Internalize intervals within `self`
-        for (chr, intervals) in intervals.into_iter(){
+        for (chr, intervals) in intervals {
             self.insert(chr, Lapper::new(intervals));
         }
         Ok(())
@@ -90,28 +95,32 @@ impl GeneticMap {
     /// # Arguments
     /// - `input_dir`: path leading to a directory containing genetic recombination maps (`.txt`)
     fn fetch_genetic_maps(input_dir: &PathBuf) -> std::io::Result<Vec<PathBuf>>{
+
+        // Get a list of files within the specified directory
         let paths = std::fs::read_dir(input_dir)?;
+
+        // Filter out anything that does not end with the .txt file extension (case insensitive).
         let maps = paths.filter_map(Result::ok)
-            .filter_map(|d| d.path()
-                .to_str()
-                .and_then(|f|
-                    if f.ends_with(".txt") {Some(d)} else {None}
-                )
-                .map(|f| f.path())
-            )
-        .collect::<Vec<PathBuf>>();
+            .filter(|d| {
+                d.path().extension()
+                .map_or(false, |ext|  ext.eq_ignore_ascii_case("txt"))
+            })
+            .map(|f| f.path())
+            .collect::<Vec<PathBuf>>();
+
         Ok(maps)
     }
 
     /// Compute a probability of genetic recombination on a given chromosome, within a range
     /// (typically, the current and the previous position)
-    /// # Arguments
+    /// # Parameters
     /// - `chromosome`        : name of the chromosome where the probability should be computed 
     /// - `previous_positions`: 0-based coordinate of the previously typed position.
     /// - `current_position`  : 0-based coordinate of the current position.
     /// 
     /// # Panics:
     /// - if `chromosome` does not match any key within `self`
+    #[must_use]
     pub fn compute_recombination_prob(&self, chromosome: u8, previous_position: u32, current_position: u32) -> f64 {
         let mut interval_prob_recomb = 0.0;
         // ---- Search for all intervals contained between the range [previous_position, current_position[
@@ -119,13 +128,8 @@ impl GeneticMap {
             let real_start = if previous_position < recombination_range.start {recombination_range.start} else {previous_position};
             let real_stop  = if current_position  > recombination_range.stop  {recombination_range.stop } else {current_position };
 
-            interval_prob_recomb += recombination_range.val.prob() * (real_stop as f64 - real_start as f64 + 1.0);
+            interval_prob_recomb += recombination_range.val.prob() * (f64::from(real_stop) - f64::from(real_start) + 1.0);
         }
         interval_prob_recomb
     }
-}
-
-#[cfg(test)]
-mod tests {
-
 }

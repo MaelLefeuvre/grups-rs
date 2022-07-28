@@ -9,19 +9,13 @@ use super::{Nucleotide, Pileup};
 /// Pileup of each individual.
 /// 
 /// This structure is heavily nested:
-/// Line +-> SNPCoord +-> chromosome
-///      |            +-> position
-///      |            +-> ref
-///      |            L-> alt
-///      L-> Vec<Pileups> +-> depth
-///                       L-> Vec<Nucleotides> +-> base
-///                                            L-> score
-/// 
-/// TODO : Error handling should be better taken of. 
-///        use .nth(0) or .next() instead on chrom, pos, ref, 
-///        instead of collecting everything and parsing individually
-///        => Except for 'reference' we should return a ParseError i
-///           f we encounter None at any point
+/// `Line` +-> `SNPCoord` +-> chromosome
+///        |              +-> position
+///        |              +-> ref
+///        |              L-> alt
+///        L-> `Vec<Pileup>` +-> depth
+///                          L-> `Vec<Nucleotides>` +-> base
+///                                                 L-> score
 /// 
 #[derive(Debug)]
 pub struct Line {
@@ -30,6 +24,15 @@ pub struct Line {
 }
 
 impl Line {
+    /// Instantiate a new pileup `Line`
+    /// 
+    /// # Errors
+    /// - `ParseIntError` if chromosome and position fails to get parsed (fields [0] and [1] of the pileup)
+    /// - `ParseIntError` if any of the `depth` fields fails to get parsed into an integer
+    ///    these fields are located at the indices where `(i+3) %% 3 == 0`
+    /// - `PileupError::RefSkip` if the pileup line contains reference skips ('[<>]' characters)
+    /// - `PileupError::UnequalLength` if the base and scores strings do not match in length.
+    /// - If any indel is encountered and the program fails to skip it.
     pub fn new(line: &str, ignore_dels: bool) -> Result<Line, Box<dyn Error>> {
         let split_line: Vec<&str>    = line.split('\t').collect();
         let chromosome: u8           = split_line[0].parse()?;
@@ -58,8 +61,11 @@ impl Line {
         }
     }
 
-    /// Apply known_variant filtering on each individual pileup, according to a given treshold.
-    /// See: Pileup::filter_known_variant()
+    /// Apply `known_variant` filtering on each individual pileup, according to a given treshold.
+    /// See: `Pileup::filter_known_variant()`
+    /// 
+    /// # Errors
+    /// - will bubble any `MissingAltRef` error raised when filtering known variants on a given individual.
     pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) -> Result<(), SNPReaderError> {
         for individual in &mut self.individuals {
             individual.filter_known_variants(known_variant)?;
@@ -69,6 +75,7 @@ impl Line {
 
     /// Apply random sampling on a single individual for self-comparison.
     /// Two nucleotide sampled (without replacement).
+    #[must_use]
     pub fn random_sample_self(&self, index: &usize) -> Vec<&Nucleotide> {
         let mut rng = &mut rand::thread_rng();
         self.individuals[*index].nucleotides.choose_multiple(&mut rng, 2).collect() 
@@ -77,6 +84,7 @@ impl Line {
     /// Apply random sampling on a a pair of individuals for pairwise-comparison.
     /// One nucleotide sampled per individual (without replacement).
     /// @TODO: rng should not be initialized within function.
+    #[must_use]
     pub fn random_sample_pair(&self, pair: &[Individual; 2]) -> Option<Vec<&Nucleotide>> {
         let mut rng = &mut rand::thread_rng();
         Some(vec![

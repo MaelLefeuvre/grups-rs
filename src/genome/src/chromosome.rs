@@ -16,6 +16,7 @@ impl Chromosome {
     /// - `index` : 0-based index of the chromosome
     /// - `name`  : 1-based name of the chromosome (i.e. 1-22)
     /// - `length`: length of the chromosome (bp)
+    #[must_use]
     pub fn new(index: usize, name: u8, length: u32) -> Chromosome{
         Chromosome{index, name, length}
     }

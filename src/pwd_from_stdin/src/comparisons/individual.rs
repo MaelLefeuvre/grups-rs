@@ -4,11 +4,11 @@ use crate::pileup::Pileup;
 use super::UNDEFINED_LABEL_PREFIX;
 
 /// Represents a requested individual Within the pileup.
-///  - name      : Name of the individual. Either given through user-input, or constructed as `Ind{index}` by default
-///                when no name has been provided.
-///  - index     : 0 based index of the individual within the pileup. Note that this index is technically offset by 3,
-///                since the first three columns of a pileup respectively define 'chr', 'pos', 'ref'.
-///  - min_depth : minimum sequencing depth that is allowed before making a comparison. User-defined, or defaults to 1.
+///  - `name`      : Name of the individual. Either given through user-input, or constructed as `Ind{index}` by default
+///                  when no name has been provided.
+///  - `index`     : 0 based index of the individual within the pileup. Note that this index is technically offset by 3,
+///                  since the first three columns of a pileup respectively define 'chr', 'pos', 'ref'.
+///  - `min_depth` : minimum sequencing depth that is allowed before making a comparison. User-defined, or defaults to 1.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Individual {
     pub name     : String,
@@ -17,6 +17,8 @@ pub struct Individual {
 }
 
 impl Individual {
+    /// Instantiate a new Pileup Individual, with a provided name, minimum requested depth and index.
+    #[must_use]
     pub fn new (name: Option<&String>, index: usize, min_depth: u16) -> Individual {
         // Parse name and give default if non-existent
         let name = match name {                            
@@ -26,6 +28,8 @@ impl Individual {
         Individual{name, index, min_depth}
     }
 
+    /// Ensure the current pileup depth is greater than the requested minimum depth at this line.
+    #[must_use]
     pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
         pileups[self.index].depth >= self.min_depth
     }

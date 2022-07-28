@@ -57,6 +57,18 @@ pub struct Cli {
 }
 
 impl<'a> Cli{
+    /// Serialize command line arguments within a `.yaml` file.
+    /// 
+    /// # Behavior
+    /// - File naming follows the convention '{current time}-{module name}.yaml'. current time follows the format
+    ///   `YYYY`-`MM`-`DD`T`hhmmss`
+    /// - File is written at the root of the user-provided `--output-dir` folder.
+    /// 
+    /// # Errors
+    /// Sends an unrecoverable error if `serde_yaml` fails to parse `Self` to a string.
+    /// 
+    /// # Panics
+    /// - Throws a tantrum whenever the provided `--output-dir` is invalid.
     pub fn serialize(&self) -> Result<(), Box<dyn Error>> {
 
         // Parse arguments to yaml and print to console.
@@ -90,7 +102,14 @@ impl<'a> Cli{
         }
     }
 
-    pub fn deserialize(&self, yaml: std::path::PathBuf) -> Result<Self, Box<dyn Error>> {
+    /// Deserialize a `.yaml` file into Command line arguments.
+    /// 
+    /// # Errors
+    /// 
+    /// - Returns `FileNotFound` or `PermissionDenied` if the provided `.yaml` is invalid,
+    ///   or does not carry read permissions
+    /// - Sends an unrecoverable error if: `serde_yaml` fails to parse the provided file to `Self`.
+    pub fn deserialize(yaml: std::path::PathBuf) -> Result<Self, Box<dyn Error>> {
         Ok(serde_yaml::from_reader(File::open(yaml)?)?)
     }
 }
@@ -184,7 +203,8 @@ pub struct Common {
     pub overwrite: bool,
 }
 
-/// Compute the average PairWise Difference (PWD) within a pileup file.
+/// Compute the average `PairWise Difference` (PWD) within a pileup file.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct PwdFromStdin {
     /// Enable self-comparison mode on individuals.
@@ -255,6 +275,7 @@ impl Default for Mode {
 }
 
 /// Run pwd-from-stdin and perform pedigree simulations in one go.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct PedigreeSims {
     /// Proportion of SNPs to keep at true frequency
@@ -391,8 +412,13 @@ pub struct VCFFst {
 
 impl PwdFromStdin {
     /// Sanity check : depth must indeed be > 2 when performing self-comparison.
-    /// TODO: - put this in Comparison::new() ?? -> This would allow mix-matching batch mode and self-comparison,
-    ///         but could be a bit confusing for users..
+    ///
+    /// # Errors
+    ///  if any of the values provided through `--min-depth` is lower than 2 while `--self-comparison` is on.
+    /// 
+    /// # @TODO:
+    /// - put this in `Comparison::new()` ?? -> This would allow mix-matching batch mode and self-comparison,
+    ///   but could be a bit confusing for users..
     pub fn check_depth<'a>(&self) -> Result<(),ParserError<'a>> {
         if self.self_comparison && self.min_depth.iter().any(|&x| x < 2) {        
             return Err(ParserError::InsufficientDepthError)
@@ -409,6 +435,9 @@ impl PwdFromStdin {
 impl Common {
     /// Sanity Check: The program should leave if the user did not provide any pileup input, either through
     /// `--pileup` or through stdinput. Without this, our program would wait indefinitely for the stdin buffer.
+    /// 
+    /// # Errors
+    /// - if the user did not provide an input file, neither from stdin, nor through the `--pileup` argument.
     pub fn check_input<'a>(&self) -> Result<(), ParserError<'a>> {
         if atty::is(atty::Stream::Stdin) && self.pileup == None {
             return Err(ParserError::MissingPileupInput)
@@ -419,7 +448,10 @@ impl Common {
     /// Get a generic filename for our output files. If the user used `--pileup`, this will become its file stem.
     /// If the user used stdin, this will become a generic name -> "pwd_from_stdin-output" 
     ///
-    /// # TODO: This function should be the one responsible of defining the default filename. Stay dry.
+    /// # @TODO: This function should be the one responsible of defining the default filename. Stay dry.
+    /// 
+    /// # Errors 
+    /// - if a default file-prefix cannot be created from the input pileup filestem.
     pub fn get_file_prefix(&self, subdir: Option<&str>) -> Result<PathBuf, &str> {
         let default_prefix = String::from("pwd_from_stdin-output");
         let file_prefix = Path::new(self.pileup.as_ref()
@@ -440,6 +472,13 @@ impl Common {
 
     /// Check if a given file already exists ; raise an error if such is the case, and the user did not explicitly 
     /// allow file overwriting.
+    /// 
+    /// # Errors
+    /// - If the provided `pathbuf` already exists and the user did not specifically allow for file
+    ///   overwrite using the `--overwrite` argument
+    /// 
+    /// # Panics
+    /// - if the provided `pathbuf` fails to get parsed as a string.
     pub fn can_write_file(&self, pathbuf: &Path) -> std::io::Result<bool> {
         if ! self.overwrite && pathbuf.exists() {   // Check if this file already exists and/or if overwrite is allowed.
             return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists,
@@ -465,7 +504,7 @@ impl std::fmt::Display for FileEntity {
     }
 }
 
-fn assert_filesystem_entity_is_valid(s: &std::ffi::OsStr, entity: FileEntity) -> std::io::Result<()> {
+fn assert_filesystem_entity_is_valid(s: &std::ffi::OsStr, entity: &FileEntity) -> std::io::Result<()> {
     if ! std::path::Path::new(s).exists() {
         return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("{entity} does not exist.")))
     }
@@ -483,12 +522,12 @@ fn assert_filesystem_entity_is_valid(s: &std::ffi::OsStr, entity: FileEntity) ->
 }
 
 fn valid_input_directory(s: &std::ffi::OsStr) -> std::io::Result<PathBuf> {
-    assert_filesystem_entity_is_valid(s, FileEntity::Directory)?;
+    assert_filesystem_entity_is_valid(s, &FileEntity::Directory)?;
     Ok(PathBuf::from(s))
 }
 
 fn valid_input_file(s: &std::ffi::OsStr) -> std::io::Result<PathBuf> {
-    assert_filesystem_entity_is_valid(s, FileEntity::File)?;
+    assert_filesystem_entity_is_valid(s, &FileEntity::File)?;
     Ok(PathBuf::from(s))
 }
 
@@ -496,7 +535,7 @@ fn valid_output_dir(s: &std::ffi::OsStr) -> std::io::Result<PathBuf> {
     if ! std::path::Path::new(s).exists() {
         std::fs::create_dir(s)?;
     }
-    assert_filesystem_entity_is_valid(s, FileEntity::Directory)?;
+    assert_filesystem_entity_is_valid(s, &FileEntity::Directory)?;
     Ok(PathBuf::from(s))
 }
 
@@ -539,12 +578,9 @@ fn parse_pedigree_param<'a>(s: &str) -> Result<Vec<f64>, ParserError<'a>> {
 /// 
 ///     --> ["1-6", "8"] for the user, becomes [1, 2, 3, 4, 5, 6, 8] for our program.
 /// 
-///  - Return value: Result <
-///        - Vector of generic integers, boxed within a Result.
-///        - ParseError
-///    >
-/// 
-/// # TODO:
+///  - Return a vector of generic integers, boxed within a Result.
+///
+/// # @TODO:
 ///   - Please make this more elegant? We could use a `flat_map` at some point...
 /// 
 /// # Example
@@ -555,13 +591,16 @@ fn parse_pedigree_param<'a>(s: &str) -> Result<Vec<f64>, ParserError<'a>> {
 /////assert_eq!(parsed_input, vec![1, 2, 3, 5, 7])
 ///```
 /// 
+/// # Errors
+///  returns a `ParseError` if the provided ranges cannot be parsed into integers.
 pub fn parse_user_ranges<'a, T>(ranges: &[String], arg_name: &'a str) -> Result<Vec<T>, ParserError<'a>>
 where
     T: FromStr + Add<Output = T> + Ord + One,
     <T as FromStr>::Err: ToString,
     Range<T>: Iterator<Item = T>,
 {
-    let parsed_ranges = ranges.iter().map(|s| parse_user_range(s))
+    let parsed_ranges = ranges.iter()
+        .map(|s| parse_user_range(s))
         .collect::<Result<Vec<Vec<T>>, _>>();
 
     // FIXME - This is inefficient: We're  performing a two-pass iteration while we could 

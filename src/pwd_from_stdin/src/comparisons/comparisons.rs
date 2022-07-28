@@ -19,6 +19,9 @@ use super::{PAIRS_FORMAT_LEN, COUNT_FORMAT_LEN, AVERG_FORMAT_LEN, DISPL_SEP};
 pub struct Comparisons (Vec<Comparison>);
 
 impl Comparisons {
+
+    /// Instantiate and populate a new `Comparisons` object from the user-provided parameters.
+    #[must_use]
     pub fn parse(
         individuals           : &[usize],
         min_depths            : &[u16],
@@ -44,8 +47,15 @@ impl Comparisons {
     Comparisons(comparisons)
     }
 
+    
+    /// Write the results of the observed average PWD in a `.pwd` output file.
+    /// 
+    /// # Errors
+    /// - If the provided path to the output `.pwd` file is invalid or the user does not have the proper UNIX
+    ///   permissions.
+    /// - If any of the contained `Comparison` fails to get written to the output file. 
     pub fn write_pwd_results(&self, print_blocks: bool, output_files: &HashMap<String, String>) -> Result<(), Box<dyn Error>> {
-        let mut pwd_writer = Writer::new(Some(output_files["pwd"].to_owned()))?;
+        let mut pwd_writer = Writer::new(Some(output_files["pwd"].clone()))?;
         
         info!("Printing results...");
         let header = format!(
@@ -72,22 +82,31 @@ impl Comparisons {
         Ok(())
     }
 
-    /// How many pairs are we comparing? 
+    /// How many pairs are we comparing?
+    #[must_use]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Get the individual's pileup indices of each comparison
+    #[must_use]
     pub fn get_pairs_indices(&self) -> Vec<[usize; 2]> {
-        Vec::from_iter(self.0.iter().map(|comparison| comparison.get_pair_indices()))
+        self.0.iter().map(Comparison::get_pair_indices).collect()
     }
 
-    // Clippy is complaining when i'm not implementing this public method :)
+    /// Check if this struct has been populated.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
+    #[must_use]
     pub fn get_pairs(&self) -> Vec<String> {
-        self.0.iter().map(|c| c.get_pair()).collect()
+        self.0.iter().map(Comparison::get_pair).collect()
+    }
+
+    pub fn update_variance_unbiased(&mut self) {
+        self.0.iter_mut().for_each(Comparison::update_variance_unbiased);
     }
 }
 

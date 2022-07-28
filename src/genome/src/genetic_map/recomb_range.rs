@@ -18,11 +18,11 @@ pub struct RecombinationRange {
 }
 
 impl RecombinationRange {
-    /// Instantiate a new RecombinationRange and probability from a genetic recombination map entry.
+    /// Instantiate a new `RecombinationRange` and probability from a genetic recombination map entry.
     /// # Arguments
-    /// - `start`: 0-based start-position of the range. (field 0 of a genetic_map file)
-    /// - `end`  : 0-based end   position of the range. (field 1 of a genetic_map file)
-    /// - `rate` : recombination rate observed within [start, end[ (field 2 of a genetic_map file)
+    /// - `start`: 0-based start-position of the range. (field 0 of a genetic map file)
+    /// - `end`  : 0-based end   position of the range. (field 1 of a genetic map file)
+    /// - `rate` : recombination rate observed within [start, end[ (field 2 of a genetic map file)
     pub fn new(start: u32, end: u32, rate: f64) -> RecombinationRange {
         let prob: f64 = rate / ONE_MORGAN / ONE_MEGABASE;  // rate/cM/Mb.
         RecombinationRange{range: Range{start, end}, prob}

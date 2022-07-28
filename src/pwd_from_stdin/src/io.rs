@@ -54,7 +54,7 @@ impl std::fmt::Display for SNPReaderError {
 // https://medium.com/bgpkit/write-generic-file-reader-in-rust-ad6408cb086a
 // --> http::request::Request
 /// Generic file reader for snp coordinates files. 
-/// - source  : BufReader. Currently Boxed, because it might be interesting to incorporate HTTP requests.
+/// - source  : `BufReader`. Currently Boxed, because it might be interesting to incorporate HTTP requests.
 /// - columns : a vector of size 4. indidicating the column indices that we're targeting (chr, pos, ref, alt)
 /// - sep     : the expected field separator for the corresponding file format.
 /// 
@@ -74,6 +74,10 @@ pub struct SNPReader<'a> {
 }
 
 impl<'a> SNPReader<'a> {
+    /// Instantiate a new `SNPReader`
+    /// 
+    /// # Errors
+    /// - if `path` targets an invalid location (`FileNotFound` or `PermissionDenied`)
     pub fn new(path: &str) -> Result<SNPReader<'a>, SNPReaderError> {
         use SNPReaderError::FileNotFound;
         let (columns, sep): (Vec<usize>, String) = Self::get_file_format(path)?;
@@ -92,7 +96,10 @@ impl<'a> SNPReader<'a> {
     /// field-separator. 
     /// Supported formats: [.snp, .vcf, .txt, .csv, .tsv]
     /// 
-    /// TODO: convert separators from String -> &str
+    /// # Errors
+    ///  - `InvalidFileFormat` if `path` is not carrying a supported file extension.
+    ///  - `MissingExtension` if `path` does not contain a file extension
+    /// @TODO: convert separators from String -> &str
     fn get_file_format(path: &str) -> Result<(Vec<usize>,String), SNPReaderError> {
         use SNPReaderError::{InvalidFileFormat, MissingExtension};
         let accepted_file_formats = ["snp", "vcf", "txt", "csv", "tsv"];
@@ -112,12 +119,19 @@ impl<'a> SNPReader<'a> {
         Ok(output)
     }
 
-    /// Read from a BufReader and convert each line to a HashMap of SNPCoord.
+    /// Read from a  `BufReader` and convert each line to a `HashMap` of `SNPCoord`.
     /// Input: - path (string): path and filename to a snp coordinates file.
-    ///
-    /// Return: HashMap of structs 'SNPCoord'
+    /// Return: `HashMap` of structs `SNPCoord`
     /// 
-    /// TODO: This should take a &self reference.
+    /// # Errors
+    /// - Can return `ParseIntError` or `ParseCharError` if any of the fields contains invalid data.
+    /// - Returns an error if any line fails to get parsed into a string.
+    /// 
+    /// # Panics
+    /// - If `exclude_transitions` is on, and `self.source` does not contain any REF/ALT information.
+    /// 
+    /// # @TODO: 
+    ///  - This should take a &self reference.
     pub fn hash_target_positions(self, exclude_transitions: bool) -> Result<HashSet<SNPCoord>, Box<dyn Error>> {
         let mut target_positions : HashSet<SNPCoord> = HashSet::new(); // Output
         for line in self.source.lines() {
@@ -175,16 +189,20 @@ impl<'a> BufRead for SNPReader<'a> {
 }
 
 /// A generic file writer.
-/// - source: Boxed BufWriter (can either handle file-writing, or stdout).
+/// - source: Boxed `BufWriter` (can either handle file-writing, or stdout).
 pub struct Writer<'a> {
     source: BufWriter<Box<dyn Write + 'a>>
 }
 
 impl<'a> Writer<'a>{
+    /// Instantiate a new `Writer`, linked to a file.
+    /// 
+    /// # Errors
+    /// if `path` is either an invalid file, or the user does not have the proper
+    /// UNIX permissions to write at this location.
     pub fn new(path: Option<String>) -> Result<Writer<'a>, Box<dyn Error>>{
         Ok(Writer { source: match path {
             Some(path) => {
-                //let file = File::create(path)?;
                 BufWriter::new(Box::new(File::create(path)?))
             },
             None => {
@@ -195,13 +213,26 @@ impl<'a> Writer<'a>{
 
     /// Write the contents of a generic iterator within a file/stdout.
     /// one Iteration step = one line.
+    /// 
+    /// # Behavior
+    /// 
+    /// For each item of the iterator, `write_iter` will search for the regular expression
+    /// `[ ]+-[ ]+` and replace matches with `\t`. This effectively removes "Pretty-print" 
+    /// from the output.
+    /// 
+    /// # Errors
+    /// - If any of the Items within `iter` fails to get written within the file.
+    /// 
+    /// # Panics
+    /// - if parsing the regex required to delete pretty-print characters fails.
+    /// 
     pub fn write_iter<T, I>(&mut self, iter: T) -> Result<(), std::io::Error>
     where
         T: IntoIterator<Item = I>,
         I: std::fmt::Display,
     {
         const WRITER_SEPARATOR: &str = "\t";
-        let re = regex::Regex::new(r"[ ]+-[ ]+").unwrap();
+        let re = regex::Regex::new(r"[ ]+-[ ]+").unwrap(); // Remove pretty print trailing and leading whitespace.
         iter.into_iter()
             .map(|obj| self.source.write(re.replace_all(format!("{}\n", obj).as_str(), WRITER_SEPARATOR).as_bytes()))
             .collect::<Result<Vec<usize>, std::io::Error>>()?;
@@ -210,9 +241,17 @@ impl<'a> Writer<'a>{
 }
 
 
-/// Obtain predefined filenames from the given output directory and pileup file. Return a HashMap with 
+/// Obtain predefined filenames from the given output directory and pileup file. Return a `HashMap` with 
 /// K: file-ext, V: Filepath. Right now this only outputs a single file, but is easily scalable.
-///  - {out_dir}/{file_prefix}.pwd -> where summary statistics are printed for pairwise differences. 
+///  - {out-dir}/{file-prefix}.pwd -> where summary statistics are printed for pairwise differences. 
+/// 
+/// # Errors
+///  - If creating the parent directories of `file_prefix` is required: will throw a `PermissionDenied`
+///    if the user does not have the proper UNIX permissions
+/// 
+/// # Panics
+/// - If failing to convert `file_prefix` from `PathBuf` to `&str`
+/// 
 pub fn get_results_file_prefix<'a>(file_prefix: &'a mut PathBuf, file_ext: Vec<&'a str>) -> std::io::Result<HashMap<&'a str, String>> {
     // Create output directory. Early return if we can't create it
     std::fs::create_dir_all(file_prefix.parent().unwrap_or(file_prefix))?; 
@@ -228,13 +267,24 @@ pub fn get_results_file_prefix<'a>(file_prefix: &'a mut PathBuf, file_ext: Vec<&
 }
 
 /// Simple enum for `get_output_files()`
-///  Suffix => HashMap will use provided file suffixes as keys
-///  Key    => HashMap will use provided file extensions as keys 
+///  Suffix => `HashMap` will use provided file suffixes as keys
+///  Key    => `HashMap` will use provided file extensions as keys 
+#[derive(Clone, Copy)]
 pub enum FileKey{Suffix, Ext}
 
 /// Obtain predefined filenames for jackknife blocks from the given output directory and pileup file. 
-/// Return a HashMap with (K (pair): "{ind1}-{ind2}", V (File): "{out_dir}/blocks/{file_prefix}.block"
+/// Return a `HashMap` with (K (pair): "{ind1}-{ind2}", V (File): "{out dir}/blocks/{file prefix}.block"
 /// ==> A new file is generated for each pair of individuals. 
+/// 
+/// # Errors
+/// 
+/// If creating the parent directory of `file_prefix` is required, will throw a `PermissionDenied` if
+/// the user does not have the proper UNIX permissions 
+/// 
+/// # Panics
+/// 
+/// when failing to convert `file_prefix` from `PathBuf` to `&str`
+/// 
 pub fn get_output_files<'a>(file_prefix: &'a mut PathBuf, allow_overwrite: bool, sort: FileKey, suffixes: &[String], file_ext: &[&'a str]) -> std::io::Result<HashMap<String, String>> {
     // Create output directory. Early return if we can't create it
     let root_dir = file_prefix.parent().unwrap_or(file_prefix);
@@ -263,7 +313,7 @@ pub fn get_output_files<'a>(file_prefix: &'a mut PathBuf, allow_overwrite: bool,
             can_write_file(allow_overwrite, &file)?;
             let key = match &sort {
                 FileKey::Suffix => suffix.clone(),
-                FileKey::Ext    => ext.to_string()
+                FileKey::Ext    => (*ext).to_string()
             };
 
             trace!("Output file: {file:?}");
@@ -275,6 +325,16 @@ pub fn get_output_files<'a>(file_prefix: &'a mut PathBuf, allow_overwrite: bool,
 
 /// Check if a given file already exists ; raise an error if such is the case, and the user did not explicitly 
 /// allow file overwriting.
+/// # Errors
+/// - If the provided `pathbuf` already exists and the user did not specifically allow for file
+///   overwrite using the `--overwrite` argument
+/// 
+/// # Panics
+/// - if the provided `pathbuf` fails to get parsed as a string.
+/// 
+/// # @TODO:
+/// - This method is a duplicate of `parser::can_write_file`. I/O functions, methods and structs should be contained
+///   is their own package.
 pub fn can_write_file(overwrite: bool, pathbuf: &Path) -> std::io::Result<bool> {
     if ! overwrite && pathbuf.exists() {   // Check if this file already exists and/or if overwrite is allowed.
         return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists,

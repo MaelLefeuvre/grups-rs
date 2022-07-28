@@ -5,12 +5,9 @@ pub mod io;
 //extern crate logger;
 //use parser;
 
-use comparisons::*;
-use genome::{
-    SNPCoord,
-    Genome,
-};
-use io::*;
+use comparisons::Comparisons;
+use genome::Genome;
+use io::{FileKey, SNPReader};
 
 use std::fs;
 use std::error::Error;
@@ -21,7 +18,12 @@ use log::{error, warn, info, debug};
 use std::process;
 
 
-// Main function. 
+/// Main function. Run pwd-from-stdin, using the user-provided parameters and input file.
+/// Returns a `Comparisons` struct, containing the results.
+/// 
+/// # Errors 
+/// - If any of the Input/Output file is invalid (`FileNotFound`, `PermissionDenied`, etc.)
+/// - If at any point, the program fails to parse a line from the user provided pileup.
 pub fn run<'a>(
     com_cli           : &'a parser::Common,
     pwd_cli           : &'a parser::PwdFromStdin,
@@ -34,7 +36,7 @@ pub fn run<'a>(
     com_cli.check_input()?; // Ensure the user has either requested stdin or --pileup
 
     if pwd_cli.min_depth.len() < requested_samples.len() {
-        warn!("--min-depth length is less than that of --samples. Values of min-depth will wrap around.")
+        warn!("--min-depth length is less than that of --samples. Values of min-depth will wrap around.");
     }
 
     // ----------------------------- Parse Comparisons
@@ -44,8 +46,8 @@ pub fn run<'a>(
     // ----------------------------- Prepare output files
     // ---- Add pwd files.
     let mut output_files = io::get_output_files(
-        &mut com_cli.get_file_prefix(None)?,    // extract the user requested file prefix
-        com_cli.overwrite,                                  // Should we allow file overwriting ?
+        &mut com_cli.get_file_prefix(None)?,  // extract the user requested file prefix
+        com_cli.overwrite,                       // Should we allow file overwriting ?
         FileKey::Ext,         // What key are we using to hash these files ?
         &["".to_string()],// Vector of filename suffixes.
         &["pwd"]          // Vector of file extensions.
@@ -119,42 +121,25 @@ pub fn run<'a>(
         if pwd_cli.known_variants {
             let current_coord = match target_positions.get(&line.coordinate) {
                 Some(coordinate) => coordinate,
-                None => panic!("Cannot filter known variants when REF/ALT allele are unknown! Please use a different file format."),
+                None => return Err("Cannot filter known variants when REF/ALT allele are unknown! Please use a different file format.".into())
             };
             line.filter_known_variants(current_coord)?;
         }
 
-        // ----------------------- Compute PWD (or simplys print the line if there's an existing overlap)        
+        // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        
         for comparison in comparisons.iter_mut() {
             if comparison.satisfiable_depth(&line.individuals) {
-                if ! pwd_cli.filter_sites {
-                    comparison.compare(&line)?;
-                } else {
+                if pwd_cli.filter_sites {
                     println!("{}", &entry);
+                } else {
+                    comparison.compare(&line)?;
                 }
             }
         }
     }
-    
 
-    // ----------------------------- Print results
-    //let mut pwd_writer = Writer::new(Some(output_files["pwd"].clone()))?;
-    //if ! pwd_cli.filter_sites {
-    //    info!("Printing results...");
-    //    let header = format!("{: <20} - Overlap - Sum PWD  - Avg. Pwd - 95-CI.   - JK. Var. - Avg. Phred", "Name");
-    //    println!("{}", header);
-    //    pwd_writer.write_iter(&vec![header])?;       // Print PWD results to file.
-    //    pwd_writer.write_iter(comparisons.iter())?;  // 
+    // Run two-pass variance estimation algorithm.
+    comparisons.update_variance_unbiased();
 
-    //    println!("{}", comparisons);                 // Print PWD results to console
-
-    //    if pwd_cli.print_blocks {
-    //        for comparison in comparisons.iter() {
-    //            let pair = comparison.get_pair();
-    //            let mut block_writer = Writer::new(Some(output_files[&pair].clone()))?;
-    //            block_writer.write_iter(vec![&comparison.blocks])?;
-    //        }
-    //    }
-    //}
     Ok((comparisons, output_files))
 }

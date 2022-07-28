@@ -1,6 +1,6 @@
 use genome::jackknife::{JackknifeBlocks, JackknifeEstimates};
 use genome::{Genome};
-use crate::pileup::{Pileup, Line, Nucleotide};
+use crate::pileup::{Pileup, Line};
 use std::error::Error;
 use std::{
     fmt,
@@ -21,9 +21,21 @@ impl Variance {
         Self{meansum: 0.0, std_dev_sum:0.0, n:0}
     }
 
-    pub fn update(&mut self, pwd: f64) {
+    /// Unbiased, two-pass variance estimation algorithm 
+    pub fn update_from_iter(&mut self, avg_pwd: f64, pwds: &BTreeSet<Pwd>) {
+        self.std_dev_sum = pwds.iter()
+            .map(|pwd| (avg_pwd - pwd.pwd).powf(2.0))
+            .sum::<f64>();
+
+        self.n = pwds.len();
+
+    }
+
+    /// Single-pass variance estimation algorithm.
+    #[allow(dead_code)]
+    pub fn dynamic_update(&mut self, pwd: f64) {
         if self.n == 0 {
-            self.meansum = pwd
+            self.meansum = pwd;
         };
         self.n += 1;
         let stepsum = pwd - self.meansum;
@@ -47,21 +59,21 @@ impl Variance {
 use super::{Individual, Pwd};
 use super::{PAIRS_FORMAT_LEN, COUNT_FORMAT_LEN, AVERG_FORMAT_LEN, DISPL_SEP, FLOAT_FORMAT_PRECISION};
 /// A struct representing a given pairwise estimation of relatedness between two individuals.
-/// - pair            : contains a representation of the individuals being compared.
-/// - self_comparison : whether or not this comparison is a self_comparison. (i.e. pair.0 == pair.1)
-/// - overlap         : counter for the number of overlapping SNP positions between our pair.
-/// - pwd             : counter for the number of pairwise differences found between our pair.
-/// - sum_phred       : sum of the avg. phred-scores of each overlapping SNP. mainly used to compute the average
-///                     Phred-score (i.e. overlap/sum_phred)
-/// - blocks          : genome blocks used for jackknife resampling.
+/// - `pair`            : contains a representation of the individuals being compared.
+/// - `self_comparison` : whether or not this comparison is a Self-comparison. (i.e. pair.0 == pair.1)
+/// - `pwd`             : counter for the number of pairwise differences found between our pair.
+/// - `sum_phred`       : sum of the avg. phred-scores of each overlapping SNP. mainly used to compute the average
+///                       Phred-score (i.e. `overlap`/`sum_phred`)
+/// - `blocks`          : genome blocks used for jackknife resampling.
 /// 
 /// # Traits : `Debug`
+/// 
+/// # @TODO:
+///  - `variance` and `positions` should be tied within their own struct.
 #[derive(Debug)]
 pub struct Comparison {
     pair            : [Individual; 2],
     self_comparison : bool,
-    pwd             : f64,
-    sum_phred       : f64,
     variance        : Variance,
     pub blocks      : JackknifeBlocks,
     pub positions   : BTreeSet<Pwd>
@@ -71,41 +83,31 @@ impl Comparison {
     pub fn new(mut pair: [Individual; 2], self_comparison: bool, genome: &Genome, blocksize: u32) -> Comparison {
         if self_comparison {
             let pair_name = format!("{}-{}", pair[0].name, pair[1].name);
-            for individual in pair.iter_mut() {
+            for individual in &mut pair {
                 if individual.min_depth < 2 {
                     warn!("[{pair_name}]: A minimal depth of 2 is required for self comparisons, while {} has min_depth = {}.\n
                         Rescaling said value to 2 (for this specific comparison)...", individual.name, individual.min_depth
                     );
-                    individual.min_depth = 2
+                    individual.min_depth = 2;
                 }
             }
         }
-        Comparison {pair, self_comparison, pwd: 0.0 , sum_phred:0.0, variance: Variance::new(), blocks: JackknifeBlocks::new(genome, blocksize), positions: BTreeSet::new()}
+        Comparison {pair, self_comparison, variance: Variance::new(), blocks: JackknifeBlocks::new(genome, blocksize), positions: BTreeSet::new()}
     }
 
     pub fn get_pair_indices(&self) -> [usize; 2] {
         [self.pair[0].index, self.pair[1].index]
     }
 
-    // Check if the sequencing depth of a given overlap is over the minimum required sequencing depth for each individual.
+    /// Check if the sequencing depth of a given overlap is over the minimum required sequencing depth for each individual.
     pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
         self.pair[0].satisfiable_depth(pileups) && self.pair[1].satisfiable_depth(pileups)
     }
 
-    // Compare our two individuals at the given SNPposition ; increment the appropriate counters after the comparison 
-    // has been made.
+    /// Compare our two individuals at the given SNP position ; increment the appropriate counters after the comparison 
+    /// has been made.
     pub fn compare(&mut self, line: &Line) -> Result<(), Box<dyn Error>> {
-
-        //let mut pwd = Pwd::initialize(line.coordinate);
-        //let random_nucl: Vec<&Nucleotide> = if self.self_comparison {   // Self comparison => Combination without replacement. 
-        //    line.random_sample_self(&self.pair[0].index)                //   - possible combinations: n!/(n-2)!
-        //} else {                                                        // Std comparison  => Permutation.
-        //    line.random_sample_pair(&self.pair)                         //  - possible combinations: n_1 * n_2
-        //};
-        //pwd.update(&random_nucl);
-
         //let pwd = Pwd::one(line.coordinate, &random_nucl);
-
 
         let pwd = if self.self_comparison {
             Pwd::deterministic_self(line, &self.pair)
@@ -113,50 +115,41 @@ impl Comparison {
             Pwd::deterministic_pairwise(line, &self.pair)
         };
 
-        self.variance.update(pwd.pwd);
-
-        self.sum_phred += pwd.compute_avg_phred();
-
         let current_block = self.blocks
             .find_block(&line.coordinate)
             .ok_or(format!("Cannot find corresponding Jackknife Block for {}", line.coordinate))?;
         current_block.add_count();
-        //if pwd.is_pwd() {
-        self.pwd += pwd.avg_local_pwd();
+
         current_block.add_pwd(pwd.avg_local_pwd());
-        //}
         
 
         self.positions.insert(pwd);
         Ok(())
     }
 
-    // Increment our `sum_phred` counter. The incremented value is computed as the average of the two sampled nucleotides.
-    fn add_phred<'a>(&mut self, nuc: &[&'a Nucleotide]) {
-        self.sum_phred += ( (nuc[0].phred + nuc[1].phred) as f64 /2.0 ) as f64;
-    }
-
-    // Check if there is a pairwise difference.
-    fn check_pwd(nuc: &[&Nucleotide]) -> bool {
-        nuc[0].base != nuc[1].base
-    }
-
     pub fn get_sum_pwd(&self) -> f64 {
-        self.pwd
+        self.positions.iter()
+            .map(Pwd::avg_local_pwd)
+            .sum::<f64>()
     }
 
     // Getter for the average pairwise difference across our overlapping snps.
     pub fn get_avg_pwd(&self) -> f64 {
-        self.pwd / self.positions.len() as f64
+        self.get_sum_pwd() / self.positions.len() as f64
     }
 
     pub fn get_overlap(&self) -> usize {
         self.positions.len()
     }
 
+    fn get_sum_phred(&self) -> f64 {
+        self.positions.iter()
+            .map(Pwd::compute_avg_phred)
+            .sum::<f64>()
+    }
     // Getter for the average pairwise phred score across our overlapping snps.
     pub fn get_avg_phred(&self) -> f64 {
-        self.sum_phred as f64/self.positions.len() as f64
+        self.get_sum_phred() / self.positions.len() as f64
     }
 
     // Return a formated string representing our pair of individuals. 
@@ -164,15 +157,23 @@ impl Comparison {
         format!("{}-{}", &self.pair[0].name, &self.pair[1].name)
     }
 
+    /// Obtain the jacknife estimates of the avg. PWD's standard deviation at each block.
     pub fn get_jackknife_estimates(&self) -> JackknifeEstimates {
-        self.blocks.compute_unequal_delete_m_pseudo_values(self.pwd, self.positions.len() as u32)
+        self.blocks.compute_unequal_delete_m_pseudo_values(self.get_sum_pwd(), self.positions.len() as u32)
     }
 
+    /// Optain the 95% confidence interval for the observed avg. PWD
     pub fn get_confidence_interval(&self) -> f64 {
         self.variance.confidence_interval()
     }
-}
 
+    /// Compute the variance and standard deviation for the observed avg. PWD using a two-pass method.
+    pub fn update_variance_unbiased(&mut self) {
+        self.variance.update_from_iter(self.get_avg_pwd(), &self.positions);
+    }
+
+    
+}
 
 impl fmt::Display for Comparison {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -185,7 +186,7 @@ impl fmt::Display for Comparison {
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}",
             self.get_pair(),
             self.positions.len(),
-            self.pwd,
+            self.get_sum_pwd(),
             self.get_avg_pwd(),
             self.get_confidence_interval(),
             self.get_avg_phred()
@@ -195,6 +196,8 @@ impl fmt::Display for Comparison {
 
 #[cfg(test)]
 mod tests {
+    use genome::SNPCoord;
+
     use crate::pileup;
     use crate::comparisons::tests::common;
     use super::*;
@@ -209,7 +212,6 @@ mod tests {
     #[test]
     fn satisfiable_depth_both() -> Result<(), Box<dyn Error>> {
         // If both individual has depth >= pileup.depth ==> return false. 
-
         let comparison = common::mock_comparison(false);
         let pileups = common::mock_pileups(&[2,2], 30, false)?;
         assert!(comparison.satisfiable_depth(&pileups[..]));
@@ -263,9 +265,9 @@ mod tests {
         let mut mock_comparison = common::mock_comparison(false);
         test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "TT"], ["JJ", "AA"])?;
 
-        assert_eq!(mock_comparison.sum_phred, 73.0);                 // ('J'  +  'A')
+        assert_eq!(mock_comparison.get_sum_phred(), 73.0);       // (J  +  A)
         assert_eq!(mock_comparison.get_avg_phred(), 73.0 / 2.0);
-        assert_eq!(mock_comparison.pwd, 0.0);                        // ('T' <-> 'T') * 2
+        assert_eq!(mock_comparison.get_sum_pwd(), 0.0);          // (T <-> T) * 2
         assert_eq!(mock_comparison.get_avg_pwd(), 0.0);
         assert_eq!(mock_comparison.positions.len(), 2);
         Ok(())
@@ -274,11 +276,11 @@ mod tests {
     #[test]
     fn test_compare_self_no_pwd() -> Result<(), Box<dyn Error>> {
         let mut mock_comparison = common::mock_comparison(true);
-        test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "TT"], ["JJ", "AA"])?;
+        test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "GG"], ["JJ", "AA"])?;
 
-        assert_eq!(mock_comparison.sum_phred, 82.0);               // ('J'  +  'J')
+        assert_eq!(mock_comparison.get_sum_phred(), 82.0);        // (J + *J*) (NOT A, since we're self-comparing)
         assert_eq!(mock_comparison.get_avg_phred(), 82.0 / 2.0);
-        assert_eq!(mock_comparison.pwd, 0.0);                      // ('T' <-> 'T') * 2
+        assert_eq!(mock_comparison.get_sum_pwd(), 0.0);           // (T <-> *T*) * 2 (NOT G, since we're self-comparing)
         assert_eq!(mock_comparison.get_avg_pwd(), 0.0);          
         assert_eq!(mock_comparison.positions.len(), 2);         
         Ok(())
@@ -290,9 +292,9 @@ mod tests {
         let mut mock_comparison = common::mock_comparison(false);
         test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "CC"], ["JJ", "AA"])?;
 
-        assert_eq!(mock_comparison.sum_phred, 73.0);               // ('J'  +  'A')
+        assert_eq!(mock_comparison.get_sum_phred(), 73.0);       // (J + A)
         assert_eq!(mock_comparison.get_avg_phred(), 73.0 / 2.0);
-        assert_eq!(mock_comparison.pwd, 2.0);                      // ('T' <-> 'C')
+        assert_eq!(mock_comparison.get_sum_pwd(), 2.0);          // (T <-> C) *2
         assert_eq!(mock_comparison.get_avg_pwd(), 1.0);
         assert_eq!(mock_comparison.positions.len(), 2);
         Ok(())
@@ -312,7 +314,7 @@ mod tests {
             expected_sum_phred += avg_test_qual; 
 
             // Ensure comparison.sum_phred represent the sum average of two given nucleotide's scores
-            assert_eq!(mock_comparison.sum_phred, expected_sum_phred as f64);
+            assert_eq!(mock_comparison.get_sum_phred(), expected_sum_phred as f64);
 
             assert_eq!(mock_comparison.get_avg_phred(), avg_test_qual as f64); // Avg. pwd should stay the same. 
         }
@@ -320,22 +322,32 @@ mod tests {
     }
 
     #[test]
-    fn pwd_checker_identity() {
-        let nucleotides = [
-            &Nucleotide{base:'A', phred: 20},
-            &Nucleotide{base:'A', phred: 30}
-        ];
-        assert_eq!(Comparison::check_pwd(&nucleotides[..]), false);
+    fn update_positions() -> Result<(), Box<dyn Error>> {
+        let mut mock_comparison = common::mock_comparison(false);
+        test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "TT"], ["JJ", "JJ"])?;
+        test_compare(&mut mock_comparison, &[30,40], 'C', ["TT", "CC"], ["JJ", "AA"])?; 
+        // J: 41 | A: 32
+        assert_eq!(mock_comparison.get_sum_phred(), 155.0);       // (J + A) 
+        assert_eq!(mock_comparison.get_avg_phred(), 155.0 / 4.0);
+        assert_eq!(mock_comparison.get_sum_pwd(), 2.0);           // (T <-> C) *2
+        assert_eq!(mock_comparison.get_avg_pwd(), 0.5);
+        assert_eq!(mock_comparison.positions.len(), 4);
+
+        
+        // Remove the last position from the comparisons.
+        let x = SNPCoord{chromosome: 22, position: 40, reference: None, alternate: None};
+        mock_comparison.positions.remove(&Pwd::initialize(x));
+
+        // Check pwd statistics are updated and sane...
+        assert_eq!(mock_comparison.get_sum_phred(), 118.5);       // (J + A)
+        assert_eq!(mock_comparison.get_avg_phred(), 118.5 / 3.0);
+        assert_eq!(mock_comparison.get_sum_pwd(), 1.0);           // (T <-> C) *2
+        assert_eq!(mock_comparison.get_avg_pwd(), 0.3333333333333333);
+        assert_eq!(mock_comparison.positions.len(), 3);
+
+        Ok(())
     }
 
-    #[test]
-    fn pwd_checker_mismatch() {
-        let nucleotides = [
-            &Nucleotide{base:'C', phred: 20},
-            &Nucleotide{base:'A', phred: 30}
-        ];
-        assert_eq!(Comparison::check_pwd(&nucleotides[..]), true);
-    }
 
     #[test]
     fn display() {
