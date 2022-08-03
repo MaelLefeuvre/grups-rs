@@ -100,6 +100,19 @@ impl PedigreeReps {
         }
         Ok(sum_simulated_stats)
     }
+
+    //// WIP: heterozygocity ratio
+    //pub fn compute_average_het_ratio(&self) -> HashMap<String, f64>{
+    //    let mut sum_simulated_stats = HashMap::new();
+    //    for pedigree in self.iter() {
+    //        // Sum the avg pwd of each replicate
+    //        for comparison in pedigree.comparisons.iter() {
+    //            *sum_simulated_stats.entry(comparison.label.to_owned()).or_insert(0.0) += comparison.get_heterozygocity_ratio()
+    //        }
+    //    }
+    //    sum_simulated_stats
+    //}
+
 }
 
 impl Deref for PedigreeReps {

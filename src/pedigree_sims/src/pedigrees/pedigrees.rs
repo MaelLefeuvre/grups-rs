@@ -525,6 +525,13 @@ impl Pedigrees {
             );
             println!("{simulation_result}");
             simulations_results.push(simulation_result);
+
+
+            //// WIP: heterozygocity ratio
+            //let avg_het_ratio = pedigree_vec.compute_average_het_ratio()["Unrelated"] / pedigree_vec.len() as f64;
+            //println!("Unrelated_het_ratio: {avg_het_ratio}");
+
+
         }
 
         // ---- Write simulation results to file.

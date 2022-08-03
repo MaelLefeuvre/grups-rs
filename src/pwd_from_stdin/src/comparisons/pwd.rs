@@ -78,10 +78,13 @@ impl Pwd {
         use itertools::Itertools;
         let (mut pwd, mut counter) = (0.0, 0.0);
         let mut phreds = [0.0, 0.0];
+        // let mut hom_alt_sum = 0.0; // WIP: heterozygocity ratio
         for nucs in line.individuals[pair[0].index].nucleotides.iter().combinations(2) {
             if nucs[0].base != nucs[1].base {
                 pwd += 1.0;
-            }
+            } //else if nucs[0].base != '.' { // WIP: heterozygocity ratio
+            //    hom_alt_sum += 1.0
+            //}
             phreds[0] += f64::from(nucs[0].phred);
             phreds[1] += f64::from(nucs[1].phred);
             counter += 1.0; 
@@ -101,11 +104,17 @@ impl Pwd {
         let set1 = line.individuals[pair[1].index].observation_set();
         let phreds = [set0.1, set1.1];
         let mut prob_pwd = 0.0;
+
+        //let mut hom_alt_sum = 0.0;
+
         for (base0, prob0) in &set0.0 {
             for (base1, prob1) in &set1.0 {
                 if base0 != base1 {
                     prob_pwd += prob0 * prob1;
-                }
+                    
+                } //else if *base0 != '.' { // WIP: heterozygocity ratio
+                //    hom_alt_sum += 1.0
+                //}
             }
         }
 

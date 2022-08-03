@@ -92,8 +92,6 @@ impl Pileup {
     /// # Errors
     ///  - Throws `MissingAltRef` if the `known_variant` does not contain REF/ALT information.
     /// 
-    /// # @TODO : Better error handling for `known_variant` unwrapping.
-    ///          => Do .ok() -> early return if None
     pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) -> Result<(), SNPReaderError> {
         use crate::io::SNPReaderError::MissingAltRef;
         let (reference, alternate) = (

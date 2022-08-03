@@ -141,5 +141,12 @@ pub fn run<'a>(
     // Run two-pass variance estimation algorithm.
     comparisons.update_variance_unbiased();
 
+    //// WIP: heterozygocity ratio
+    //for comparison in comparisons.iter() {
+    //    println!("{} : {}", comparison.get_pair(), comparison.get_heterozygocity_ratio())
+    //}
+
+
+
     Ok((comparisons, output_files))
 }

@@ -172,7 +172,12 @@ impl Comparison {
         self.variance.update_from_iter(self.get_avg_pwd(), &self.positions);
     }
 
-    
+    //// WIP: heterozygocity ratio
+    //pub fn get_heterozygocity_ratio(&self) -> f64 {
+    //    let sum_hom_alt = self.positions.iter().map(|pwd| pwd.hom_alt_sum).sum::<f64>();
+    //    self.get_sum_pwd() / sum_hom_alt
+    //}
+
 }
 
 impl fmt::Display for Comparison {
