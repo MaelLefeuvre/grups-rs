@@ -71,8 +71,8 @@ impl GeneticMap {
         let mut start = 0;
         for line in source.lines().skip(1) { // Skip header
             let line= line?;
+            if line.is_empty(){ continue } // Skip empty lines.
             let line = &line.split('\t').collect::<Vec<&str>>();
-
             let chr   = str::replace(line[0], "chr", "").parse::<u8>()?;
             let stop = line[1].parse::<u32>()?;
             let rate = line[2].parse::<f64>()?;
