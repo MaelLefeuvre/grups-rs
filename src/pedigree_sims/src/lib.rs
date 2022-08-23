@@ -97,12 +97,14 @@ pub fn run(
     };
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
+    info!("Initializing pedigree replicates...");
     let mut pedigrees = pedigrees::Pedigrees::initialize(
         ped_cli.pedigree_pop,
         comparisons,
         &ped_cli.recomb_dir
     )?;
 
+    info!("Populating pedigree replicates...");
     pedigrees.populate(
         comparisons,
         &panel,
@@ -113,6 +115,7 @@ pub fn run(
     )?;
 
     // --------------------- Assign simulation parameters for each pedigree.
+    info!("Assigning simulation parameters...");
     pedigrees.set_params(
         comparisons,
         ped_cli.snp_downsampling_rate,

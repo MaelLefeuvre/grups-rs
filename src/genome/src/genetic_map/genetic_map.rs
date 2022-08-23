@@ -46,7 +46,11 @@ impl GeneticMap {
             return Err(format!("Failed to find or parse any genetic-map in provided directory: {dir_str}", ).into())
         }
         for map in &map_paths {
-            self.from_map(map)?;
+            self.from_map(map).map_err(|err| {
+                format!(" Got [{err}] When attempting to parse genetic map '{map:?}'. \
+                    Ensure the provided '--recomb-dir' ONLY contains properly formatted recombination map files."
+                )
+            })?;
         }
         Ok(self)
     }
