@@ -36,14 +36,18 @@ pub fn run(
 
     // ----------------------------- Sanity checks 
     if ped_cli.contamination_rate.len() < comparisons.len() {
-        warn!("Number of contamination rates is lower than the number of comparisons. Values of --contamination-rate will wrap around.")
+        warn!("Number of contamination rates is lower than the number of comparisons. \
+            Values of --contamination-rate will wrap around."
+        );
     }
 
     match &ped_cli.seq_error_rate {
         None => (),
         Some(error_rates_vec) => {
             if error_rates_vec.len() < comparisons.len() {
-                warn!("Number of sequencing error rates is lower than the number of comparisons. Values of --seq-error-rate will wrap around.")
+                warn!("Number of sequencing error rates is lower than the number of comparisons. \
+                    Values of --seq-error-rate will wrap around."
+                );
             }
         }
     }
@@ -93,17 +97,38 @@ pub fn run(
     };
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
-    let mut pedigrees = pedigrees::Pedigrees::initialize(ped_cli.pedigree_pop, comparisons, &ped_cli.recomb_dir)?;
-    pedigrees.populate(comparisons, &panel, ped_cli.reps, &ped_cli.pedigree, &ped_cli.contam_pop, &ped_cli.contam_num_ind)?;
+    info!("Initializing pedigree replicates...");
+    let mut pedigrees = pedigrees::Pedigrees::initialize(
+        ped_cli.pedigree_pop,
+        comparisons,
+        &ped_cli.recomb_dir
+    )?;
+
+    info!("Populating pedigree replicates...");
+    pedigrees.populate(
+        comparisons,
+        &panel,
+        ped_cli.reps,
+        &ped_cli.pedigree,
+        &ped_cli.contam_pop,
+        &ped_cli.contam_num_ind
+    )?;
 
     // --------------------- Assign simulation parameters for each pedigree.
-    pedigrees.set_params(comparisons, ped_cli.snp_downsampling_rate, ped_cli.af_downsampling_rate, &ped_cli.seq_error_rate, &ped_cli.contamination_rate)?;
+    info!("Assigning simulation parameters...");
+    pedigrees.set_params(
+        comparisons,
+        ped_cli.snp_downsampling_rate,
+        ped_cli.af_downsampling_rate,
+        &ped_cli.seq_error_rate, 
+        &ped_cli.contamination_rate)?;
+
     
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.
     match ped_cli.mode {
         parser::Mode::Vcf => {
             info!("Starting VCF pedigree comparisons.");
-            for vcf in input_paths.iter() {
+            for vcf in &input_paths {
                 pedigrees.pedigree_simulations_vcf(
                     comparisons, 
                     vcf,
@@ -114,7 +139,7 @@ pub fn run(
         },
         parser::Mode::Fst => {
             info!("Starting FST pedigree comparisons.");
-            for fst in input_paths.iter(){
+            for fst in &input_paths{
                 pedigrees.pedigree_simulations_fst(
                     comparisons,
                     fst,

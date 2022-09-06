@@ -100,7 +100,7 @@ impl Pedigree {
 
             // ---- Perform allele fixation at random, according to this pedigrees af_downsampling_rate.
             founder.alleles = match rng.f64() < af_downsampling_rate { 
-                false => {reader.get_alleles(founder_tag)},
+                false => Some(reader.get_alleles(founder_tag)?),
                 true  => Some([0, 0]),
             };
         }

@@ -12,9 +12,9 @@ pub struct JackknifeEstimates {
 }
 
 #[derive(Debug)]
-/// A simple struct representing a HashMap of Jackknife Blocks for a given
+/// A simple struct representing a `HashMap` of `JackknifeBlock` for a given
 /// genome. Implemented within struct Comparison. See: `pwd_from_stdin::pileup::Comparison`
-///   - HashMap is indexed according to the chromosome name.
+///   - `HashMap` is indexed according to the chromosome name.
 /// 
 /// # Traits:
 ///   - `Display` : Pretty print. for file writing and debug. Recursively calls `Display` for each
@@ -26,14 +26,15 @@ pub struct JackknifeBlocks {
 }
 
 impl JackknifeBlocks {
+    #[must_use]
     pub fn new(genome: &Genome, blocksize: u32) -> JackknifeBlocks {
         let mut jackknives = HashMap::new();
         for chr in genome.values() {
             let mut blocks = Vec::new();
             let mut add_block = |chr, start, end| {
-                blocks.push(JackknifeBlock::new(chr, start, end))
+                blocks.push(JackknifeBlock::new(chr, start, end));
             };
-            let chr_blocks: Vec<u32> = (1..chr.length+1).step_by(blocksize as usize).collect();
+            let chr_blocks: Vec<u32> = (1..=chr.length).step_by(blocksize as usize).collect();
             for i in 1..chr_blocks.len(){
                 add_block(chr.name, chr_blocks[i-1], chr_blocks[i]);
             }
@@ -45,22 +46,17 @@ impl JackknifeBlocks {
         JackknifeBlocks{blocks: jackknives}
     }
 
-    /// Search for a given block, using an SNPCoord struct.
-    /// Return the block which contains the SNPCoord position. 
+    /// Search for a given block, using an `SNPCoord` struct.
+    /// Return the block containing the `SNPCoord` position. 
     pub fn find_block(&mut self, coordinate: &SNPCoord) -> Option<&mut JackknifeBlock> {
         self.blocks.get_mut(&coordinate.chromosome)?
             .iter_mut()
             .find(|block| block.range.contains(&coordinate.position))
     }
 
+    /// Compute jackknifed avg. PWD estimate for each chromosome block
+    #[must_use]
     pub fn compute_unequal_delete_m_pseudo_values(&self, sum_pwd: f64, sum_overlap: u32) -> JackknifeEstimates {
-
-        //  for each chromosome_block {
-        //      for each (i, block) in chromosome_blocks.enumerate() {
-        //          self.compute_pseudo_value(i)
-        //}
-            
-        // Compute jackknifed avg_pwd estimate
         let mut theta_jk: f64 = 0.0;
         for chromosome_blocks in self.blocks.values() {
             for block in chromosome_blocks.iter() {
@@ -77,13 +73,13 @@ impl JackknifeBlocks {
             for block in chromosome_blocks.iter() {
                 let pseudo_value = block.compute_unequal_delete_m_pseudo_value(sum_pwd, sum_overlap);
                 if pseudo_value.hj.is_finite() {
-                    var_jk += f64::powf(pseudo_value.weigthed_pseudovalue()-theta_jk, 2.0) / (pseudo_value.hj - 1.0)
+                    var_jk += f64::powf(pseudo_value.weigthed_pseudovalue() - theta_jk, 2.0) / (pseudo_value.hj - 1.0);
                 }
             }
         }
 
-        let g : usize = self.blocks.values().map(|blocks| blocks.len()).sum();
-        let var_jk = var_jk / g as f64;
+        let g = self.blocks.values().map(Vec::len).sum::<usize>() as u32; // Casting to u32 because usize -> f64 conversion
+        let var_jk = var_jk / g as f64;                                   // can generate precision loss on x64 architectures.
 
         JackknifeEstimates{estimate: theta_jk, variance: var_jk}
     }

@@ -6,7 +6,7 @@ pub struct Logger;
 
 impl Logger {
 
-    pub fn init(verbosity: u8) -> Self {
+    pub fn init(verbosity: u8) {
         let log_level = Self::u8_to_loglevel(verbosity);
         let env = Env::default()
             .filter("GRUPS_LOG");
@@ -49,7 +49,6 @@ impl Logger {
             })
             .parse_env(env)
             .init();
-        Self
     }
 
     fn u8_to_loglevel(verbosity: u8) -> LevelFilter {
@@ -62,8 +61,8 @@ impl Logger {
         }
     }
 
-    pub fn set_level(&self, verbosity: u8) {
-        log::set_max_level(Self::u8_to_loglevel(verbosity))
+    pub fn set_level(verbosity: u8) {
+        log::set_max_level(Self::u8_to_loglevel(verbosity));
     }
 }
 
@@ -73,9 +72,9 @@ mod tests {
 
     #[test]
     fn log_level(){
-        let logger = Logger::init(0);
+        Logger::init(0);
         for level in 0..u8::MAX {
-            logger.set_level(level);
+            Logger::set_level(level);
 
             let expected_level = match level {
                 0           => LevelFilter::Error,

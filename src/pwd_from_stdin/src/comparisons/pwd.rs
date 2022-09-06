@@ -13,6 +13,7 @@ pub struct Coordinate {
 }
 
 impl Coordinate {
+    #[must_use]
     pub fn new(chromosome: u8, position: u32) -> Self {
         Self{chromosome, position}
     }
@@ -48,34 +49,44 @@ pub struct Pwd {
 }
 
 impl Pwd {
+    #[must_use]
     pub fn initialize(coordinate: SNPCoord) -> Self {
         Self{
-            coordinate : Coordinate{chromosome: coordinate.chromosome, position: coordinate.position},
-            phreds: [0.0,0.0],
-            pwd: 0.0,
+            coordinate  : Coordinate{chromosome: coordinate.chromosome, position: coordinate.position},
+            phreds      : [0.0,0.0],
+            pwd         : 0.0,
             observations: 0
         }
     }
+    
+    #[must_use]
     pub fn one(coordinate: SNPCoord, random_nucl: &[&Nucleotide]) -> Self {
         Self {
-            coordinate : Coordinate{chromosome: coordinate.chromosome, position: coordinate.position},
+            coordinate  : Coordinate{chromosome: coordinate.chromosome, position: coordinate.position},
             //nucleotides: [*random_nucl[0], *random_nucl[1]],
-            phreds: [random_nucl[0].phred as f64 , random_nucl[1].phred as f64],
-            pwd        : Self::check_pwd(random_nucl),
+            phreds      : [
+                f64::from(random_nucl[0].phred),
+                f64::from(random_nucl[1].phred)
+            ],
+            pwd         : Self::check_pwd(random_nucl),
             observations: 1,
         }
     }
 
+    #[must_use]
     pub fn deterministic_self(line: &Line, pair: &[Individual; 2]) -> Self {
         use itertools::Itertools;
         let (mut pwd, mut counter) = (0.0, 0.0);
         let mut phreds = [0.0, 0.0];
+        // let mut hom_alt_sum = 0.0; // WIP: heterozygocity ratio
         for nucs in line.individuals[pair[0].index].nucleotides.iter().combinations(2) {
             if nucs[0].base != nucs[1].base {
                 pwd += 1.0;
-            }
-            phreds[0] += nucs[0].phred as f64;
-            phreds[1] += nucs[1].phred as f64;
+            } //else if nucs[0].base != '.' { // WIP: heterozygocity ratio
+            //    hom_alt_sum += 1.0
+            //}
+            phreds[0] += f64::from(nucs[0].phred);
+            phreds[1] += f64::from(nucs[1].phred);
             counter += 1.0; 
         }
         
@@ -86,18 +97,24 @@ impl Pwd {
         Self { coordinate, phreds, pwd, observations: 1 }
     }
 
+    #[must_use]
     pub fn deterministic_pairwise(line: &Line, pair: &[Individual; 2]) -> Self {
         // Breaks if self.comparison == true
-
         let set0 = line.individuals[pair[0].index].observation_set();
         let set1 = line.individuals[pair[1].index].observation_set();
         let phreds = [set0.1, set1.1];
         let mut prob_pwd = 0.0;
-        for (base0, prob0) in set0.0.iter() {
-            for (base1, prob1) in set1.0.iter() {
+
+        //let mut hom_alt_sum = 0.0;
+
+        for (base0, prob0) in &set0.0 {
+            for (base1, prob1) in &set1.0 {
                 if base0 != base1 {
                     prob_pwd += prob0 * prob1;
-                }
+                    
+                } //else if *base0 != '.' { // WIP: heterozygocity ratio
+                //    hom_alt_sum += 1.0
+                //}
             }
         }
 
@@ -112,35 +129,30 @@ impl Pwd {
     }
 
     fn update_phreds(&mut self, random_nucl: &[&Nucleotide]) {
-        self.phreds[0] += random_nucl[0].phred as f64;
-        self.phreds[1] += random_nucl[1].phred as f64;
+        self.phreds[0] += f64::from(random_nucl[0].phred);
+        self.phreds[1] += f64::from(random_nucl[1].phred);
     }
     
     // Check if there is a pairwise difference.
     fn check_pwd(nuc: &[&Nucleotide]) -> f64 {
-        (nuc[0].base != nuc[1].base) as u64 as f64
+        f64::from(u8::from(nuc[0].base != nuc[1].base))
     }
 
+    #[must_use]
     pub fn avg_local_pwd(&self) -> f64 {
-        self.pwd / self.observations as f64 
+        self.pwd / f64::from(self.observations)
     }
 
+    #[must_use]
     pub fn compute_avg_phred(&self) -> f64 {
-        ( (self.phreds[0] + self.phreds[1]) as f64 / 2.0 / self.observations as f64 ) as f64
+        (self.phreds[0] + self.phreds[1]) / 2.0 / f64::from(self.observations)
     }
 
-    //pub fn is_pwd(&self) -> bool {
-    //    self.pwd
-    //}
-
+    #[must_use]
     pub fn error_probs(&self) -> [f64; 2] {
         [
-            f64::powf(10.0, -1.0 * (self.phreds[0] as f64)/10.0),
-            f64::powf(10.0, -1.0 * (self.phreds[1] as f64)/10.0)
-
-
-            //self.nucleotides[0].error_prob(),
-            //self.nucleotides[1].error_prob()
+            f64::powf(10.0, -1.0 * (self.phreds[0]) / 10.0),
+            f64::powf(10.0, -1.0 * (self.phreds[1]) / 10.0)
         ]
     }
 }

@@ -83,7 +83,7 @@ impl FSTReader {
     /// Public wrapper for `find_chromosome()`. returns a sorted, unduplicated list of chromosomes contained within the set.
     pub fn find_chromosomes(&self) -> std::io::Result<Vec<u8>> {
         let root = self.genotypes_set.as_fst().root();
-        let mut string = Vec::new();
+        let mut string = Vec::with_capacity(4);
         let mut chromosomes = Vec::new();
         self.find_chromosome(root, &mut string, &mut chromosomes)?;
         chromosomes.sort_unstable();
@@ -225,15 +225,18 @@ impl FSTReader {
 
 impl GenotypeReader for FSTReader {
     // Return the alleles for a given SampleTag. Search is performed using `sample_tag.id()`;
-    fn get_alleles(&self, sample_tag: &SampleTag ) -> Option<[u8; 2]> {
-        Some(self.genotypes[sample_tag.id()].map(|all| all - 48))
+    fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2], String> {
+        match self.genotypes.get(sample_tag.id()) {
+            Some(alleles) => Ok(alleles.map(|all| all -48)),
+            None => Err(format!("Failed to retrieve the alleles of sample {} within the current FST set.", sample_tag.id()))
+        }
     }
 
     // Return the alleles frequencies for a given population id.
-    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, Box<dyn Error>> {
+    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, String> {
         match self.frequencies.get(pop) {
             Some(freq) => Ok(*freq),
-            None             => Err(format!("Missing allele frequency in .frq file for pop {} at this coordinate.", pop).into())
+            None             => Err(format!("Missing allele frequency in .frq file for pop {} at this coordinate.", pop))
         }
     }
 }

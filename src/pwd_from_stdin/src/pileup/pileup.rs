@@ -1,8 +1,6 @@
 use genome::SNPCoord;
-use std::ops::Add;
 use std::{iter::Peekable, collections::HashMap};
 use std::error::Error;
-use itertools::Itertools;
 
 use crate::io::SNPReaderError;
 
@@ -25,6 +23,12 @@ pub struct Pileup {
 }
 
 impl Pileup {
+    /// Instantiate a new `Pileup` entry, tied to a given `Individual`.
+    /// 
+    /// # Errors 
+    /// - If an indel is encountered and the program fails to skip it.
+    /// -  `RefSkip` if a reference skip is encountered ('[<>]' characters).
+    /// - `UnequalLength` if the base and scores strings do not match in length.
     pub fn new(depth: u16, bases: &str, scores: &str, ignore_dels: bool) -> Result<Pileup, Box<dyn Error>> {
 
         let bases = &bases.to_uppercase();    // Convert antisense to forward
@@ -53,17 +57,22 @@ impl Pileup {
         Ok(Pileup { depth, nucleotides })
     }
 
+    /// Generate a table of frequency of nucleotide observations for this pileup entry.
+    /// Returns:
+    ///  - a frequency table as a `HashMap` (K: nucleotide, V: frequency of obs)
+    ///  - the `avg_phred` score for all observed nucleotides.
+    #[must_use]
     pub fn observation_set(&self) -> (HashMap<char, f64>, f64) {
         let mut set: HashMap<char, f64> = HashMap::new();
         let mut sum_phred: u32 = 0;
-        for nucleotide in self.nucleotides.iter() {
+        for nucleotide in &self.nucleotides {
             *set.entry(nucleotide.base).or_insert(0.0) += 1.0;
-            sum_phred += nucleotide.phred as u32;
+            sum_phred += u32::from(nucleotide.phred);
         }
         for count in set.values_mut() {
             *count /= self.nucleotides.len() as f64;
         }
-        let avg_phred = sum_phred as f64 / self.nucleotides.len() as f64 ;
+        let avg_phred = f64::from(sum_phred) / self.nucleotides.len() as f64 ;
         (set, avg_phred)
     }
 
@@ -75,11 +84,14 @@ impl Pileup {
         self.update_depth();
     }
 
-    /// Apply triallelic filtration for each Nucleotide, using a given SNPCoordinate.
-    /// Note that SNPCoordinates must contain values for their `reference` and `alternate` fields
+    /// Apply triallelic filtration for each Nucleotide, using a given `SNPCoord`.
     /// 
-    /// TODO : Better error handling for known_variant unwrapping.
-    ///        => Do .ok() -> early return if None
+    /// Note that the provided `SNPCoord` must contain values for their `reference` 
+    /// and `alternate` fields.
+    /// 
+    /// # Errors
+    ///  - Throws `MissingAltRef` if the `known_variant` does not contain REF/ALT information.
+    /// 
     pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) -> Result<(), SNPReaderError> {
         use crate::io::SNPReaderError::MissingAltRef;
         let (reference, alternate) = (
@@ -94,6 +106,8 @@ impl Pileup {
     }
 
     /// Return a string of nucleotides. Mainly for Tests and Debug.
+    #[must_use]
+    #[cfg(test)]
     pub fn get_nucleotides(&self) -> String {
         let mut pileup_nuc = String::from("");
         for nuc in &self.nucleotides {
@@ -104,6 +118,7 @@ impl Pileup {
 
     /// Return a string of BQ scores in ASCII format. Mainly for Tests and Debug.
     #[must_use]
+    #[cfg(test)]
     pub fn get_scores_ascii(&self) -> String {
         let mut pileup_nuc = String::from("");
         for nuc in &self.nucleotides {
@@ -114,12 +129,20 @@ impl Pileup {
 
     /// Run through a Peekable Iterator of nucleotides to parse the number of characters that should be skipped
     /// When encountering an indel.
-    /// Indel regex: [+-][0-9]+[ATCGANatcgan]+
-    ///               --  ---   ------------
-    ///               |   |     + Sequence
-    ///               |   + Length of Sequence
-    ///               + Identifier ('-' = deletion , '+' = insertion=
     /// 
+    /// 
+    /// ```Text
+    /// Indel regex: `[+-][0-9]+[ATCGANatcgan]+`
+    ///                --  ---   ------------
+    ///                |   |     | 
+    ///                |   |     +- Sequence
+    ///                |   | 
+    ///                |   +- Length of Sequence
+    ///                | 
+    ///                +- Identifier ('+' = insertion, '-' = deletion)
+    /// ```
+    /// # Errors
+    /// - If the length of the sequence (following [+-]) cannot get parsed into an integer.
     fn skip_indel<I: Iterator<Item = char>>(chars: &mut Peekable<I>) -> Result<(), String> {
         let mut digit: String = "".to_string();
         let err_msg = "Error while skipping indels: characters following indel identifier are not numeric.";
@@ -143,8 +166,8 @@ impl Pileup {
     }
 
     /// Refresh the depth after quality filtration.
-    /// Mainly used by: - self.filter_known_variants()
-    ///                 - self.filter_base_quality()
+    /// Mainly used by: - `self.filter_known_variants()`
+    ///                 - `self.filter_base_quality()`
     fn update_depth(&mut self) {
         self.depth = self.nucleotides.len() as u16;
 

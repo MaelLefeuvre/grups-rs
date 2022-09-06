@@ -20,10 +20,10 @@ impl Pseudovalue {
 ///Chromosome Block for Jackknife resampling. Implemented within struct `JackknifeBlocks`, which is itself implemented
 ///within structs `pwd_from_stdin::pileup::Comparison`
 /// # Fields
-/// - chromosome  : chromosome name (warn: not by index -> cannot handle specific names, such as "X", "MT", "chr7", etc.)
-/// - range       : `[start, end[` coordinates of the block.
-/// - site_counts : counts the number of overlapping SNPs for a given pair of individuals.
-/// - pwd_counts  : counts the number of pairwise differences for a given pair of individuals.
+/// - `chromosome`  : chromosome name (warn: not by index -> cannot handle specific names, such as "X", "MT", "chr7", etc.)
+/// - `range`       : `[start, end[` coordinates of the block.
+/// - `site_counts` : counts the number of overlapping SNPs for a given pair of individuals.
+/// - `pwd_counts`  : counts the number of pairwise differences for a given pair of individuals.
 /// 
 /// # Traits :
 ///  - `Eq` and `PartialEq` : with `Self`.
@@ -46,6 +46,7 @@ impl JackknifeBlock {
     /// - `chromosome`: name of the chromosome (u8 cast)
     /// - `start`     : 0-based start-coordinate of the block.
     /// - `end`       : 0-based end-coordinate of the block
+    #[must_use]
     pub fn new(chromosome: u8, start: u32, end: u32) -> JackknifeBlock {
         JackknifeBlock{chromosome, range: Range{start, end}, site_counts: 0, pwd_counts:0.0}
     }
@@ -61,13 +62,18 @@ impl JackknifeBlock {
         self.site_counts += 1;
     }
 
+    #[must_use]
     pub fn compute_unequal_delete_m_pseudo_value(&self, sum_pwd: f64, sum_overlap: u32) -> Pseudovalue {
+        // Cast once, compute later...
+        let sum_overlap = f64::from(sum_overlap);
+        let site_counts = f64::from(self.site_counts);
+
         // hj = n / m_j
         // theta: Estimate of avg_PWD bassed on all the observations.
         // theta_minus_j: Estimate of avg_PWD based on all the observations, except those from Block j
-        let hj          = sum_overlap as f64 / self.site_counts as f64; // hj = n/m_j
-        let theta         = sum_pwd as f64 / sum_overlap as f64;          // Estimate of avg_pwd based on all the observations 
-        let theta_minus_j = (sum_pwd - self.pwd_counts as f64) as f64 / (sum_overlap - self.site_counts) as f64; // Estimate of avg_pwd based on all the observations 
+        let hj          = sum_overlap / site_counts; // hj = n/m_j
+        let theta         = sum_pwd / sum_overlap;          // Estimate of avg_pwd based on all the observations 
+        let theta_minus_j = (sum_pwd - self.pwd_counts) / (sum_overlap - site_counts); // Estimate of avg_pwd based on all the observations 
 
         let theta_j = hj * theta - (hj - 1.0) * theta_minus_j;
         Pseudovalue{hj, theta_j}

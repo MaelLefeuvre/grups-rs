@@ -29,6 +29,7 @@ use pwd_from_stdin::{
 };
 
 use fastrand;
+use ahash::{AHashMap};
 use log::{info, trace, debug};
 
 
@@ -264,7 +265,7 @@ impl Pedigrees {
         let stop  = Coordinate::new(max, std::u32::MAX);
 
         // Keep a record of positions that should get filtered out after maf < treshold.
-        let mut positions_to_delete = HashMap::new();
+        let mut positions_to_delete: AHashMap<String, Vec<Coordinate>> = AHashMap::new();
         'comparison: for comparison in comparisons.iter() {
             info!("Performing simulations for : {}", comparison.get_pair());
 
@@ -322,7 +323,7 @@ impl Pedigrees {
     /// # Arguments:
     /// - `positions_to_delete`: HashMap of coordinates. Key = comparison label | Value = Vec<Coordinate> to delete.
     /// - `comparisons`        : pileup Comparisons of our real samples.
-    fn filter_pileup_positions(positions_to_delete: &mut HashMap<String, Vec<Coordinate>>, comparisons: &mut Comparisons) {
+    fn filter_pileup_positions(positions_to_delete: &mut AHashMap<String, Vec<Coordinate>>, comparisons: &mut Comparisons) {
         info!("Filtering out unwanted alleles from comparisons.");
         for comparison in comparisons.iter_mut() {
             let key = comparison.get_pair();
@@ -349,8 +350,7 @@ impl Pedigrees {
 
         // --------------------- Keep a record of positions that should get filtered out
         //                       after maf < treshold.
-        let mut positions_to_delete = HashMap::new();
-
+        let mut positions_to_delete: AHashMap<String, Vec<Coordinate>> = AHashMap::new();
         'line: while vcf_reader.has_data_left()? {
 
             // --------------------- Get current chromosome and position.
@@ -446,7 +446,7 @@ impl Pedigrees {
     /// # Arguments
     /// - `comparisons`   : pileup Comparisons of our real samples.
     /// - `output_files`  : target output file where results are written.
-    pub fn compute_results(&self, comparisons: &Comparisons, output_file: &str) -> Result<(), Box<dyn Error>> {
+    pub fn compute_results(&self, comparisons: &mut Comparisons, output_file: &str) -> Result<(), Box<dyn Error>> {
         // ---- Resource acquisition
         let mut simulations_results = Vec::with_capacity(comparisons.len());
         let mut writer = pwd_from_stdin::io::Writer::new(Some(output_file.to_owned()))?;
@@ -457,6 +457,13 @@ impl Pedigrees {
         );
         println!("{simulation_header}");
         simulations_results.push(simulation_header);
+
+
+        // ---- We might have removed some PWDs during simulations. We need to recompute the variance before printing out
+        //      "corrected" 95% Confidence intervals.
+        //      -> Run two-pass variance estimation algorithm.
+        comparisons.update_variance_unbiased();
+
 
         // ---- loop across our pileup comparisons and assign a most-likely relationship, using our simulations.
         for comparison in comparisons.iter() {
@@ -518,6 +525,13 @@ impl Pedigrees {
             );
             println!("{simulation_result}");
             simulations_results.push(simulation_result);
+
+
+            //// WIP: heterozygocity ratio
+            //let avg_het_ratio = pedigree_vec.compute_average_het_ratio()["Unrelated"] / pedigree_vec.len() as f64;
+            //println!("Unrelated_het_ratio: {avg_het_ratio}");
+
+
         }
 
         // ---- Write simulation results to file.

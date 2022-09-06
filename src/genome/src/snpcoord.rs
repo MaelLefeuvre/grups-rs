@@ -7,11 +7,11 @@ use std::{
 const CHR_FORMAT_LEN: usize = 2;
 const POS_FORMAT_LEN: usize = 9;
 
-/// A simple struct representing an SNPCoordinate position.
+/// A simple struct representing an `SNPCoordinate` position.
 /// Note that :
 ///   - REF/ALT positions are optional, but are required if the user
 ///     requires known-sites filtration.
-///   - SNPCoordinates implement Equality with JackknifeBlock structs.
+///   - `SNPCoordinates` implement Equality with `JackknifeBlock` structs.
 ///     See: `pwd_from_stdin::jackknife::JackknifeBlock`
 ///   - Hashable, but only in regards to chr and pos.
 ///     -> don't insert alternate variations.
@@ -24,6 +24,9 @@ pub struct SNPCoord {
 }
 
 impl SNPCoord {
+
+    /// Check if this coordinate contains known REF/ALT alleles.
+    #[must_use]
     pub fn has_known_alleles(&self) -> bool {
         self.reference.is_some() && self.alternate.is_some()
     }

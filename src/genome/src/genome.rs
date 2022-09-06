@@ -41,7 +41,7 @@ impl std::fmt::Display for FastaIndexReaderError {
 }
 
 
-/// BTreeMap of chromosomes, with Key: chromosome name (u8) | Value: Chromosome
+/// `BTreeMap` of chromosomes, with Key: chromosome name (u8) | Value: Chromosome
 #[derive(Debug, Clone)]
 pub struct Genome(BTreeMap<u8, Chromosome>);
 
@@ -56,11 +56,13 @@ impl Deref for Genome {
 impl Genome {
     /// Instantiate a new, empty chromosome
     /// # @TODO convert this into default()
+    #[must_use]
     pub fn new() -> Genome {
         Genome(BTreeMap::new())
     }
 
     /// Create a new genome from a slice of Chromosomes
+    #[must_use]
     pub fn from(chromosomes: &[Chromosome]) -> Genome {
         let mut genome = Genome::new();
         for chr in chromosomes {
@@ -79,7 +81,7 @@ impl Genome {
     /// - Fields         : `<CHROMOSOME>`    `<LENGTH>`
     /// - Field-separator: `'\t'`
     /// 
-    /// # Errors:
+    /// # Errors
     /// - returns `FastaIndexReaderError::InvalidFileFormat` if ...
     ///   - `path` does not carry a file extension.
     ///   - `path` extension is neither (`.fa`, `.fasta` or `.fai`)
@@ -143,28 +145,28 @@ impl Default for Genome {
     fn default() -> Self {
         warn!("No reference genome provided. Using default.");
         Genome(BTreeMap::from([
-            (1, Chromosome::new( 0,  1,  249250621)),
-            (2, Chromosome::new( 1,  2,  243199373)),
-            (3, Chromosome::new( 2,  3,  198022430)),
-            (4, Chromosome::new( 3,  4,  191154276)),
-            (5, Chromosome::new( 4,  5,  180915260)),
-            (6, Chromosome::new( 5,  6,  171115067)),
-            (7, Chromosome::new( 6,  7,  159138663)),
-            (8, Chromosome::new( 7,  8,  146364022)),
-            (9, Chromosome::new( 8,  9,  141213431)),
-            (10, Chromosome::new(9,  10, 135534747)),
-            (11, Chromosome::new(10, 11, 135006516)),
-            (12, Chromosome::new(11, 12, 133851895)),
-            (13, Chromosome::new(12, 13, 115169878)),
-            (14, Chromosome::new(13, 14, 107349540)),
-            (15, Chromosome::new(14, 15, 102531392)),
-            (16, Chromosome::new(15, 16,  90354753)),
-            (17, Chromosome::new(16, 17,  81195210)),
-            (18, Chromosome::new(17, 18,  78077248)),
-            (19, Chromosome::new(18, 19,  59128983)),
-            (20, Chromosome::new(19, 20,  63025520)),
-            (21, Chromosome::new(20, 21,  48129895)),
-            (22, Chromosome::new(21, 22,  51304566))
+            (1, Chromosome::new( 0,  1,  249_250_621)),
+            (2, Chromosome::new( 1,  2,  243_199_373)),
+            (3, Chromosome::new( 2,  3,  198_022_430)),
+            (4, Chromosome::new( 3,  4,  191_154_276)),
+            (5, Chromosome::new( 4,  5,  180_915_260)),
+            (6, Chromosome::new( 5,  6,  171_115_067)),
+            (7, Chromosome::new( 6,  7,  159_138_663)),
+            (8, Chromosome::new( 7,  8,  146_364_022)),
+            (9, Chromosome::new( 8,  9,  141_213_431)),
+            (10, Chromosome::new(9,  10, 135_534_747)),
+            (11, Chromosome::new(10, 11, 135_006_516)),
+            (12, Chromosome::new(11, 12, 133_851_895)),
+            (13, Chromosome::new(12, 13, 115_169_878)),
+            (14, Chromosome::new(13, 14, 107_349_540)),
+            (15, Chromosome::new(14, 15, 102_531_392)),
+            (16, Chromosome::new(15, 16,  90_354_753)),
+            (17, Chromosome::new(16, 17,  81_195_210)),
+            (18, Chromosome::new(17, 18,  78_077_248)),
+            (19, Chromosome::new(18, 19,  59_128_983)),
+            (20, Chromosome::new(19, 20,  63_025_520)),
+            (21, Chromosome::new(20, 21,  48_129_895)),
+            (22, Chromosome::new(21, 22,  51_304_566))
         ]))
     }
 }

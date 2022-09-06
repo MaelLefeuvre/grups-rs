@@ -71,13 +71,21 @@ impl PedComparison {
     ///                     Entry[i] of the array corresponds to `self.pair[i]`.
     pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2], rng: &mut fastrand::Rng) -> Result<(), Box<dyn Error>> {
         self.add_overlap();
-        let random_sample0 = Self::simulate_observed_reads(1, rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], self.pair[0].borrow().get_alleles()?);
-        let random_sample1 = Self::simulate_observed_reads(1, rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], self.pair[1].borrow().get_alleles()?);
-        if random_sample0 != random_sample1 {
+        let random_sample0 = Self::simulate_observed_reads(1, rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], self.pair[0].borrow().get_alleles()?)?;
+        let random_sample1 = Self::simulate_observed_reads(1, rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], self.pair[1].borrow().get_alleles()?)?;
+        if random_sample0[0] != random_sample1[0] {
             self.add_pwd();
-        }
+        } // else if random_sample0[0] == 1 { // WIP: heterozygocity
+        //    self.hom_alt_sum += 1;
+        //}
         Ok(())
     }
+
+    //// WIP: heterozygocity
+    //pub fn get_heterozygocity_ratio(&self) -> f64 {
+    //    f64::from(self.pwd) / f64::from(self.hom_alt_sum)
+    //}
+
 
     /// Simulate `n` observed pileup reads from a set of alleles and given the provided contamination and sequencing parameters.
     /// # Arguments:
@@ -105,7 +113,7 @@ impl PedComparison {
             // ---- Simulate sequencing error rate.
             const SEQ_ERROR_CHOICES: [[u8; 3]; 4] = [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
             if rng.f64() < seq_error_rate {
-                let wrong_base: u8 = *SEQ_ERROR_CHOICES[chosen_base as usize].get(rng.usize(0..=SEQ_ERROR_CHOICES.len()))
+                let wrong_base: u8 = *SEQ_ERROR_CHOICES[chosen_base as usize].get(rng.usize(0..3))
                     .ok_or_else(|| {String::from(
                         "While simulating observed reads: failed to select a random \
                         erroneous base when simulating sequencing error."

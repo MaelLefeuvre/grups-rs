@@ -22,8 +22,8 @@ use rayon::{self};
 
 /// Convert a `.vcf(.gz)` file into a Finite-State-Transducer Set.
 /// See the following resources for a recap on the theory and applications of FST Sets :
-/// - https://cs.nyu.edu/~mohri/pub/fla.pdf (DOI: 10.1007/978-3-540-39886-8_29) 
-/// - https://blog.burntsushi.net/transducers/
+/// - <https://cs.nyu.edu/~mohri/pub/fla.pdf (DOI: 10.1007/978-3-540-39886-8_29) 
+/// - <https://blog.burntsushi.net/transducers/>
 /// 
 /// # Behavior:
 /// `VCFIndexer` will build to FST sets from a unique vcf file:
@@ -43,8 +43,8 @@ use rayon::{self};
 /// 
 /// # Struct Fields
 /// - `reader`             : inner `VCFReader`
-/// - `builder`            : FST SetBuilder for genotypes (this is what constructs our `.fst` file)
-/// - `frq_builder`        : FST SetBuilder for alleleq_frequencies (this is what constructs ou `.fst.frq` file)
+/// - `builder`            : FST `SetBuilder` for genotypes (this is what constructs our `.fst` file)
+/// - `frq_builder`        : FST `SetBuilder` for allele frequencies (this is what constructs ou `.fst.frq` file)
 /// - `samples`            : Transposed input panel definition map, sorted across `SampleTag.id()`
 /// - `counter`            : Keeps track of the number of processed VCF lines.
 /// - `coordinate_buffer`  : Coordinate of the current VCF line
@@ -66,7 +66,7 @@ pub struct VCFIndexer<'a>{
 }      
 
 impl<'a> VCFIndexer<'a> {
-    /// Initialize a new VCFIndexer.
+    /// Initialize a new `VCFIndexer`.
     /// # Arguments:
     /// - `vcf`    : path leading to the target `.vcf`|`.vcf.gz` file
     /// - `samples`: transposed input samples definition file (sorted across SampleTag.id())
@@ -146,7 +146,7 @@ impl<'a> VCFIndexer<'a> {
             pop_afs.sort();
 
             // ---- and insert the relevant entries within our frequency_set.
-            for pop_af in pop_afs.iter() {
+            for pop_af in &pop_afs {
                 let pop_af_key = format!("{}{} {}", std::str::from_utf8(&self.coordinate_buffer)?, pop_af[0], pop_af[1]);
                 self.frequency_keys.push(pop_af_key);
             }
@@ -155,7 +155,7 @@ impl<'a> VCFIndexer<'a> {
             self.skip_fields(1)?;                 // Skip INFO field
             self.fill_genotypes_buffer()?;        
             self.print_progress(50000)?;              
-            self.parse_keys()?;
+            self.parse_keys();
             self.genotypes_buffer.clear();
             self.coordinate_buffer.clear();
         }
@@ -165,6 +165,8 @@ impl<'a> VCFIndexer<'a> {
     }
 
     /// Finish the construction of our genotype/frequency sets and flush their underlying writers.
+    /// # Errors
+    /// - if either the `.fst` or `.fst.frq` file fails to finish building and writting itself.s
     pub fn finish_build(self) -> Result<(), Box<dyn Error>> {
         self.builder.finish()?;
         self.frq_builder.finish()?;
@@ -175,22 +177,21 @@ impl<'a> VCFIndexer<'a> {
     fn fill_current_position_buffer(&mut self) -> Result<(), Box<dyn Error>> {
         // ---------------------------- Get current chromosome and position.
         let chr_bytes = self.reader.source.read_until(b'\t', &mut self.coordinate_buffer)?; // Add chromosome
-        self.add_field_separator(b' ')?;
+        self.add_field_separator(b' ');
         let pos_bytes = self.reader.source.read_until(b'\t', &mut self.coordinate_buffer)?; // Add position.
-        self.add_field_separator(b' ')?;
+        self.add_field_separator(b' ');
         for _ in 0..(10-pos_bytes) {                 // Add 9 leading zeroes for padding (this ensure our key is sorted.)
-            self.coordinate_buffer.insert(chr_bytes, b'0')   
+            self.coordinate_buffer.insert(chr_bytes, b'0');
         }
         Ok(())
     }
 
-    /// remove the last character of self.coordinate_buffer (i.e. the vcf field separator) and add our own Field separator.
+    /// remove the last character of `self.coordinate_buffer` (i.e. the vcf field separator) and add our own Field separator.
     /// # Arguments:
     /// - `field`: byte character value of the desired field separator.
-     fn add_field_separator(&mut self, field: u8) -> Result<(), Box<dyn Error>> {
+     fn add_field_separator(&mut self, field: u8) {
         self.coordinate_buffer.pop();
         self.coordinate_buffer.push(field);
-        Ok(())
     }
     
     /// Check if the current vcf coordinate is the same as the previous line.
@@ -200,7 +201,7 @@ impl<'a> VCFIndexer<'a> {
 
     /// Checks if the current VCF line coordinate is a duplicate of the previous.
     /// - Skip and clear buffers if this is the case...
-    /// - Flush the contents of our buffers within their respective SetBuilders if it is not the case 
+    /// - Flush the contents of our buffers within their respective `SetBuilders` if it is not the case 
     fn insert_previous_keys(&mut self) -> Result<bool, Box<dyn Error>> {
         if self.duplicate_line() {
             self.clear_buffers()?;     // If so, skip this lines, and don't insert the keys of the previous line.
@@ -222,12 +223,12 @@ impl<'a> VCFIndexer<'a> {
 
     /// Flush the contents of `self.genotypes_keys` and `self.frequency_keys` into their respective setbuilders.
     fn insert_keys(&mut self) -> Result<(), Box<dyn Error>> {
-        for gen in self.genotype_keys.iter() {
+        for gen in &self.genotype_keys {
             self.builder.insert(gen)?;
         }
         self.genotype_keys.clear();
 
-        for frq in self.frequency_keys.iter() {
+        for frq in &self.frequency_keys {
             self.frq_builder.insert(frq)?;
         } 
         self.frequency_keys.clear();
@@ -264,8 +265,8 @@ impl<'a> VCFIndexer<'a> {
         Ok(())
     }
 
-    /// Parse the genotypes of all the requested SampleTags (`self.samples.keys()`) and index them within `self.genotype_keys`
-    unsafe fn parse_keys(&mut self) -> Result<(), Box<dyn Error>> {
+    /// Parse the genotypes of all the requested `SampleTags` (`self.samples.keys()`) and index them within `self.genotype_keys`
+    unsafe fn parse_keys(&mut self) {
         for sample_tag in self.samples.keys() {            
 
             // ---- Complete value to insert.
@@ -280,7 +281,6 @@ impl<'a> VCFIndexer<'a> {
 
             self.genotype_keys.push(key);
         }
-        Ok(())
     }
 }
 
@@ -326,7 +326,7 @@ pub fn run(
 
 
     pool.scope(|scope|{
-        for vcf in input_vcf_paths.iter(){
+        for vcf in &input_vcf_paths{
             scope.spawn(|_| {
                 // -------------------------- Format output file stem
                 let file_stem = vcf.as_path()
