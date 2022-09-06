@@ -4,7 +4,16 @@
 #' @import stringr
 #' @import shinycssloaders
 #' @export
-app <- function(ui, server, data_dir = "./grups_output", ...) {
+app <- function(ui, 
+		server, 
+		data_dir = "./grups_output", 
+		sample_regex = "[A-Za-z0-9]+([-0-9]+){0,1}", 
+		...
+	       ) {
+
+  # ----- Format a file pair regular expression
+  pair_regex = paste0("(?<=-)(",sample_regex,"-",sample_regex,")")
+  print(pair_regex)
 
   # ---- 0a. Configure loading spinner animation
   options(spinner.type = 8, spinner.color = "#0dc5c1")
@@ -35,7 +44,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     path      = blk_files,
     row.names = stringr::str_extract(  # Extract pair names
       blk_files,
-      "(?<=-)([A-Za-z0-9]+([-0-9]+){0,1}-[A-Za-z0-9]+([-0-9]+){0,1})(?=.blk$)"
+      paste0(pair_regex, "(?=.blk$)")
     ),
     stringsAsFactors = FALSE
   )
@@ -51,7 +60,7 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     path = sim_files,
     row.names = stringr::str_extract( # Extract pair names
       sim_files,
-      "(?<=-)([A-Za-z0-9]+([-0-9]+){0,1}-[A-Za-z0-9]+([-0-9]+){0,1})(?=.sims$)"
+      paste0(pair_regex, "(?=.sims$)")
     ),
     stringsAsFactors = FALSE
   )
@@ -321,14 +330,15 @@ app <- function(ui, server, data_dir = "./grups_output", ...) {
     # ---- 1b. Load / Update pairwise dataframe.
     load_pairwise_dataframe <- shiny::reactive(
       grups.plots::load_pairwise_file(
-        path = pwd_files[1],
-        res_data = load_results_file(),
+        path          = pwd_files[1],
+        res_data      = load_results_file(),
         norm_avg_type = input$norm_avg_type,
-        min_overlap  = input$min_overlap,
-        norm_request = input$norm_request,
-        norm_method  = input$norm_method,
-        norm_metric  = input$norm_metric,
-        norm_value   = input$norm_value
+	sample_regex  = sample_regex,
+        min_overlap   = input$min_overlap,
+        norm_request  = input$norm_request,
+        norm_method   = input$norm_method,
+        norm_metric   = input$norm_metric,
+        norm_value    = input$norm_value
       )
     )
 

@@ -6,6 +6,7 @@ load_pairwise_file <- function(
   path,
   res_data,
   norm_avg_type,
+  sample_regex,
   min_overlap  = 0,
   norm_request = FALSE,
   norm_method  = "Raw",
@@ -43,9 +44,10 @@ load_pairwise_file <- function(
   # - both matches are only separated by a dash
   # - the match spans the entire string.
   # i.e. : ^([A-Za-z0-9]+([-0-9]+){0,1})-(\1)$
+  twin_regex = paste0("^(", sample_regex,")-(\\1)$")
   pwd_data$Self <- stringr::str_detect(
     pwd_data$Pair_name,
-    "^([A-Za-z0-9]+([-0-9]+){0,1})-(\\1)$"
+    twin_regex
   )
 
   # Order pairs according to their avg pwd.
