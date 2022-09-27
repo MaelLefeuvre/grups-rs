@@ -208,7 +208,7 @@ impl Pedigrees {
             // --------------------- Perform SNP downsampling if necessary
             if self.rng.f64() < pedigree.get_params()?.snp_downsampling_rate {continue 'pedigree}
 
-            // --------------------- Update founder alleles. Perform Allele Frequency downsampling if necessary.
+            // --------------------- Update founder alleles. Perform allele frequency downsampling if necessary.
             pedigree.update_founder_alleles(reader, &mut self.rng)?;
 
             // --------------------- Compute offspring genomes

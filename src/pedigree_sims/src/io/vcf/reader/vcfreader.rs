@@ -72,7 +72,7 @@ impl InfoField {
             .find(|&field| field.starts_with(&pop_af_regex))
             .map(|x| x.split('='))
             .ok_or_else(|| {
-                return format!("INFO field does not contain any '{pop_af_regex}' tag.")
+                format!("INFO field does not contain any '{pop_af_regex}' tag.")
             })?
             .collect::<Vec<&str>>()[1]
             .parse::<f64>()
@@ -241,7 +241,7 @@ impl<'a> VCFReader<'a> {
     ///              (Only relevant if the file extension ends with `.gz`)
     fn get_reader(path: &Path, threads: usize) -> std::io::Result<Box<dyn BufRead>> {
         let path_ext = path.extension().ok_or_else(||{
-            return std::io::Error::new(
+            std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("Invalid or missing file extension for vcf file: '{}'", path.display())
             )
@@ -307,6 +307,6 @@ impl<'a> GenotypeReader for VCFReader<'a> {
     
     // Return the alleles frequencies for a given population id.
     fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64, String> {
-        Ok(self.info.get_pop_allele_frequency(pop)?)
+        self.info.get_pop_allele_frequency(pop)
     }
 }

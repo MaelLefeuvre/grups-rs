@@ -85,11 +85,11 @@ impl PedigreeReps {
                 // ---- Access summary statistics 
                 let mut summary_statistics = sum_simulated_stats.get_mut(&comparison.label)
                     .ok_or_else(|| {
-                        return format!(
+                        format!(
                             "While computing simulation statistics : Attempting to access a missing pedigree-comparison \
                             summary statistics, using the comparison label '{}'",
                             comparison.label
-                        );
+                        )
                     })?;
 
                 // ---- Compute the avg + sum of squares for variance / std err estimation.

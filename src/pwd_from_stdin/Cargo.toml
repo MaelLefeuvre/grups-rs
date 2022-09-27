@@ -1,7 +1,9 @@
 [package]
-  name    = "pwd_from_stdin"
-  version = "0.1.0"
-  edition = "2021"
+  name              = "pwd_from_stdin"
+  edition           = "2021"
+  version.workspace = true
+  authors.workspace = true
+  publish.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -1,7 +1,6 @@
 use std::{
     error::Error,
     fs::File,
-    num::ParseFloatError,
     path::{Path, PathBuf},
     str::FromStr
 };
@@ -36,7 +35,9 @@ impl<'a> std::fmt::Display for ParserError<'a> {
 }
 
 #[derive(Parser, Debug, Serialize, Deserialize)]
-/// GRUPS: Get Relatedness Using Pedigree Simulations 
+#[clap(name="grups", author, version, about, long_about = None)]
+#[clap(propagate_version = true)]
+/// GRUPS-rs: Get Relatedness Using Pedigree Simulations
 pub struct Cli {
     ///Set the verbosity level (-v -vv -vvv -vvvv)
     /// 
@@ -90,9 +91,8 @@ impl<'a> Cli{
                 format!("{}/{current_time}-fst-index.yaml", fst.output_dir.to_str().unwrap())
             },
 
-            Commands::FromYaml {yaml: _} => {
-                return Ok(())
-            }
+            Commands::FromYaml {yaml: _} => return Ok(()),
+            Commands::Cite => return Ok(())
         };
 
         // Write arguments
@@ -140,9 +140,13 @@ pub enum Commands {
     /// Run GRUPS using a previously generated .yaml config file.
     FromYaml {
         yaml: std::path::PathBuf,
-    }
+    },
+
+    // Print all citations tied to this project
+    Cite 
 }
 
+pub struct Cite;
 
 #[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct Common {
@@ -279,11 +283,11 @@ impl Default for Mode {
 #[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct PedigreeSims {
     /// Proportion of SNPs to keep at true frequency
-    #[clap(short='d', long, default_value("0.0"))]
+    #[clap(short='d', long, default_value("0.0"), parse(try_from_str=percent_str_to_ratio))]
     pub af_downsampling_rate: f64,
 
     /// Proportion of filtered SNP positions to include in the analysis
-    #[clap(short='D', long, default_value("0.0"))]
+    #[clap(short='D', long, default_value("0.0"), parse(try_from_str=percent_str_to_ratio))]
     pub snp_downsampling_rate: f64,
 
     /// Contamination rates (or rate ranges) for each pileup individual. 
@@ -553,21 +557,34 @@ where
     }
 }
 
-fn percent_str_to_ratio(s: &str) -> Result<f64, ParseFloatError> {
-    Ok(s.parse::<f64>()? / 100.0)
+fn percent_str_to_ratio(s: &str) -> Result<f64, Box<dyn Error + Send + Sync + 'static>>{
+    use std::io::{Error, ErrorKind::InvalidInput};
+
+    const MIN_PERCENT: f64 = 0.0;
+    const MAX_PERCENT: f64 = 100.0;
+
+    let percent = s.parse::<f64>()?;
+
+    // Ensure the user input lies between the [0% - 100%] range.
+    match percent < MAX_PERCENT || percent > MIN_PERCENT {
+        true  => Ok(percent/100.0),
+        false => {
+            Err(Error::new(
+                    InvalidInput,
+                    format!("The provided value must lie between {MIN_PERCENT} and {MAX_PERCENT}")
+                ).into()
+            )
+        }
+    }
 }
 
-fn parse_pedigree_param<'a>(s: &str) -> Result<Vec<f64>, ParserError<'a>> {
-    let vec: Result<Vec<f64>, ParseFloatError> = s.split('-')
+fn parse_pedigree_param<'a>(s: &str) -> Result<Vec<f64>, Box<dyn Error + Send + Sync + 'static>> {
+    let vec = s.split('-')
         .map(percent_str_to_ratio)
-        .collect();
+        .collect::<Result<Vec<f64>, Box<dyn Error + Send + Sync + 'static>>>()?;
 
-    let vec = match vec {
-        Ok(vec) => vec,
-        Err(_) => return Err(ParserError::RangeError("ParseFloatError")),
-    };
     if vec.is_empty() || vec.len() > 2 {
-        return Err(ParserError::RangeError("Found multiple dashes"))
+        return Err(Box::new(ParserError::RangeError("Found multiple dashes")))
     }
     Ok(vec)
 }

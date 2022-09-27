@@ -134,6 +134,8 @@ impl GeneticMap {
 
             interval_prob_recomb += recombination_range.val.prob() * (f64::from(real_stop) - f64::from(real_start) + 1.0);
         }
-        interval_prob_recomb
+
+        // Probability that an odd number of cross-over occurs, under Poisson distribution.
+        0.5 * (1.0 - f64::exp(-2.0 * interval_prob_recomb))
     }
 }

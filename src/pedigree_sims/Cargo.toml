@@ -1,7 +1,9 @@
 [package]
-name = "pedigree_sims"
-version = "0.1.0"
-edition = "2021"
+name              = "pedigree_sims"
+edition           = "2021"
+version.workspace = true
+authors.workspace = true
+publish.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

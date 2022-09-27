@@ -86,23 +86,25 @@ impl Pedigree {
         // ---- Extract this pedigree allele frequency downsampling rate.
         let af_downsampling_rate = self.get_params()?.af_downsampling_rate;
 
-        // ---- Fill the genotypes of all this pedigree's founder individuals. 
-        for mut founder in self.founders_mut() {
+        // ---- Perform allele fixation at random, according to this pedigrees af_downsampling_rate
+        if rng.f64() < af_downsampling_rate {
+            self.founders_mut().for_each(|mut founder| founder.alleles = Some([0, 0]))
+        } else {
+            // ---- Fetch and assign the 'true' alleles for all founder individuals. 
+            for mut founder in self.founders_mut() {
 
-            // ---- Extract founder tag ; raise an error if None is returned.
-            let founder_tag = founder.get_tag().ok_or_else(|| {
-                let err: Box<dyn Error> = format!(
-                    "While attempting to update founder alleles : missing SampleTag for founder individual {}",
-                    founder.label
-                ).into();
-                err
-            })?;
+                // ---- Extract founder tag ; raise an error if None is returned.
+                let founder_tag = founder.get_tag().ok_or_else(|| {
+                    let err: Box<dyn Error> = format!(
+                        "While attempting to update founder alleles : missing SampleTag for founder individual {}",
+                        founder.label
+                    ).into();
+                    err
+                })?;
 
-            // ---- Perform allele fixation at random, according to this pedigrees af_downsampling_rate.
-            founder.alleles = match rng.f64() < af_downsampling_rate { 
-                false => Some(reader.get_alleles(founder_tag)?),
-                true  => Some([0, 0]),
-            };
+                // ---- Fetch and assign the individual's allele from our reader.
+                founder.alleles = Some(reader.get_alleles(founder_tag)?)
+            }
         }
         Ok(())
     }

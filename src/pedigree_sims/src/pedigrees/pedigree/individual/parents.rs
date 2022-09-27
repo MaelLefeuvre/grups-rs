@@ -8,7 +8,7 @@ use super::Individual;
 
 /// Helper struct to Deref and Display the parents of an individual.
 /// 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Parents([Rc<RefCell<Individual>>; 2]);
 
 impl Parents{

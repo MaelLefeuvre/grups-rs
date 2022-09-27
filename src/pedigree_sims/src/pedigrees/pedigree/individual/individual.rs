@@ -222,7 +222,6 @@ impl Individual {
         match &self.parents {
             None => panic!("Cannot generate genome, as parents are missing."),
             Some(parents) => {
-                //let mut rng = rand::thread_rng(); 
                 // ---- Perform allele assignment for each parent.
                 for (i, parent) in parents.iter().enumerate() {
 

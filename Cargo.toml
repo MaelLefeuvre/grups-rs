@@ -1,16 +1,30 @@
+[workspace.package]
+  version           = "0.2.0"
+  authors           = ["Maël Lefeuvre <mael.lefeuvre@mnhn.fr>"]
+  description       = "GRUPS-rs: Get Relatedness Using Pedigree Simulations"
+  readme            = "README.md"
+  publish           = false
+
 [package]
-  name    = "grups"
-  version = "0.1.0"
-  edition = "2021"
+  name              = "grups"
+  edition           = "2021" 
+  version.workspace = true
+  authors.workspace = true
+  publish.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [profile.release]
-  # Enable link-time optimization. ~+10-20 faster runtime at the cost of greater compile time. 
-  lto = true  
+  opt-level       = 3
+  overflow-checks = true
+  lto             = true     # Enable link-time optimization
+  codegen-units   = 1        # Don't split compilation across multiple units.
+  panic           = "abort"  # Suppress stack unwinding behavior, and let the OS deal with errors.
 
-  ## Don't split compilation across several compilation units.
-  #codegen-units = 1
+[profile.dev]
+  opt-level       = 3
+  overflow-checks = true
+  panic           = "unwind"
 
 [workspace]
   members = ["src/pwd_from_stdin", "src/pedigree_sims", "src/genome", "src/parser", "src/logger", "src/vcf-fst"]

@@ -37,7 +37,7 @@ See `Cargo.toml` for a complete list of crate dependencies (these are automatica
 
 3. Compile and install 
    ```Bash
-   user@desktop:~$ cargo install --release --path .
+   user@desktop:~$ RUSTFLAGS="-Ctarget-cpu=native" cargo install --path .
    ```
 
 4. Grups should be located within `~/.cargo/bin/` and included in your PATH

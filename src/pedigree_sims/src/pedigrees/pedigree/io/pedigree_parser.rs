@@ -34,7 +34,7 @@ pub fn pedigree_parser(path: &Path) -> std::io::Result<Pedigree> {
             "INDIVIDUALS"   => change_parse_mode(ParseMode::Individuals),
             "RELATIONSHIPS" => change_parse_mode(ParseMode::Relationships),
             "COMPARISONS"   => change_parse_mode(ParseMode::Comparisons),
-            _               => (false)
+            _               => false
         }{continue} // ---- ...And skip the current line if we've just switched to a different mode.
 
         // ---- If this is neither a comment line, not a mode-switch,

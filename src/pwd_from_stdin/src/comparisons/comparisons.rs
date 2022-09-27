@@ -148,7 +148,7 @@ mod tests {
     fn permutations_sample(n: u32) -> u32 {
         match n {
             0|1|2 => factorial(n) - 1,
-            3..   => (factorial(n)/(factorial(n-2)*2)),
+            3..   => factorial(n)/(factorial(n-2)*2),
         }
     }
 
