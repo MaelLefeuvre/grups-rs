@@ -44,7 +44,7 @@ load_pairwise_file <- function(
   # - both matches are only separated by a dash
   # - the match spans the entire string.
   # i.e. : ^([A-Za-z0-9]+([-0-9]+){0,1})-(\1)$
-  twin_regex = paste0("^(", sample_regex,")-(\\1)$")
+  twin_regex <- paste0("^(", sample_regex, ")-(\\1)$")
   pwd_data$Self <- stringr::str_detect(
     pwd_data$Pair_name,
     twin_regex
@@ -82,7 +82,7 @@ load_pairwise_file <- function(
 
   # Assign least z-score + putative relationship
 
-  z_scores <- lapply(pwd_data$Norm.Avg, FUN = function(x) {
+  z_scores  <- lapply(pwd_data$Norm.Avg, FUN = function(x) {
     z_temps <- abs(x - unlist(norm_values))
     z_temps <- z_temps[which.min(z_temps)]
   })

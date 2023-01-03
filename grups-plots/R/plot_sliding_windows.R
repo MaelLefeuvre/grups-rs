@@ -43,9 +43,10 @@ plot_sliding_window <- function(block_dataframe, pair) {
     ) %>%
     plotly::config(editable    = TRUE,
                    displaylogo = FALSE,
-                   scrollZoom  = TRUE
-                  ) # %>%
-    # filter(chr %in% input$chromosome_labels) %>%
-    # group_by(chr) %>%
-    # plotly::add_lines()
+                   scrollZoom  = TRUE,
+                   toImageButtonOptions = list(
+                    format = "svg",
+                    filename = paste0("sliding_window-", pair),
+                    )
+                  )
 }

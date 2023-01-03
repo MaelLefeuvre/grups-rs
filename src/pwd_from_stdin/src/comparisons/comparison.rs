@@ -1,6 +1,10 @@
 use genome::jackknife::{JackknifeBlocks, JackknifeEstimates};
 use genome::{Genome};
 use crate::pileup::{Pileup, Line};
+
+use super::{Individual, Pwd};
+use super::{PAIRS_FORMAT_LEN, COUNT_FORMAT_LEN, AVERG_FORMAT_LEN, DISPL_SEP, FLOAT_FORMAT_PRECISION};
+
 use std::error::Error;
 use std::{
     fmt,
@@ -56,8 +60,6 @@ impl Variance {
     }
 }
 
-use super::{Individual, Pwd};
-use super::{PAIRS_FORMAT_LEN, COUNT_FORMAT_LEN, AVERG_FORMAT_LEN, DISPL_SEP, FLOAT_FORMAT_PRECISION};
 /// A struct representing a given pairwise estimation of relatedness between two individuals.
 /// - `pair`            : contains a representation of the individuals being compared.
 /// - `self_comparison` : whether or not this comparison is a Self-comparison. (i.e. pair.0 == pair.1)

@@ -9,11 +9,10 @@ app <- function(ui,
 		data_dir = "./grups_output", 
 		sample_regex = "[A-Za-z0-9]+([-0-9]+){0,1}", 
 		...
-	       ) {
+) {
 
   # ----- Format a file pair regular expression
   pair_regex = paste0("(?<=-)(",sample_regex,"-",sample_regex,")")
-  print(pair_regex)
 
   # ---- 0a. Configure loading spinner animation
   options(spinner.type = 8, spinner.color = "#0dc5c1")
@@ -333,7 +332,7 @@ app <- function(ui,
         path          = pwd_files[1],
         res_data      = load_results_file(),
         norm_avg_type = input$norm_avg_type,
-	sample_regex  = sample_regex,
+        sample_regex  = sample_regex,
         min_overlap   = input$min_overlap,
         norm_request  = input$norm_request,
         norm_method   = input$norm_method,

@@ -13,12 +13,9 @@ use pwd_from_stdin::comparisons::Comparisons;
 //   +        [CRUCIAL] Add Missing SNP filtration mechanism. (remove &Pwd if Pwd.coordinate is not in vcf/fst file.)
 //                      - add "typed" counter in Pwd field ? -> remove if typed == 0 after all files have been used.
 // -------------------------------------------------------------------------------------------------------------------
-//   + [DONE] [  QoL  ] Finish implementing CLI Args (de)serialization.
 //            [  QoL  ] Add multiple candidate file extensions to GeneticMap.
 // -------------------------------------------------------------------------------------------------------------------
 // @ TODO! CLEANUP + BUGFIX
-//   + [ DONE  ][CRUCIAL] Remove dead arguments from CLI parser
-//   + [ FIXED ][  BUG  ] GeneticMap does not detect if recomb-dir is empty.
 //   + [  BUG  ] Grups Fst bugs out when Samples Panel does not perfectly match the VCF ordering.
 //   + [  BUG  ] VcfPanelReader::copy_from_source not working when using FST pop-subset
 //   + [  BUG  ] vcfreader.rs:193:39 && fstreader.rs:144:14 panics if contaminating pop is missing from vcf/fst index.
@@ -42,7 +39,11 @@ pub fn run(
     }
 
     match &ped_cli.seq_error_rate {
-        None => (),
+        None => {
+            // Explicitely warn the user that contamination error rates will be taken from the pileup file
+            // if --seq_error_rate was unspecified
+            warn!("--seq_error_rate was unspecified. Error probabilities will be sampled directly from the pileup file" );
+        },
         Some(error_rates_vec) => {
             if error_rates_vec.len() < comparisons.len() {
                 warn!("Number of sequencing error rates is lower than the number of comparisons. \
@@ -51,6 +52,9 @@ pub fn run(
             }
         }
     }
+
+
+
 
     // ----------------------------- Prepare output files
     // ---- Add final_results files.

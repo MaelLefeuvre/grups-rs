@@ -47,6 +47,10 @@ impl PedComparison {
         self.overlap +=1;
     }
 
+    pub fn add_missing(&mut self, n: u32) {
+        self.overlap += n;
+    }
+    
     /// Compute the average pairwise differences between the two individuals.
     /// i.e. `self.pwd / self.overlap` 
     pub fn get_avg_pwd(&self) -> f64 {

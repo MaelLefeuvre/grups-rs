@@ -267,6 +267,7 @@ impl Pedigrees {
         // Keep a record of positions that should get filtered out after maf < treshold.
         let mut positions_to_delete: AHashMap<String, Vec<Coordinate>> = AHashMap::new();
         'comparison: for comparison in comparisons.iter() {
+            let mut missing_snps: u32 = 0; //MODIFIED
             info!("Performing simulations for : {}", comparison.get_pair());
 
             // ---- Extract positions matching the FST index chromosome(s)
@@ -295,6 +296,7 @@ impl Pedigrees {
                 // --------------------- If genotypes is empty, then this position is missing within the index... Skip ahead.
                 if ! fst_reader.has_genotypes() {
                     debug!("Missing coordinate in fst index: [{chromosome: <2} {position: >9}]");
+                    missing_snps += 1;                    // MODIFIED
                     continue 'coordinate
                 }
 
@@ -310,7 +312,18 @@ impl Pedigrees {
                 // --------------------- Parse genotype fields and start updating dynamic simulations.
                 self.update_pedigrees(&fst_reader, chromosome, position, &key, &pileup_error_probs)?;
             }
+
+            // MODIFIED
+            for pedigree in self.pedigrees.get_mut(&comparison.get_pair()).unwrap().iter_mut() {
+                for comparison in pedigree.comparisons.iter_mut() {
+                    comparison.add_missing(missing_snps);
+                    break;
+                }
+            }
+            info!("# -------------------------- Missing \n{missing_snps}\n ----");
+            // END MODIFIED
         }
+
 
         // --------------------- Filter out unwanted alleles. 
         Self::filter_pileup_positions(&mut positions_to_delete, comparisons);
@@ -436,7 +449,7 @@ impl Pedigrees {
             let mut writer = pwd_from_stdin::io::Writer::new(Some(output_files[&comparison_label].clone()))?;
             writer.write_iter(vec![&pedigree_vec])?;
 
-            info!("\n--------------------- {comparison_label}\n{}", pedigree_vec);
+            debug!("\n--------------------- {comparison_label}\n{}", pedigree_vec);
         }
         Ok(())
     }
@@ -455,7 +468,7 @@ impl Pedigrees {
         let simulation_header = format!("{: <20} - {: <20} - {: <10} - {: <10} - {: <10} - {: <12} - {: <14} - {: <10} - {: <10}",
             "Pair_name", "Most_Likely_rel", "Corr.Overlap", "Corr.Sum.PWD", "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred", "Sim.Avg.PWD", "Min.Z_Score"
         );
-        println!("{simulation_header}");
+        debug!("\n{simulation_header}");
         simulations_results.push(simulation_header);
 
 
@@ -523,7 +536,7 @@ impl Pedigrees {
                  {most_likely_avg_pwd: <11.6} - \
                  {min_z_score: >11.6}"
             );
-            println!("{simulation_result}");
+            debug!("{simulation_result}");
             simulations_results.push(simulation_result);
 
 
