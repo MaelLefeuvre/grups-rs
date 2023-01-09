@@ -14,9 +14,8 @@ use std::error::Error;
 use std::collections::{HashSet, HashMap};
 use std::io::{BufReader, BufRead};
 
-use log::{error, warn, info, debug};
+use log::{error, warn, info, debug, trace};
 use std::process;
-
 
 /// Main function. Run pwd-from-stdin, using the user-provided parameters and input file.
 /// Returns a `Comparisons` struct, containing the results.
@@ -47,10 +46,10 @@ pub fn run<'a>(
     // ---- Add pwd files.
     let mut output_files = io::get_output_files(
         &mut com_cli.get_file_prefix(None)?,  // extract the user requested file prefix
-        com_cli.overwrite,                       // Should we allow file overwriting ?
-        FileKey::Ext,         // What key are we using to hash these files ?
-        &["".to_string()],// Vector of filename suffixes.
-        &["pwd"]          // Vector of file extensions.
+        com_cli.overwrite,                    // Should we allow file overwriting ?
+        FileKey::Ext,                         // What key are we using to hash these files ?
+        &["".to_string()],                    // Vector of filename suffixes.
+        &["pwd"]                              // Vector of file extensions.
     )?;
 
     // ---- Add blocks files.
@@ -83,7 +82,7 @@ pub fn run<'a>(
 
     // ----------------------------- Parse requested Chromosomes
     let valid_chromosomes : Vec<u8> = match com_cli.chr.clone() {
-        None         => genome.keys().copied().collect(),
+        None         => genome.keys().copied().map(|x| x.into()).collect(),
         Some(vector) => parser::parse_user_ranges(&vector, "chr")?
     };
     info!("Valid chromosomes: {:?}", valid_chromosomes);
@@ -102,7 +101,7 @@ pub fn run<'a>(
         let entry = entry?;
         let mut line: pileup::Line = match pileup::Line::new(&entry, pwd_cli.ignore_dels){
             Ok(line) => line,
-            Err(e) => {error!("Error: {}", e); process::exit(1);},
+            Err(e)   => {error!("Error: {:?}", e); process::exit(1);},
         };
 
         // ----------------------- Check if line should be skipped.
@@ -145,8 +144,6 @@ pub fn run<'a>(
     //for comparison in comparisons.iter() {
     //    println!("{} : {}", comparison.get_pair(), comparison.get_heterozygocity_ratio())
     //}
-
-
 
     Ok((comparisons, output_files))
 }

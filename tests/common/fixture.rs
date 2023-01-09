@@ -2,7 +2,7 @@ use std::path::Path;
 use std::fs;
 use std::io;
 
-use tempfile;
+use tempfile::{self};
 use tempfile::TempDir;
 
 pub const TEST_DATA_DIR: &str = "./tests/test-data";
@@ -19,7 +19,7 @@ impl Fixture {
         let root_dir = &std::env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR");
         let mut source = std::path::PathBuf::from(root_dir);
         source.push(TEST_DATA_DIR);
-        source.push(&fixture_filename);
+        source.push(fixture_filename);
 
         // The "real" path of the file is going to be under a temporary directory:
         let tempdir = tempfile::tempdir().unwrap();
@@ -28,8 +28,8 @@ impl Fixture {
         let mut path = std::path::PathBuf::from(&tempdir.path());
         let fixture_path = Path::new(&fixture_filename);
         match fixture_path.is_absolute() {
-            true => path.push(&fixture_path.file_name().unwrap()), // PathBuf overwrites the buffer if the given str is absolute.
-            false => path.push(&fixture_filename), 
+            true => path.push(fixture_path.file_name().unwrap()), // PathBuf overwrites the buffer if the given str is absolute.
+            false => path.push(fixture_filename), 
         };
 
         Fixture { _tempdir: tempdir, source, path }
@@ -42,7 +42,7 @@ impl Fixture {
         if fixture.source.is_dir() {
             copy_dir_all(&fixture.source, &fixture.path).unwrap();
         } else {
-            std::fs::create_dir_all(&fixture.path.parent().unwrap()).unwrap();
+            std::fs::create_dir_all(fixture.path.parent().unwrap()).unwrap();
             std::fs::copy(&fixture.source, &fixture.path).unwrap();
         }
         fixture

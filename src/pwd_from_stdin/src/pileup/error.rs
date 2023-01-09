@@ -1,5 +1,4 @@
-use std::error::Error;
-use std::fmt;
+use thiserror::Error;
 
 /// `PileupError` struct for error propagation and chaining.
 ///  - `RefSkip`       -> when char ['>', '<'] are found within a pileup string.
@@ -9,23 +8,14 @@ use std::fmt;
 ///                       case.
 ///  - `ParseLine`     -> Not yet Implemented. General error which is raised if a 
 ///                       character failed to parse.
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum PileupError {
+    #[error("Cannot handle reference skips within pileup. ('>' '<')")]
     RefSkip,
+    #[error("Length of nucleotides and scores differ vector differ.")]
     UnequalLength,
-    //ParseLine,
-}
-
-impl Error for PileupError {}
-
-impl fmt::Display for PileupError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::RefSkip       => write!(f, "Cannot handle reference skips within pileup. ('>' '<')"),
-            Self::UnequalLength => write!(f, "Length of nucleotides and scores differ vector differ."),
-            //Self::ParseLine     => write!(f, "Failed to parse pileup line"),
-        }
-    }
+    #[error("Failed to parse pileup line")]
+    ParseLine,
 }
 
 #[cfg(test)]
@@ -44,10 +34,10 @@ mod tests {
         assert!( !error.is_empty())
     }
 
-    //#[test]
-    //fn pileup_err_parseline_display() {
-    //    let error = format!("{}", PileupError::ParseLine);
-    //    assert!( !error.is_empty())
-    //}
+    #[test]
+    fn pileup_err_parseline_display() {
+        let error = format!("{}", PileupError::ParseLine);
+        assert!( !error.is_empty())
+    }
 
 }

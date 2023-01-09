@@ -1,7 +1,9 @@
-use genome::SNPCoord;
+use genome::{SNPCoord, coordinate::{ChrIdx, Position, Coordinate}, snp::Allele};
 use crate::{comparisons::Individual, io::SNPReaderError};
 use std::error::Error;
 use rand::seq::SliceRandom;
+
+use located_error::prelude::*;
 
 use super::{Nucleotide, Pileup};
 
@@ -19,7 +21,8 @@ use super::{Nucleotide, Pileup};
 /// 
 #[derive(Debug)]
 pub struct Line {
-    pub coordinate : SNPCoord,
+    pub coordinate : Coordinate,
+    pub reference  : Allele,
     pub individuals: Vec<Pileup>,
 }
 
@@ -33,11 +36,11 @@ impl Line {
     /// - `PileupError::RefSkip` if the pileup line contains reference skips ('[<>]' characters)
     /// - `PileupError::UnequalLength` if the base and scores strings do not match in length.
     /// - If any indel is encountered and the program fails to skip it.
-    pub fn new(line: &str, ignore_dels: bool) -> Result<Line, Box<dyn Error>> {
+    pub fn new(line: &str, ignore_dels: bool) -> Result<Line> {
         let split_line: Vec<&str>    = line.split('\t').collect();
-        let chromosome: u8           = split_line[0].parse()?;
-        let position  : u32          = split_line[1].parse()?;
-        let reference : Option<char> = split_line[2].parse().ok();
+        let chromosome: ChrIdx       = split_line[0].parse()?;
+        let position  : Position     = split_line[1].parse()?;
+        let reference : Allele       = split_line[2].parse().loc(format!("While parsing reference allele {}", split_line[2]))?;
         //Loop along individuals
         let mut individuals: Vec<Pileup> = Vec::new();
         for i in (3..split_line.len()).step_by(3) {
@@ -45,10 +48,11 @@ impl Line {
             let bases : &str = split_line[i+1];
             let scores: &str = split_line[i+2];
 
-            individuals.push(Pileup::new(depth, bases, scores, ignore_dels)?);
+            individuals.push(Pileup::new(reference, depth, bases, scores, ignore_dels)?);
         }
         Ok(Line {
-            coordinate: SNPCoord{chromosome, position, reference, alternate: None },
+            coordinate: Coordinate::new(chromosome, position),
+            reference,
             individuals
         })
     }
@@ -66,7 +70,7 @@ impl Line {
     /// 
     /// # Errors
     /// - will bubble any `MissingAltRef` error raised when filtering known variants on a given individual.
-    pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) -> Result<(), SNPReaderError> {
+    pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) -> Result<()> {
         for individual in &mut self.individuals {
             individual.filter_known_variants(known_variant)?;
         }
@@ -106,7 +110,7 @@ mod tests {
     fn line_filter_base_qualities() -> Result<(), Box<dyn Error>>{
         println!("Testing Line base_quality filtering.");
         let raw_line="22\t51057923\tC\t6\tTTTTtt\tJEJEEE\t0\t*\t*\t1\tT\tJ";
-        let mut line = pileup::Line::new(&raw_line, true)?;
+        let mut line = pileup::Line::new(raw_line, true)?;
 
         line.filter_base_quality(&30);
         assert_eq!(line.individuals[0].get_nucleotides(), "TTTTTT");
@@ -122,9 +126,9 @@ mod tests {
     fn line_filter_known_variant_1() -> Result<(), Box<dyn Error>> {
         println!("Testing Line known_variant filtration.");
         let raw_line="2\t21303470\tN\t0\t*\t*\t8\tTTcTTtt^Ft\tEEJEEEEE\t0\t*\t*";
-        let mut line = pileup::Line::new(&raw_line, true)?;
+        let mut line = pileup::Line::new(raw_line, true)?;
 
-        let known_variant = SNPCoord { chromosome: 2, position: 21303470, reference: Some('C'), alternate: Some('A') };
+        let known_variant = SNPCoord::try_new(2, 21303470, 'C', 'A')?;
         line.filter_known_variants(&known_variant)?;
         assert_eq!(line.individuals[1].get_nucleotides(), String::from('C'));
         assert_eq!(line.individuals[1].get_scores_ascii(), String::from('J'));
@@ -136,11 +140,11 @@ mod tests {
     fn line_filter_known_variant_2() -> Result<(), Box<dyn Error>> {
         println!("Testing Line known_variant filtration.");
         let raw_line="2\t21303470\tT\t0\t*\t*\t8\t..c..,,^F,\tEEJEEEEE\t0\t*\t*";
-        let mut line = pileup::Line::new(&raw_line, true)?;
+        let mut line = pileup::Line::new(raw_line, true)?;
 
-        let known_variant = SNPCoord { chromosome: 2, position: 21303470, reference: Some('T'), alternate: Some('A') };
+        let known_variant = SNPCoord::try_new(2, 21303470, 'T', 'A')?;
         line.filter_known_variants(&known_variant)?;
-        assert_eq!(line.individuals[1].get_nucleotides(),  String::from("......."));
+        assert_eq!(line.individuals[1].get_nucleotides(),  String::from("TTTTTTT"));
         assert_eq!(line.individuals[1].get_scores_ascii(), String::from("EEEEEEE"));
         assert_eq!(line.individuals[1].depth, 7);
         Ok(())

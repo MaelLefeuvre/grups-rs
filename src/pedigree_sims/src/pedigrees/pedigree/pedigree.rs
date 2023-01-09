@@ -339,10 +339,10 @@ mod tests {
         offspr.strands= Some([0,0]);
 
         let output = offspr.assign_alleles(0.0, 0, &rng).expect("Failed to assign alleles");
-        assert_eq!(output, true);
+        assert!(output);
 
         let output = offspr.assign_alleles(0.0, 0, &rng).expect("Failed to assign alleles");
-        assert_eq!(output, false);
+        assert!(!output);
     }
 
     #[test]

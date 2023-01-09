@@ -3,7 +3,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rand::{prelude::{ThreadRng, SliceRandom}, thread_rng};
 use nanorand::WyRand;
 
-use fastrand;
+use fastrand::{self};
 
 fn simulate_observed_reads(n: u8, rng: &mut ThreadRng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>, String> {
     use rand::Rng;

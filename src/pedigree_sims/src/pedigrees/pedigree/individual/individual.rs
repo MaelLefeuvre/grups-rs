@@ -215,7 +215,7 @@ impl Individual {
     ///   Passing a &ThreadRng reference around might be better.
     pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize, rng: &fastrand::Rng) -> Result<bool, Box<dyn Error>> {
         // ---- Ensure this method call is non-redundant.
-        if self.alleles != None {
+        if self.alleles.is_some() {
             return Ok(false)
         }
         // ---- Ensure the individual is 'equipped' with parents before attempting allele assignment.
@@ -501,7 +501,7 @@ mod tests {
         // Different Index should not impact ordering. What matters is the ID.
         let mut ind_a_prime = ind_a.clone();
         ind_a_prime.set_tag(SampleTag::new("A", Some(996)));
-        assert!(! (ind_a >  ind_a_prime));
+        assert!(ind_a <= ind_a_prime);
 
 
     }

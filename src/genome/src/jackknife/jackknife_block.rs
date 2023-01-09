@@ -1,8 +1,9 @@
 
-use crate::snpcoord::SNPCoord;
+use crate::snp::SNPCoord;
+use crate::coordinate::{ChrIdx, Position, Coordinate};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
-use std::fmt;
+use std::fmt::{self, Display, Formatter};
 
 use super::{CHROM_FORMAT_LEN, COUNT_FORMAT_LEN, RANGE_FORMAT_LEN};
 
@@ -34,10 +35,10 @@ impl Pseudovalue {
 ///  - `Display`            : Pretty print for file and/or console output Recursively called by `JackknifeBlocks` when it itself is displayed.
 #[derive(Debug)]
 pub struct JackknifeBlock {
-    pub chromosome : u8,
-    pub range      : Range<u32>,
-    site_counts: u32,
-    pwd_counts : f64,
+    pub chromosome : ChrIdx,
+    pub range      : Range<Position>,
+    site_counts    : u32,
+    pwd_counts     : f64,
 }
 
 impl JackknifeBlock {
@@ -47,8 +48,8 @@ impl JackknifeBlock {
     /// - `start`     : 0-based start-coordinate of the block.
     /// - `end`       : 0-based end-coordinate of the block
     #[must_use]
-    pub fn new(chromosome: u8, start: u32, end: u32) -> JackknifeBlock {
-        JackknifeBlock{chromosome, range: Range{start, end}, site_counts: 0, pwd_counts:0.0}
+    pub fn new(chromosome: impl Into<ChrIdx>, start: impl Into<Position>, end: impl Into<Position>) -> JackknifeBlock {
+        JackknifeBlock{chromosome: chromosome.into(), range: Range{start: start.into(), end: end.into()}, site_counts: 0, pwd_counts:0.0}
     }
 
     /// Incrementer for the `pwd_counts` field. Called by `pwd_from_stdin::Comparison::compare()`
@@ -71,7 +72,7 @@ impl JackknifeBlock {
         // hj = n / m_j
         // theta: Estimate of avg_PWD bassed on all the observations.
         // theta_minus_j: Estimate of avg_PWD based on all the observations, except those from Block j
-        let hj          = sum_overlap / site_counts; // hj = n/m_j
+        let hj            = sum_overlap / site_counts; // hj = n/m_j
         let theta         = sum_pwd / sum_overlap;          // Estimate of avg_pwd based on all the observations 
         let theta_minus_j = (sum_pwd - self.pwd_counts) / (sum_overlap - site_counts); // Estimate of avg_pwd based on all the observations 
 
@@ -80,8 +81,8 @@ impl JackknifeBlock {
     }
 }
 
-impl fmt::Display for JackknifeBlock {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for JackknifeBlock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f,
             "{: <CHROM_FORMAT_LEN$} - \
              {: <RANGE_FORMAT_LEN$} - \
@@ -99,6 +100,12 @@ impl fmt::Display for JackknifeBlock {
 
 impl PartialEq<SNPCoord> for JackknifeBlock {
     fn eq(&self, other: &SNPCoord) -> bool {
+        self.chromosome == other.coordinate.chromosome && self.range.start <= other.coordinate.position && self.range.end > other.coordinate.position
+    }
+}
+
+impl PartialEq<Coordinate> for JackknifeBlock {
+    fn eq(&self, other: &Coordinate) -> bool {
         self.chromosome == other.chromosome && self.range.start <= other.position && self.range.end > other.position
     }
 }
@@ -121,6 +128,7 @@ impl Hash for JackknifeBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
     const N_ITERS: u32 = 1_000_000;
 
     #[test]
@@ -154,22 +162,24 @@ mod tests {
     }
 
     #[test]
-    fn snpcoord_equality() {
+    fn snpcoord_equality() -> Result<()> {
         let block = JackknifeBlock::new(10, 11_000, 12_000);
 
         //snpcoord == block if block.start <= snpcoord.position < block.end AND block.chr == snpcoord.chr
-        assert_eq!(block, SNPCoord{chromosome: 10, position: 11_000, reference: None, alternate: None}); // le. range    ; same chromosome.
-        assert_eq!(block, SNPCoord{chromosome: 10, position: 11_500, reference: None, alternate: None}); // within range ; same chromosome.
+        assert_eq!(block, SNPCoord::try_new(10, 11_000, 'N', 'N')?); // le. range    ; same chromosome.
+        assert_eq!(block, SNPCoord::try_new(10, 11_500, 'N', 'N')?); // within range ; same chromosome.
+        Ok(())
     }
 
     #[test]
-    fn snpcoord_inequality() {
+    fn snpcoord_inequality() -> Result<()> {
         let block = JackknifeBlock::new(10, 11_000, 12_000);
 
-        assert_ne!(block, SNPCoord{chromosome: 10, position: 10_999, reference: None, alternate: None}); // lt. range    ; same chromosome
-        assert_ne!(block, SNPCoord{chromosome: 10, position: 12_000, reference: None, alternate: None}); // ge. range    ; same chromosome
-        assert_ne!(block, SNPCoord{chromosome: 10, position: 12_001, reference: None, alternate: None}); // gt. range    ; same chromosome
-        assert_ne!(block, SNPCoord{chromosome: 11, position: 11_500, reference: None, alternate: None}); // within range ; different chromosome.
+        assert_ne!(block, SNPCoord::try_new(10, 10_999, 'N', 'N')?); // lt. range    ; same chromosome
+        assert_ne!(block, SNPCoord::try_new(10, 12_000, 'N', 'N')?); // ge. range    ; same chromosome
+        assert_ne!(block, SNPCoord::try_new(10, 12_001, 'N', 'N')?); // gt. range    ; same chromosome
+        assert_ne!(block, SNPCoord::try_new(11, 11_500, 'N', 'N')?); // within range ; different chromosome.
+        Ok(())
     }
 
     #[test]

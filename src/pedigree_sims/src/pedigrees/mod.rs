@@ -4,5 +4,6 @@ mod pedigree;
 use pedigree::Pedigree;
 use pedigree::Contaminant;
 
+#[allow(clippy::module_inception)]
 mod pedigrees;
 pub use pedigrees::Pedigrees;

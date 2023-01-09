@@ -27,7 +27,7 @@
   panic           = "unwind"
 
 [workspace]
-  members = ["src/pwd_from_stdin", "src/pedigree_sims", "src/genome", "src/parser", "src/logger", "src/vcf-fst"]
+  members = ["src/pwd_from_stdin", "src/pedigree_sims", "src/genome", "src/parser", "src/logger", "src/vcf-fst", "src/located-error"]
 
 
 [[bin]]
@@ -53,13 +53,14 @@
   logger         = {path = "src/logger"}
   parser         = {path = "src/parser"}
   vcf-fst        = {path = "src/vcf-fst"}
+  located_error  = {path = "src/located-error"}
   
   clap           = {version = "3.1.2", features = ["derive"]}
   log            = "0.4.16"
   fastrand       = "1.8.0"
-
   serde_yaml     = "0.8"
-
+  anyhow         = "1"
+  thiserror      = "1"
 
 [dev-dependencies]
   tempfile       = "3.3.0"
@@ -69,6 +70,13 @@
   nanorand       = "0.7.0"
   fastrand       = "1.8.0"
 
+  itertools    = "0.10.3"
+
+
 [[bench]]
-  name = "pedigree_sims_bench"
+  name    = "pedigree_sims_bench"
+  harness = false
+
+[[bench]]
+  name    = "bench_pileup"
   harness = false

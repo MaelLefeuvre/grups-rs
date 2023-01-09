@@ -17,7 +17,7 @@ fn main() {
     match cli.serialize() {
         Ok(()) => (),
         Err(e) => {
-            error!("{}", e);
+            error!("{:?}", e);
             process::exit(1);
         }
     };
@@ -26,7 +26,7 @@ fn main() {
     match grups::run(cli) {
         Ok(()) => (),
         Err(e) => {
-            error!("{}", e);
+            error!("{:?}", e);
             process::exit(1);
         }
     };

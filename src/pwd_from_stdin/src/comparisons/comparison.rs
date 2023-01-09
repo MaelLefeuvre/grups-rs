@@ -261,8 +261,11 @@ mod tests {
                 nucs[0].len(), nucs[0], quals[0],
                 nucs[1].len(), nucs[1], quals[1])
             ;
-            let line = pileup::Line::new(&raw_line.as_str(), true)?;
+            println!("{pos}: Creating line");
+            let line = pileup::Line::new(raw_line.as_str(), true)?;
+            println!("{pos}: Comparing...");
             comparison.compare(&line)?;
+            println!("{pos}: Done");
         }
         Ok(())
     }
@@ -283,6 +286,7 @@ mod tests {
     #[test]
     fn test_compare_self_no_pwd() -> Result<(), Box<dyn Error>> {
         let mut mock_comparison = common::mock_comparison(true);
+
         test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "GG"], ["JJ", "AA"])?;
 
         assert_eq!(mock_comparison.get_sum_phred(), 82.0);        // (J + *J*) (NOT A, since we're self-comparing)
@@ -342,7 +346,7 @@ mod tests {
 
         
         // Remove the last position from the comparisons.
-        let x = SNPCoord{chromosome: 22, position: 40, reference: None, alternate: None};
+        let x = SNPCoord::try_new(22, 40, 'N', 'N')?;
         mock_comparison.positions.remove(&Pwd::initialize(x));
 
         // Check pwd statistics are updated and sane...

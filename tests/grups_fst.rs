@@ -7,8 +7,8 @@ use common::test_grups_run;
 
 #[test]
 fn test_grups_fst() {
-    let vcf_dir    =  Fixture::copy(&format!("vcf/binary-2FIN-1ACB-virtual/"));
-    let output_dir  = Fixture::blank(&format!("test_grups_fst"));
+    let vcf_dir    =  Fixture::copy("vcf/binary-2FIN-1ACB-virtual/");
+    let output_dir  = Fixture::blank("test_grups_fst");
 
     let args = format!("grups fst
         --vcf-dir    {vcf_dir}

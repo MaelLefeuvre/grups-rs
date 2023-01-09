@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::{self, BufRead, Read};
 
 use genome::SNPCoord;
+use genome::snp::Allele;
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -41,7 +42,7 @@ impl std::fmt::Display for SNPReaderError {
             Self::MissingAltRef(nuc) => {
                 write!(f, "Target SNP Coordinate [{} {}] is missing its reference and/or alternate allele \
                     information when it is required.",
-                    nuc.chromosome, nuc.position
+                    nuc.coordinate.chromosome, nuc.coordinate.position
                 )
             }
 
@@ -137,34 +138,35 @@ impl<'a> SNPReader<'a> {
         for line in self.source.lines() {
             let line = line?;
             if &line[..1] == "#" {continue} // Skip comment
-            let split_line: Vec<&str>    = line.split(&self.sep).filter(|x| x!=&"").collect();
-            let chromosome: u8           = split_line[self.columns[0]].parse()?;
-            let position  : u32          = split_line[self.columns[1]].parse()?;
-            let reference : Option<char> = split_line[self.columns[2]].parse().ok();
-            let alternate : Option<char> = split_line[self.columns[3]].parse().ok();
+            let split_line: Vec<&str> = line.split(&self.sep).filter(|x| x!=&"").collect();
+            let chromosome: u8        = split_line[self.columns[0]].parse()?;
+            let position  : u32       = split_line[self.columns[1]].parse()?;
+            let reference : Allele    = split_line[self.columns[2]].parse()?;
+            let alternate : Allele    = split_line[self.columns[3]].parse()?;
             
-            let coordinate: SNPCoord     = SNPCoord {chromosome, position, reference, alternate};
+            let coordinate: SNPCoord     = SNPCoord::try_new(chromosome, position, reference, alternate)?;
 
             if exclude_transitions && !coordinate.has_known_alleles() {
-                return Err("Cannot filter-out transitions if reference and alternate alleles is unknown. \
+                return Err("Cannot filter-out transitions if reference and/or alternate alleles is unknown. \
                 Please provide '--targets' with a file containing known reference and alternate alleles.".into())
             }
 
             target_positions.insert(coordinate);
         }
 
-        let transitions = vec![['A', 'G'], ['G', 'A'], ['C', 'T'], ['T', 'C']];
+        use genome::snp::Allele::*;
+        let transitions = vec![[A, G], [G, A], [C, T], [T, C]];
         if exclude_transitions {
             info!("Filtering transitions from targets file.");
             let before = target_positions.len();
             target_positions.retain(|nuc| {
                 !transitions.contains(&[
-                    nuc.reference.unwrap(), 
-                    nuc.alternate.unwrap()
+                    nuc.reference, 
+                    nuc.alternate
                 ])
             });
             let after = target_positions.len();
-            info!("{} transitions filtered out. (Before: {} - After: {})", before-after, before, after);
+            info!("{} transitions filtered out. (Before: {} - After: {})", before - after, before, after);
         }
 
         Ok(target_positions)
@@ -353,28 +355,28 @@ mod tests {
     #[test]
     fn snp_reader_file_ext_snp(){
         let path = "./targets /v50.0_1240K_public.snp";
-        assert_eq!((vec![1,3,4,5]," ".to_string()), SNPReader::get_file_format(&path).unwrap())
+        assert_eq!((vec![1,3,4,5]," ".to_string()), SNPReader::get_file_format(path).unwrap())
     }
     #[test]
     fn snp_reader_file_ext_vcf(){
         let path = "./targets /v50.0_1240K_public.vcf";
-        assert_eq!((vec![0,1,3,4],"\t".to_string()), SNPReader::get_file_format(&path).unwrap())
+        assert_eq!((vec![0,1,3,4],"\t".to_string()), SNPReader::get_file_format(path).unwrap())
     }
     #[test]
     fn snp_reader_file_ext_txt(){
         let path = "./targets /v50.0_1240K_public.txt";
-        assert_eq!((vec![0,1,2,3]," ".to_string()), SNPReader::get_file_format(&path).unwrap())
+        assert_eq!((vec![0,1,2,3]," ".to_string()), SNPReader::get_file_format(path).unwrap())
     }
 
     #[test]
     fn snp_reader_file_ext_tsv(){
         let path = "./targets /v50.0_1240K_public.tsv";
-        assert_eq!((vec![0,1,2,3],"\t".to_string()), SNPReader::get_file_format(&path).unwrap())
+        assert_eq!((vec![0,1,2,3],"\t".to_string()), SNPReader::get_file_format(path).unwrap())
     }
 
     #[test]
     fn snp_reader_file_ext_csv(){
         let path = "./targets /v50.0_1240K_public.csv";
-        assert_eq!((vec![0,1,2,3],",".to_string()), SNPReader::get_file_format(&path).unwrap())
+        assert_eq!((vec![0,1,2,3],",".to_string()), SNPReader::get_file_format(path).unwrap())
     }
 }

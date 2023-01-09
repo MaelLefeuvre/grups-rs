@@ -5,6 +5,7 @@ use super::super::comparison::Comparison;
 use crate::comparisons::Individual;
 use crate::pileup::Pileup;
 use genome::Genome;
+use genome::snp::Allele;
 use rand::prelude::SliceRandom;
 
 pub const MOCK_IND_INDICES: [usize; 2] = [0, 1];
@@ -24,7 +25,7 @@ pub fn mock_comparison(self_comparison: bool) -> Comparison {
 }
 
 
-fn mock_pileup_strings<'a>(depth: u16, min_qual: u8) -> Result<(String, String), Box<dyn Error>> {
+fn mock_pileup_strings(depth: u16, min_qual: u8) -> Result<(String, String), Box<dyn Error>> {
     let mut rng = rand::thread_rng();
 
     let nucleotides = vec!['A', 'C', 'G', 'T'];
@@ -37,7 +38,7 @@ fn mock_pileup_strings<'a>(depth: u16, min_qual: u8) -> Result<(String, String),
         scores.push(*quals.choose(&mut rng).ok_or("Empty quals vector in 'mock_pileup_strings'")?);
     }
 
-    return Ok((bases, scores))
+    Ok((bases, scores))
 }
 
 
@@ -45,9 +46,9 @@ pub fn mock_pileups(min_depths: &[u16], min_qual: u8, ignore_dels: bool) -> Resu
     let mut pileups = Vec::new();
     for depth in min_depths {
         let (bases, scores) = mock_pileup_strings(*depth, min_qual)?;
-        let pileup = Pileup::new(*depth, bases.as_str(), scores.as_str(), ignore_dels)?;
+        let pileup = Pileup::new(Allele::N, *depth, bases.as_str(), scores.as_str(), ignore_dels)?;
         pileups.push(pileup);
     }
 
-    return Ok(pileups)
+    Ok(pileups)
 }

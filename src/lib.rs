@@ -9,11 +9,9 @@ extern crate log;
 
 use std::error::Error;
 
-
-
 pub fn cite() {
     // If this ever becomes bloated, consider using the 'indoc' crate.
-    const CITATIONS: &'static str = r###"
+    const CITATIONS: &str = r###"
     A. If you plan to use GRUPS-rs in your work, please cite the original
        publication of GRUPS:
 

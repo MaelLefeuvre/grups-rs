@@ -1,5 +1,7 @@
-mod snpcoord;
-pub use snpcoord::SNPCoord;
+pub mod coordinate;
+
+pub mod snp;
+pub use snp::SNPCoord;
 
 pub mod jackknife;
 
@@ -10,5 +12,6 @@ mod genome;
 pub use crate::genome::Genome; 
 
 mod chromosome;
-pub use chromosome::Chromosome;
+pub use crate::chromosome::Chromosome;
+
 

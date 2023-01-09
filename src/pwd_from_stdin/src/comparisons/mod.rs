@@ -2,7 +2,7 @@ mod individual;
 pub use individual::Individual;
 
 mod comparison;
-
+#[allow(clippy::module_inception)]
 mod comparisons;
 pub use comparisons::Comparisons;
 

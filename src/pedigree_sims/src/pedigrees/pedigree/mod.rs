@@ -1,6 +1,6 @@
 mod individual;
 use individual::Individual;
-
+#[allow(clippy::module_inception)]
 mod pedigree;
 pub use pedigree::Pedigree;
 

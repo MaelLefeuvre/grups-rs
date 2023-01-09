@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    path::{PathBuf, Path},
+    path::{Path},
     error::Error
 };
 
@@ -18,14 +18,14 @@ use crate::io::{
     }, 
 };
 
-use genome::GeneticMap;
+use genome::{
+    GeneticMap,
+    coordinate::Coordinate
+};
 
 use pwd_from_stdin::{
     self,
-    comparisons::{
-        Comparisons,
-        pwd::Coordinate,
-    },
+    comparisons::Comparisons
 };
 
 use fastrand;
@@ -66,14 +66,14 @@ impl Pedigrees {
     /// 
     /// # Errors:
     /// - returns an error upon failing to parse `self.genetic_map`
-    pub fn initialize(pedigree_pop: String, comparisons: &Comparisons, recomb_dir: &PathBuf) -> Result<Self, Box<dyn Error>> {
+    pub fn initialize(pedigree_pop: String, comparisons: &Comparisons, recomb_dir: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         // Generate pedigree replicates for each pwd_from_stdin::Comparison.
         let pedigrees = HashMap::new();
 
 
         // --------------------- Parse input recombination maps.
-        info!("Parsing genetic maps in {}", &recomb_dir.to_str().unwrap_or("None"));
-        let genetic_map = GeneticMap::default().from_dir(recomb_dir)?;
+        //info!("Parsing genetic maps in {}", recomb_dir);
+        let genetic_map = GeneticMap::from_dir(recomb_dir)?;
 
         // --------------------- For each comparison, keep a record of the previously typed SNP's position.
         let mut previous_positions = HashMap::new();
@@ -290,8 +290,8 @@ impl Pedigrees {
 
                 // --------------------- Search through the FST index for the genotypes and pop frequencies at this coordinate.
                 fst_reader.clear_buffers();
-                fst_reader.search_coordinate_genotypes(chromosome, position);
-                fst_reader.search_coordinate_frequencies(chromosome, position);
+                fst_reader.search_coordinate_genotypes(chromosome.into(), position.into());
+                fst_reader.search_coordinate_frequencies(chromosome.into(), position.into());
 
                 // --------------------- If genotypes is empty, then this position is missing within the index... Skip ahead.
                 if ! fst_reader.has_genotypes() {
@@ -310,14 +310,13 @@ impl Pedigrees {
                 
                 let pileup_error_probs = pairwise_diff.error_probs();
                 // --------------------- Parse genotype fields and start updating dynamic simulations.
-                self.update_pedigrees(&fst_reader, chromosome, position, &key, &pileup_error_probs)?;
+                self.update_pedigrees(&fst_reader, chromosome.into(), position.into(), &key, &pileup_error_probs)?;
             }
 
             // MODIFIED
             for pedigree in self.pedigrees.get_mut(&comparison.get_pair()).unwrap().iter_mut() {
                 for comparison in pedigree.comparisons.iter_mut() {
                     comparison.add_missing(missing_snps);
-                    break;
                 }
             }
             info!("# -------------------------- Missing \n{missing_snps}\n ----");

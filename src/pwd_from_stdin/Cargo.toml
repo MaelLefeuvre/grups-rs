@@ -10,7 +10,10 @@
 [dependencies]
   parser       = {path ="../parser"}
   genome       = {path ="../genome"}
+  located_error = {path = "../located-error" }
   itertools    = "0.10.3"
   rand         = "0.8.5"
   log          = "0.4.16"
   regex        = "1.5.0"
+  thiserror    = "1"
+  anyhow       = "1"

@@ -1,10 +1,11 @@
 use std::{
     hash::{Hash, Hasher},
     ops::{Range},
+    borrow::Borrow
 };
 
 // ---- Constant values
-const ONE_MORGAN: f64 = 100.0; 
+const ONE_MORGAN  : f64 = 100.0; 
 const ONE_MEGABASE: f64 = 1_000_000.0;
 
 /// Genetic Recombination probabily over a given range.
@@ -33,7 +34,8 @@ impl RecombinationRange {
         &self.prob
     }
 
-    /// Convert `self.prob` back to a recombination rate. 
+    /// Convert `self.prob` back to a recombination rate.
+    #[cfg(test)]
     pub fn rate(&self) -> f64 {
         self.prob * ONE_MORGAN * ONE_MEGABASE
     }
@@ -59,9 +61,9 @@ impl Hash for RecombinationRange {
     }
 }
 
-impl std::borrow::Borrow<Range<u32>> for RecombinationRange {
+impl Borrow<Range<u32>> for RecombinationRange {
     fn borrow(&self) -> &Range<u32> {
-        self.range.borrow()
+        &self.range
     }
 }
 

@@ -8,10 +8,12 @@ publish.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+  located_error = {path = "../located-error" }
   itertools    = "0.10.3"
   rust-lapper  = "1.0.0"
   log          = "0.4.16"
-
+  anyhow       = "1"
+  thiserror    = "1"
 [dev-dependencies]
   float-cmp    = "0.9.0"
   rand         = "0.8.5"

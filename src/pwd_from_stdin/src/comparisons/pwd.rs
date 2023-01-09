@@ -6,39 +6,7 @@ use genome::SNPCoord;
 
 use super::Individual;
 
-#[derive(Debug,Clone, Copy)]
-pub struct Coordinate {
-    pub chromosome: u8,
-    pub position  : u32,
-}
-
-impl Coordinate {
-    #[must_use]
-    pub fn new(chromosome: u8, position: u32) -> Self {
-        Self{chromosome, position}
-    }
-}
-
-impl PartialEq<Coordinate> for Coordinate {
-    fn eq(&self, other: &Self) -> bool { 
-        self.chromosome == other.chromosome && self.position == other.position
-    }
-}
-
-impl Eq for Coordinate {}
-
-impl Ord for Coordinate {
-    fn cmp(&self, other: &Self) -> Ordering {
-        (self.chromosome, self.position).cmp(&(other.chromosome, other.position))
-    }
-}
-
-impl PartialOrd for Coordinate {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
+use genome::coordinate::Coordinate;
 
 #[derive(Debug)]
 pub struct Pwd {
@@ -52,7 +20,7 @@ impl Pwd {
     #[must_use]
     pub fn initialize(coordinate: SNPCoord) -> Self {
         Self{
-            coordinate  : Coordinate{chromosome: coordinate.chromosome, position: coordinate.position},
+            coordinate  : Coordinate{chromosome: coordinate.coordinate.chromosome, position: coordinate.coordinate.position},
             phreds      : [0.0,0.0],
             pwd         : 0.0,
             observations: 0
@@ -62,7 +30,7 @@ impl Pwd {
     #[must_use]
     pub fn one(coordinate: SNPCoord, random_nucl: &[&Nucleotide]) -> Self {
         Self {
-            coordinate  : Coordinate{chromosome: coordinate.chromosome, position: coordinate.position},
+            coordinate  : Coordinate{chromosome: coordinate.coordinate.chromosome, position: coordinate.coordinate.position},
             //nucleotides: [*random_nucl[0], *random_nucl[1]],
             phreds      : [
                 f64::from(random_nucl[0].phred),
@@ -193,7 +161,7 @@ mod tests {
     #[test]
     pub fn deterministic_pairwise() -> Result<(), Box<dyn Error>> {
         let raw_line="22\t51057923\tC\t6\tTTTTtt\tJEJJEE\t4\t.,TT\tJJJJ";
-        let line = Line::new(&raw_line, true)?;
+        let line = Line::new(raw_line, true)?;
         let pair = [
             Individual::new(None, 0, 1),
             Individual::new(None, 1, 1),
@@ -207,7 +175,7 @@ mod tests {
     #[test]
     pub fn deterministic_self() -> Result<(), Box<dyn Error>> {
         let raw_line="22\t51057923\tC\t4\tTTT...\tJJJEEE";
-        let line = Line::new(&raw_line, true)?;
+        let line = Line::new(raw_line, true)?;
         let pair = [
             Individual::new(None, 0, 2),
             Individual::new(None, 0, 2),

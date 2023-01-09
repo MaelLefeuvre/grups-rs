@@ -1,10 +1,11 @@
-use crate::snpcoord::SNPCoord;
+use crate::snp::SNPCoord;
 use crate::genome::Genome;
 use std::collections::HashMap;
 use itertools::Itertools;
 use std::fmt;
 
 use super::JackknifeBlock;
+use crate::coordinate::{ChrIdx, Coordinate};
 
 pub struct JackknifeEstimates {
     pub estimate: f64,
@@ -22,7 +23,7 @@ pub struct JackknifeEstimates {
 /// # TODO:
 ///   - add a header for the `Display trait`
 pub struct JackknifeBlocks {
-    blocks : HashMap<u8, Vec<JackknifeBlock>>
+    blocks : HashMap<ChrIdx, Vec<JackknifeBlock>>
 }
 
 impl JackknifeBlocks {
@@ -48,7 +49,7 @@ impl JackknifeBlocks {
 
     /// Search for a given block, using an `SNPCoord` struct.
     /// Return the block containing the `SNPCoord` position. 
-    pub fn find_block(&mut self, coordinate: &SNPCoord) -> Option<&mut JackknifeBlock> {
+    pub fn find_block(&mut self, coordinate: &Coordinate) -> Option<&mut JackknifeBlock> {
         self.blocks.get_mut(&coordinate.chromosome)?
             .iter_mut()
             .find(|block| block.range.contains(&coordinate.position))
@@ -104,28 +105,26 @@ mod tests{
     use std::fmt::Write;
     use super::super::{CHROM_FORMAT_LEN, COUNT_FORMAT_LEN, RANGE_FORMAT_LEN};
     use crate::chromosome::Chromosome;
-    
 
     #[test]
     fn jackknife_blocks_check_len_unequal() {
-       let genome = Genome::from(&vec![Chromosome::new(0, 1, 249250621)]);
+       let genome = Genome::from(&[Chromosome::new(1, 249250621)]);
        let blocks = JackknifeBlocks::new(&genome, 1000);
-       assert_eq!(blocks.blocks[&genome[&1].name].len(),249251);
+       assert_eq!(blocks.blocks[&genome[&ChrIdx::from(1)].name].len(),249251);
     }
     
     #[test]
     fn jackknife_blocks_check_len_equal () {
-       let genome = Genome::from(&vec![Chromosome::new(0, 1, 2000001)]);
+       let genome = Genome::from(&[Chromosome::new(1, 2000001)]);
        let blocks = JackknifeBlocks::new(&genome, 1000);
-       assert_eq!(blocks.blocks[&genome[&1].name].len(), 2000);
+       assert_eq!(blocks.blocks[&genome[&ChrIdx::from(1)].name].len(), 2000);
     }
 
     #[test]
     fn display(){
-        let genome = Genome::from(&vec![ 
-            Chromosome::new(0, 1, 10_001),
-            Chromosome::new(1, 2, 10_001), 
-        ]);
+        let genome = Genome::from(&[
+            Chromosome::new(1, 10_001),
+            Chromosome::new(2, 10_001)]);
         
         let blocksize = 1000;
         let blocks = JackknifeBlocks::new(&genome, blocksize);
@@ -156,7 +155,7 @@ mod tests{
         let blocksize = 1000;
         let mut blocks = JackknifeBlocks::new(&genome, blocksize);
 
-        let coord = SNPCoord{chromosome: 1, position: 651_000, reference: None, alternate: None};
+        let coord = Coordinate::new(1, 651_000);
 
         let block = blocks
             .find_block(&coord)

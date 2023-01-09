@@ -33,7 +33,7 @@ impl Comparisons {
         let mut inds = vec![];
         for (i, index) in individuals.iter().enumerate() {
             let name = names.get(i);
-            let min_depth = &min_depths[(i % (min_depths.len())) as usize]; // wrap around min_depths if its length is lesser than the number of inds.
+            let min_depth = &min_depths[i % (min_depths.len())]; // wrap around min_depths if its length is lesser than the number of inds.
             inds.push(Individual::new(name, *index, *min_depth));
         }
         let mut comparisons: Vec<Comparison> = vec![];
@@ -152,11 +152,11 @@ mod tests {
         }
     }
 
-    fn mock_comparisons(ind_set: &Vec<usize>, allow_self_comparison: bool) -> Comparisons {
+    fn mock_comparisons(ind_set: &[usize], allow_self_comparison: bool) -> Comparisons {
         let min_depths = vec![2];
         let names = vec![];
         let genome = Genome::default();
-        Comparisons::parse(&ind_set, &min_depths, &names, allow_self_comparison, &genome, 50_000_000)
+        Comparisons::parse(ind_set, &min_depths, &names, allow_self_comparison, &genome, 50_000_000)
     }
 
     #[test]

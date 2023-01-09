@@ -57,7 +57,7 @@ pub struct Cli {
     pub commands: Commands,
 }
 
-impl<'a> Cli{
+impl Cli{
     /// Serialize command line arguments within a `.yaml` file.
     /// 
     /// # Behavior
@@ -109,7 +109,7 @@ impl<'a> Cli{
     /// - Returns `FileNotFound` or `PermissionDenied` if the provided `.yaml` is invalid,
     ///   or does not carry read permissions
     /// - Sends an unrecoverable error if: `serde_yaml` fails to parse the provided file to `Self`.
-    pub fn deserialize(yaml: std::path::PathBuf) -> Result<Self, Box<dyn Error>> {
+    pub fn deserialize(yaml: PathBuf) -> Result<Self, Box<dyn Error>> {
         Ok(serde_yaml::from_reader(File::open(yaml)?)?)
     }
 }
@@ -139,7 +139,7 @@ pub enum Commands {
 
     /// Run GRUPS using a previously generated .yaml config file.
     FromYaml {
-        yaml: std::path::PathBuf,
+        yaml: PathBuf,
     },
 
     // Print all citations tied to this project
@@ -200,7 +200,7 @@ pub struct Common {
 
     /// Output directory where results will be written.
     #[clap(short, long, default_value("grups-output"), parse(try_from_os_str=valid_output_dir))]
-    pub output_dir: std::path::PathBuf,
+    pub output_dir: PathBuf,
 
     /// Overwrite existing output files.
     #[clap(short='w', long)]
@@ -317,7 +317,7 @@ pub struct PedigreeSims {
 
     /// Path to input VCF genomes for founder individuals (1000G)
     #[clap(short='F', long, parse(try_from_os_str=valid_input_directory))] // default_value(r#"./data/founders/1000G-phase3-v5a"#),
-    pub data_dir: std::path::PathBuf,
+    pub data_dir: PathBuf,
 
     /// Define the expected data input type for pedigree simulations.
     #[clap(short='I', long, arg_enum, default_value("vcf"))]
@@ -326,7 +326,7 @@ pub struct PedigreeSims {
 
     /// Path to recombination genetic map data.
     #[clap(short='G', long, required(false), parse(try_from_os_str=valid_input_directory))] // default_value("./data/recombination/GRCh37"),
-    pub recomb_dir: std::path::PathBuf,
+    pub recomb_dir: PathBuf,
 
     /// Number of pedigree replicates to perform
     #[clap(short='R', long, default_value("1"))]
@@ -355,11 +355,11 @@ pub struct PedigreeSims {
 
     /// Path to input pedigree definition file.
     #[clap(short='T', long, required(false), parse(try_from_os_str=valid_input_file))] // default_value(r#"./data/pedigrees/default.ped"#),
-    pub pedigree: std::path::PathBuf,
+    pub pedigree: PathBuf,
     
     // Path to input Panel Definition files.
     #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
-    pub panel: Option<std::path::PathBuf>,
+    pub panel: Option<PathBuf>,
 
     // /// Number of parallel CPU processes when performing pedigree-simulations.
     // /// 
@@ -384,7 +384,7 @@ pub struct PedigreeSims {
 pub struct VCFFst {
     /// Path to input Panel Definition files.
     #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
-    pub panel: Option<std::path::PathBuf>,
+    pub panel: Option<PathBuf>,
 
     /// Population Subset
     /// 
@@ -395,11 +395,11 @@ pub struct VCFFst {
 
     /// Output directory
     #[clap(short='o', long, parse(try_from_os_str=valid_output_dir))]
-    pub output_dir: std::path::PathBuf,
+    pub output_dir: PathBuf,
 
     /// Path to input VCF genomes for founder individuals (1000G)
     #[clap(short='d', long, parse(try_from_os_str=valid_input_directory))] // default_value(r#"./data/founders/1000G-phase3-v5a"#),
-    pub vcf_dir: std::path::PathBuf,
+    pub vcf_dir: PathBuf,
 
     /// Number of parallel CPU processes when performing FST-Indexation
     /// 
@@ -443,7 +443,7 @@ impl Common {
     /// # Errors
     /// - if the user did not provide an input file, neither from stdin, nor through the `--pileup` argument.
     pub fn check_input<'a>(&self) -> Result<(), ParserError<'a>> {
-        if atty::is(atty::Stream::Stdin) && self.pileup == None {
+        if atty::is(atty::Stream::Stdin) && self.pileup.is_none() {
             return Err(ParserError::MissingPileupInput)
         }
         Ok(())
@@ -578,7 +578,7 @@ fn percent_str_to_ratio(s: &str) -> Result<f64, Box<dyn Error + Send + Sync + 's
     }
 }
 
-fn parse_pedigree_param<'a>(s: &str) -> Result<Vec<f64>, Box<dyn Error + Send + Sync + 'static>> {
+fn parse_pedigree_param(s: &str) -> Result<Vec<f64>, Box<dyn Error + Send + Sync + 'static>> {
     let vec = s.split('-')
         .map(percent_str_to_ratio)
         .collect::<Result<Vec<f64>, Box<dyn Error + Send + Sync + 'static>>>()?;

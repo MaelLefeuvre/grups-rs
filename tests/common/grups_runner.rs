@@ -6,7 +6,7 @@ use super::Fixture;
 
 fn get_bufreader(filename: &str) -> BufReader<File> {
     let inner = File::open(filename)
-        .expect(&format!("Failed to open test output file: {filename}"));
+        .unwrap_or_else(|_| panic!("Failed to open test output file: {filename}"));
     BufReader::new(inner)
 }
 
@@ -57,10 +57,8 @@ pub fn test_grups_run(mode: parser::Mode, data_dir: &str) {
 
     const FILESTEM: &str = "parents-offspring";
     println!("before: {data_dir}");
-    let data_dir   = Fixture::copy(&data_dir);
+    let data_dir   = Fixture::copy(data_dir);
     println!("after: {data_dir}");
-
-    //loop{}
 
     let pileup_dir = Fixture::copy(&format!("pileup/{FILESTEM}.pileup"));
     let recomb_dir = Fixture::copy("recombination-map/");
