@@ -1,0 +1,36 @@
+# example pedigree definition input file
+# suggestion: pairwise comparisons labels and individual IDs should be simple and not contain spaces or special characters)
+
+# first define individuals in pedigree (each with unique ID)
+INDIVIDUALS
+father
+mother
+son
+son_mate
+gson
+gson_mate
+ggson
+ggson_mate
+gggson
+gggson_mate
+ggggson
+
+# next define offspring relationships
+RELATIONSHIPS
+son=repro(father,mother)
+gson=repro(son,son_mate)
+ggson=repro(gson,gson_mate)
+gggson=repro(ggson,ggson_mate)
+ggggson=repro(gggson,gggson_mate)
+
+
+# finally, define pairwise comparisons for which to calculate/output genetic distances and later perform plotting
+COMPARISONS
+Self=compare(father,father)      # IDENTICAL RELATIONSHIP
+First=compare(father,son)        # First Degree
+Second=compare(father,gson)      # Second Degree
+Third=compare(father,ggson)      # Third Degree
+Fourth=compare(father,gggson)    # Fourth Degree
+Fifth=compare(father,ggggson)    # Fifth Degree
+
+
