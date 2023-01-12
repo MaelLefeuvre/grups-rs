@@ -1,24 +1,27 @@
-use std::{
-    path::Path,
-    error::Error,
-    fs::File,
-    io::BufRead,
-    collections::BTreeMap,
+use std::{str, path::Path, error::Error, fs::File, io::{BufRead, BufWriter}, collections::BTreeMap};
+
+use located_error::prelude::*;
+use parser::VCFFst;
+use grups_io::read::{
+    SampleTag, PanelReader,
+    genotype_reader::{GenotypeReader, VCFReader, FST_EXT, FRQ_EXT},
 };
 
-use fst::{
-    SetBuilder,
-};
-
-use parser::{self};
-use pedigree_sims::io::vcf::{
-    self,
-    SampleTag,
-    reader::{VCFReader, VCFPanelReader},
-};
-
+use fst::SetBuilder;
 use log::{info};
 use rayon::{self}; 
+
+mod error;
+use error::GenomeFstError;
+
+///Create a new SetBuilder from a file
+fn create_set_builder(file: &str) -> Result<SetBuilder<BufWriter<File>>> {
+    use GenomeFstError::{CreateFile, CreateSetBuilder};
+    let loc_msg = "While attempting to generate a new Set Builder";
+    let file    = File::create(file).map_err(CreateFile).loc(loc_msg)?;
+    SetBuilder::new(BufWriter::new(file)).map_err(CreateSetBuilder).loc(loc_msg)
+}
+
 
 /// Convert a `.vcf(.gz)` file into a Finite-State-Transducer Set.
 /// See the following resources for a recap on the theory and applications of FST Sets :
@@ -54,8 +57,8 @@ use rayon::{self};
 /// - `frequency_keys`     : Temporary buffer of the values that should be inserted into the frequency set builder
 pub struct VCFIndexer<'a>{
     reader              : VCFReader<'a>,
-    builder             : SetBuilder<std::io::BufWriter<File>>,
-    frq_builder         : SetBuilder<std::io::BufWriter<File>>,
+    gen_builder         : SetBuilder<BufWriter<File>>,
+    frq_builder         : SetBuilder<BufWriter<File>>,
     samples             : BTreeMap<SampleTag, String>,
     counter             : usize,
     coordinate_buffer   : Vec<u8>,
@@ -66,24 +69,24 @@ pub struct VCFIndexer<'a>{
 }      
 
 impl<'a> VCFIndexer<'a> {
+
+
     /// Initialize a new `VCFIndexer`.
     /// # Arguments:
     /// - `vcf`    : path leading to the target `.vcf`|`.vcf.gz` file
     /// - `samples`: transposed input samples definition file (sorted across SampleTag.id())
     /// - `threads`: number of requested decompression threads (only relevant in the case of BGZF compressed `.vcf.gz` files)
-    pub  fn new(vcf: &Path, output_file: &str, samples: BTreeMap<SampleTag, String>, threads: usize) -> Result<Self, Box<dyn Error>> {
+    pub  fn new(vcf: &'a Path, output_file: &str, samples: BTreeMap<SampleTag, String>, threads: usize) -> Result<Self> {
+        let loc_msg = |ext| format!("While attempting to create a new VCFIndexer for {output_file}.{ext}");
         // ----------------------- Initialize Genotypes and Frequency Writers
-        let gen_writer  = std::io::BufWriter::new(File::create(format!("{output_file}.fst"))?);
-        let builder =  SetBuilder::new(gen_writer)?;
-
-        let frq_writer  = std::io::BufWriter::new(File::create(format!("{output_file}.fst.frq"))?);
-        let frq_builder =  SetBuilder::new(frq_writer)?;
+        let gen_builder = create_set_builder(&format!("{output_file}.{FST_EXT}")).with_loc(|| loc_msg(FST_EXT))?;
+        let frq_builder = create_set_builder(&format!("{output_file}.{FRQ_EXT}")).with_loc(|| loc_msg(FRQ_EXT))?;
 
         // ----------------------- Initialize VCFReader.
         let reader  = VCFReader::new(vcf, threads)?;
         Ok(Self {
             reader,
-            builder,
+            gen_builder,
             frq_builder,
             samples,
             counter            : 0,
@@ -147,7 +150,7 @@ impl<'a> VCFIndexer<'a> {
 
             // ---- and insert the relevant entries within our frequency_set.
             for pop_af in &pop_afs {
-                let pop_af_key = format!("{}{} {}", std::str::from_utf8(&self.coordinate_buffer)?, pop_af[0], pop_af[1]);
+                let pop_af_key = format!("{}{} {}", str::from_utf8(&self.coordinate_buffer)?, pop_af[0], pop_af[1]);
                 self.frequency_keys.push(pop_af_key);
             }
 
@@ -168,7 +171,7 @@ impl<'a> VCFIndexer<'a> {
     /// # Errors
     /// - if either the `.fst` or `.fst.frq` file fails to finish building and writting itself.s
     pub fn finish_build(self) -> Result<(), Box<dyn Error>> {
-        self.builder.finish()?;
+        self.gen_builder.finish()?;
         self.frq_builder.finish()?;
         Ok(())
     }
@@ -224,7 +227,7 @@ impl<'a> VCFIndexer<'a> {
     /// Flush the contents of `self.genotypes_keys` and `self.frequency_keys` into their respective setbuilders.
     fn insert_keys(&mut self) -> Result<(), Box<dyn Error>> {
         for gen in &self.genotype_keys {
-            self.builder.insert(gen)?;
+            self.gen_builder.insert(gen)?;
         }
         self.genotype_keys.clear();
 
@@ -243,7 +246,7 @@ impl<'a> VCFIndexer<'a> {
     /// Skip a defined number of column fields within the VCF.
     /// # Arguments:
     /// - `n` number of fields to skip.
-    fn skip_fields(&mut self, n: usize) -> Result<(), Box<dyn Error>> {
+    fn skip_fields(&mut self, n: usize) -> Result<()> {
         for _ in 0..n {
             self.reader.source.read_until(b'\t', &mut Vec::new())?;
         }    
@@ -251,15 +254,15 @@ impl<'a> VCFIndexer<'a> {
     }
 
     /// read the contents of the whole vcf line and dump them into `self.genotypes_buffer`
-    fn fill_genotypes_buffer(&mut self) -> Result<(), Box<dyn Error>> {   
+    fn fill_genotypes_buffer(&mut self) -> Result<()> {   
         self.reader.source.read_until(b'\n', &mut self.genotypes_buffer)?;
         Ok(())
     }
 
     /// Log this Indexer's progress into the console, if `self.counter` is a multiple of `every_n`
-    fn print_progress(&mut self, every_n: usize) -> Result<(), Box<dyn Error>> {
+    fn print_progress(&mut self, every_n: usize) -> Result<()> {
         if self.counter % every_n == 0 {
-            info!("{: >9} {:?}", self.counter, std::str::from_utf8(&self.coordinate_buffer)?);
+            info!("{: >9} {:?}", self.counter, str::from_utf8(&self.coordinate_buffer)?);
         }
         self.counter+= 1;
         Ok(())
@@ -285,26 +288,23 @@ impl<'a> VCFIndexer<'a> {
 }
 
 
-pub fn run(
-    fst_cli: &parser::VCFFst,
-) -> Result<(), Box<dyn Error>> {
+pub fn run(fst_cli: &VCFFst) -> Result<()> {
+    let loc_msg = "While attempting to initialize FST Set Builder";
 
     // -------------------- Fetch the input vcf paths within `vcf_dir`
-    info!("Fetching input VCF files in {}", &fst_cli.vcf_dir.to_str().unwrap());
-    let mut input_vcf_paths = vcf::get_input_vcfs(&fst_cli.vcf_dir).unwrap();
+    info!("Fetching input VCF files in {}", &fst_cli.vcf_dir.to_string_lossy());
+    let mut input_vcf_paths = VCFReader::fetch_input_files(&fst_cli.vcf_dir).loc(loc_msg)?;
     input_vcf_paths.sort();
 
     // --------------------- Fetch the input samples definition file
-    let input_panel_path = match fst_cli.panel.clone() {
-        Some(path) => path,
-        None => vcf::fetch_input_panel(&fst_cli.vcf_dir)?,
-    };
-
+    let mut panel = match fst_cli.panel.as_ref() {
+        Some(path) => PanelReader::new(path),
+        None       => PanelReader::from_dir(&fst_cli.vcf_dir),
+    }.loc(loc_msg)?;
     // --------------------- Open the first vcf and assign column field indices for each sample
     //                       @ TODO: This could cause bugs if samples are not sorted in the same 
     //                               manner across multiple vcf files
-    let mut panel = VCFPanelReader::new(&input_panel_path)?;
-    panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
+    panel.assign_vcf_indexes(input_vcf_paths[0].as_path()).loc(loc_msg)?;
 
     // --------------------- Subset the panel according to user-provided (super-)population id(s)
     match &fst_cli.pop_subset {
@@ -312,17 +312,27 @@ pub fn run(
         None         => (),
     }
 
+    // --------------------- Parse the output panel file.
+    let Some(output_dir) = fst_cli.output_dir.to_str() else {
+        return Err(GenomeFstError::DisplayPath).loc(loc_msg)
+    };
+
+    let Some(source_file) = panel.source_file.to_str() else {
+        return Err(GenomeFstError::DisplayPath).loc(loc_msg)
+    };
+    let output_panel_path = format!("{output_dir}/{source_file}");
+    info!("output_panel_path: {output_panel_path}");
+    panel.copy_from_source(Path::new(&output_panel_path))?;
+    
     // --------------------- Setup a ThreadPool
+    info!("Setting up thread pool with {} threads", fst_cli.threads);
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(fst_cli.threads)
         .build()
-        .unwrap();
+        .map_err(GenomeFstError::BuildThreadPool)
+        .loc(loc_msg)?;
 
-    let output_panel_path = format!("{}/{}",
-        fst_cli.output_dir.to_str().unwrap(),
-        input_panel_path.file_name().unwrap().to_str().unwrap());
-    info!("output_panel_path: {output_panel_path}");
-    panel.copy_from_source(Path::new(&output_panel_path))?;
+
 
 
     pool.scope(|scope|{
@@ -343,11 +353,16 @@ pub fn run(
                 };
 
                 // -------------------------- Format the output file and destination directory.
-                let output_path =format!("{}/{}{}", fst_cli.output_dir.to_str().unwrap(), file_stem, pop_tag);
+                let output_path =format!("{}/{}{}", output_dir, file_stem, pop_tag);
                 info!("Output path: {output_path:?}");
 
                 // -------------------------- Build an FST set for this vcf file. 
-                let mut setbuilder = VCFIndexer::new(vcf, &output_path, panel.into_transposed_btreemap(), fst_cli.decompression_threads).unwrap();
+                let mut setbuilder = VCFIndexer::new(
+                    vcf, 
+                    &output_path,
+                    panel.into_transposed_btreemap(),
+                    fst_cli.decompression_threads
+                ).unwrap();
                 unsafe {setbuilder.build_fst().unwrap();}
 
                 // -------------------------- Finish the construction of our `.fst` and `.fst.frq` sets.

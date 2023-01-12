@@ -1,9 +1,9 @@
 [package]
-name              = "pedigree_sims"
-edition           = "2021"
-version.workspace = true
-authors.workspace = true
-publish.workspace = true
+  name              = "pedigree_sims"
+  version.workspace = true
+  authors.workspace = true
+  publish.workspace = true
+  edition.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,6 +11,8 @@ publish.workspace = true
   parser         = {path = "../parser"}
   pwd_from_stdin = {path = "../pwd_from_stdin" }
   genome         = {path = "../genome"}
+  grups-io       = {path = "../grups-io"}
+  located-error  = {path = "../located-error"}
   gzp            = "0.9.5"
   fst            = "0.4"
   log            = "0.4.16"
@@ -18,6 +20,8 @@ publish.workspace = true
   memmap         = "0.7.0"
   fastrand       = "1.8.0"
   ahash          = "0.7.6"
+  thiserror      = "1.0"
+  anyhow         = "1.0"
 
 
 [dev-dependencies]

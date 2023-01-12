@@ -1,11 +1,10 @@
-use genome::{SNPCoord, coordinate::{ChrIdx, Position, Coordinate}, snp::Allele};
-use crate::{comparisons::Individual, io::SNPReaderError};
-use std::error::Error;
+use genome::{Nucleotide, SNPCoord, coordinate::{ChrIdx, Position, Coordinate, derive::Coord}, snp::Allele};
+use crate::{comparisons::Individual};
 use rand::seq::SliceRandom;
 
 use located_error::prelude::*;
 
-use super::{Nucleotide, Pileup};
+use super::Pileup;
 
 /// Parsed line of a pileup file entry, containing the both coordinates and 
 /// Pileup of each individual.
@@ -19,7 +18,7 @@ use super::{Nucleotide, Pileup};
 ///                          L-> `Vec<Nucleotides>` +-> base
 ///                                                 L-> score
 /// 
-#[derive(Debug)]
+#[derive(Debug, Coord)]
 pub struct Line {
     pub coordinate : Coordinate,
     pub reference  : Allele,
@@ -30,39 +29,35 @@ impl Line {
     /// Instantiate a new pileup `Line`
     /// 
     /// # Errors
-    /// - `ParseIntError` if chromosome and position fails to get parsed (fields [0] and [1] of the pileup)
-    /// - `ParseIntError` if any of the `depth` fields fails to get parsed into an integer
-    ///    these fields are located at the indices where `(i+3) %% 3 == 0`
-    /// - `PileupError::RefSkip` if the pileup line contains reference skips ('[<>]' characters)
-    /// - `PileupError::UnequalLength` if the base and scores strings do not match in length.
+    /// - [`ParseChr`]   if chromosome is an invalid u8               (field [0] of the pileup)
+    /// - [`ParsePos`]   if position   is an invalid u32              (field [1])
+    /// - [`ParseRef`]   if reference  is an invalid allele character (field [2])
+   /// -  [`ParseDepth`] if any depth  field is an invalid u16        (fields[i%3])
+    /// - [`PileupError::RefSkip`] if the pileup line contains reference skips ('[<>]' characters)
+    /// - [`PileupError::UnequalLength`] if the base and scores strings do not match in length.
     /// - If any indel is encountered and the program fails to skip it.
     pub fn new(line: &str, ignore_dels: bool) -> Result<Line> {
-        let split_line: Vec<&str>    = line.split('\t').collect();
-        let chromosome: ChrIdx       = split_line[0].parse()?;
-        let position  : Position     = split_line[1].parse()?;
-        let reference : Allele       = split_line[2].parse().loc(format!("While parsing reference allele {}", split_line[2]))?;
+        use super::PileupError::{ParseChr, ParsePos, ParseRef, ParseDepth};
+        let err_context = "While parsing new pileup line";
+        let fields: Vec<&str>    = line.split('\t').collect();
+        let chromosome: ChrIdx   = fields[0].parse().map_err(ParseChr).loc(err_context)?;
+        let position  : Position = fields[1].parse().map_err(ParsePos).loc(err_context)?;
+        let reference : Allele   = fields[2].parse().map_err(ParseRef).loc(err_context)?;
         //Loop along individuals
         let mut individuals: Vec<Pileup> = Vec::new();
-        for i in (3..split_line.len()).step_by(3) {
-            let depth : u16  = split_line[i].parse()?;
-            let bases : &str = split_line[i+1];
-            let scores: &str = split_line[i+2];
+        for i in (3..fields.len()).step_by(3) {
+            let depth           = fields[i].parse().map_err(ParseDepth).loc(err_context)?;
+            let (bases, scores) = (fields[i+1], fields[i+2]);
 
             individuals.push(Pileup::new(reference, depth, bases, scores, ignore_dels)?);
         }
-        Ok(Line {
-            coordinate: Coordinate::new(chromosome, position),
-            reference,
-            individuals
-        })
+        Ok(Line { coordinate: Coordinate::new(chromosome, position), reference, individuals })
     }
 
     /// Apply base quality filtering on each individual pileup, according to a given treshold
     /// See: `Pileup::filter_base_quality()`
-    pub fn filter_base_quality(&mut self, phred_treshold: &u8) {
-        for individual in &mut self.individuals {
-            individual.filter_base_quality(phred_treshold);
-        }
+    pub fn filter_base_quality(&mut self, phred_treshold: u8) {
+        self.individuals.iter_mut().for_each(|ind| ind.filter_base_quality(phred_treshold.into()) )
     }
 
     /// Apply `known_variant` filtering on each individual pileup, according to a given treshold.
@@ -72,7 +67,8 @@ impl Line {
     /// - will bubble any `MissingAltRef` error raised when filtering known variants on a given individual.
     pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) -> Result<()> {
         for individual in &mut self.individuals {
-            individual.filter_known_variants(known_variant)?;
+            individual.filter_known_variants(known_variant)
+                .with_loc(|| "While filtering known variants" )?;
         }
         Ok(())
     }
@@ -90,8 +86,9 @@ impl Line {
     /// @TODO: rng should not be initialized within function.
     #[must_use]
     pub fn random_sample_pair(&self, pair: &[Individual; 2]) -> Option<Vec<&Nucleotide>> {
+        // @TODO: change to fastrand.
         let mut rng = &mut rand::thread_rng();
-        Some(vec![
+        Some(vec![ // @TODO: Yuk! change this horrid allocation.
             self.individuals[pair[0].index].nucleotides.choose(&mut rng)?,
             self.individuals[pair[1].index].nucleotides.choose(&mut rng)?,
         ])
@@ -101,29 +98,29 @@ impl Line {
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
+    use anyhow::Result;
 
     use crate::{pileup};
     use genome::SNPCoord;
 
     #[test]
-    fn line_filter_base_qualities() -> Result<(), Box<dyn Error>>{
+    fn line_filter_base_qualities() -> Result<()>{
         println!("Testing Line base_quality filtering.");
         let raw_line="22\t51057923\tC\t6\tTTTTtt\tJEJEEE\t0\t*\t*\t1\tT\tJ";
         let mut line = pileup::Line::new(raw_line, true)?;
 
-        line.filter_base_quality(&30);
+        line.filter_base_quality(30);
         assert_eq!(line.individuals[0].get_nucleotides(), "TTTTTT");
         assert_eq!(line.individuals[0].get_scores_ascii(), "JEJEEE");
 
-        line.filter_base_quality(&40);
+        line.filter_base_quality(40);
         assert_eq!(line.individuals[0].get_nucleotides(), "TT");
         assert_eq!(line.individuals[0].get_scores_ascii(), "JJ");
         Ok(())
     }
 
     #[test]
-    fn line_filter_known_variant_1() -> Result<(), Box<dyn Error>> {
+    fn line_filter_known_variant_1() -> Result<()> {
         println!("Testing Line known_variant filtration.");
         let raw_line="2\t21303470\tN\t0\t*\t*\t8\tTTcTTtt^Ft\tEEJEEEEE\t0\t*\t*";
         let mut line = pileup::Line::new(raw_line, true)?;
@@ -137,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn line_filter_known_variant_2() -> Result<(), Box<dyn Error>> {
+    fn line_filter_known_variant_2() -> Result<()> {
         println!("Testing Line known_variant filtration.");
         let raw_line="2\t21303470\tT\t0\t*\t*\t8\t..c..,,^F,\tEEJEEEEE\t0\t*\t*";
         let mut line = pileup::Line::new(raw_line, true)?;

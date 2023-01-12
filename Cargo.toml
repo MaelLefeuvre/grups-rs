@@ -2,12 +2,13 @@
   version           = "0.2.0"
   authors           = ["Maël Lefeuvre <mael.lefeuvre@mnhn.fr>"]
   description       = "GRUPS-rs: Get Relatedness Using Pedigree Simulations"
+  edition           = "2021"
   readme            = "README.md"
   publish           = false
 
 [package]
   name              = "grups"
-  edition           = "2021" 
+  edition.workspace = true 
   version.workspace = true
   authors.workspace = true
   publish.workspace = true
@@ -21,13 +22,23 @@
   codegen-units   = 1        # Don't split compilation across multiple units.
   panic           = "abort"  # Suppress stack unwinding behavior, and let the OS deal with errors.
 
-[profile.dev]
+[profile.dev-release]         # dev, with additional performance
+  inherits        = "dev"
   opt-level       = 3
-  overflow-checks = true
-  panic           = "unwind"
+  codegen-units   = 16
 
 [workspace]
-  members = ["src/pwd_from_stdin", "src/pedigree_sims", "src/genome", "src/parser", "src/logger", "src/vcf-fst", "src/located-error"]
+  members = [
+    "src/pwd_from_stdin",
+    "src/pedigree_sims",
+    "src/genome",
+    "src/genome/src/coordinate-derive",
+    "src/parser",
+    "src/logger",
+    "src/vcf-fst",
+    "src/located-error",
+    "src/grups-io",
+  ]
 
 
 [[bin]]
@@ -47,13 +58,14 @@
 #  path = "src/vcf-fst/src/main.rs"
 
 [dependencies]
-  pwd_from_stdin = {path = "src/pwd_from_stdin" }
-  pedigree_sims  = {path = "src/pedigree_sims" }
-  genome         = {path = "src/genome"}
-  logger         = {path = "src/logger"}
-  parser         = {path = "src/parser"}
-  vcf-fst        = {path = "src/vcf-fst"}
-  located_error  = {path = "src/located-error"}
+  pwd_from_stdin    = {path = "src/pwd_from_stdin" }
+  pedigree_sims     = {path = "src/pedigree_sims" }
+  genome            = {path = "src/genome"}
+  coordinate-derive = {path = "src/genome/src/coordinate-derive"}
+  logger            = {path = "src/logger"}
+  parser            = {path = "src/parser"}
+  vcf-fst           = {path = "src/vcf-fst"}
+  located-error     = {path = "src/located-error"}
   
   clap           = {version = "3.1.2", features = ["derive"]}
   log            = "0.4.16"

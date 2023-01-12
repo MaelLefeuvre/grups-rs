@@ -1,6 +1,7 @@
 use std::{hash::{Hash, Hasher}, fmt::{self, Display, Formatter}, str::FromStr, cmp::Ordering};
+
 mod error;
-use error::ParsePositionError;
+pub use error::ParsePositionError;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Position(pub u32);
@@ -25,9 +26,9 @@ impl From<u32> for Position {
     }
 }
 
-impl Into<u32> for Position {
-    fn into(self) -> u32 {
-        self.0
+impl From<Position> for u32 {
+    fn from(pos: Position) -> u32 {
+        pos.0
     }
 }
 

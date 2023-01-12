@@ -1,15 +1,13 @@
-use std::{
-    error::Error,
-    rc::Rc,
-    cell::RefCell
-};
+use std::{rc::Rc, cell::RefCell};
 
 use super::super::Individual;
-
-use crate::io::vcf::SampleTag; 
+use super::ComparisonError;
+use grups_io::read::SampleTag; 
 
 use fastrand;
+use located_error::LocatedOption;
 
+use located_error::prelude::*;
 
 /// Track a pedigree genetic relatedness comparison
 /// # Fields:
@@ -73,10 +71,19 @@ impl PedComparison {
     ///                     Entry[i] of the array corresponds to `self.pair[i]`.
     /// - `seq_error_rate`: Size-two array of the simulated sequencing error rate.
     ///                     Entry[i] of the array corresponds to `self.pair[i]`.
-    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2], rng: &mut fastrand::Rng) -> Result<(), Box<dyn Error>> {
+    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2], rng: &mut fastrand::Rng) -> Result<()> {
+        use ComparisonError::CompareAllele;
         self.add_overlap();
-        let random_sample0 = Self::simulate_observed_reads(1, rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], self.pair[0].borrow().get_alleles()?)?;
-        let random_sample1 = Self::simulate_observed_reads(1, rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], self.pair[1].borrow().get_alleles()?)?;
+
+        let random_sample0 = self.pair[0].borrow()
+            .get_alleles()
+            .and_then(|allele| Self::simulate_observed_reads(1, rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], allele))
+            .with_loc(||CompareAllele)?;
+        let random_sample1 = self.pair[1].borrow()
+            .get_alleles()
+            .and_then(|allele| Self::simulate_observed_reads(1, rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], allele))
+            .with_loc(||CompareAllele)?;
+
         if random_sample0[0] != random_sample1[0] {
             self.add_pwd();
         } // else if random_sample0[0] == 1 { // WIP: heterozygocity
@@ -99,7 +106,8 @@ impl PedComparison {
     /// - `seq_error_rate`: sequencing error rate required for the simulation.
     /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
     // #[inline(always)]
-    fn simulate_observed_reads(n: u8, rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>, String> {
+    fn simulate_observed_reads(n: u8, rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>> {
+        use ComparisonError::{SampleAllele, SimSeqError};
         let mut reads = Vec::with_capacity(n as usize);
 
         // ---- Simulate n pileup observations.
@@ -110,19 +118,13 @@ impl PedComparison {
                     true  => 1,  // Becomes the alternative reference allele, if contam_rate * contam_pop_af
                     false => 0,  // otherwise, pick the reference allele.
                 }
-                false => *alleles.get(rng.usize(0..=1))
-                    .ok_or_else(|| String::from("While simulating observed reads: failed to select a random allele"))?
+                false => *alleles.get(rng.usize(0..=1)).with_loc(||SampleAllele)?
             };
 
             // ---- Simulate sequencing error rate.
             const SEQ_ERROR_CHOICES: [[u8; 3]; 4] = [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
             if rng.f64() < seq_error_rate {
-                let wrong_base: u8 = *SEQ_ERROR_CHOICES[chosen_base as usize].get(rng.usize(0..3))
-                    .ok_or_else(|| {String::from(
-                        "While simulating observed reads: failed to select a random \
-                        erroneous base when simulating sequencing error."
-                    )
-                })?;
+                let wrong_base: u8 = *SEQ_ERROR_CHOICES[chosen_base as usize].get(rng.usize(0..3)).with_loc(||SimSeqError)?;
 
                 reads.push(wrong_base);
             }
@@ -193,7 +195,7 @@ mod tests {
 
 
     #[test]
-    fn simulate_observed_reads_contam() -> Result<(), Box<dyn Error>> {
+    fn simulate_observed_reads_contam() -> Result<()> {
         let binary_rates = [0.0, 1.0];
         let binary_alleles = [[0,0], [1,1]];
         let mut rng = fastrand::Rng::new();
@@ -210,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn allele_comparison() -> Result<(), Box<dyn Error>> {
+    fn allele_comparison() -> Result<()> {
 
         let mut rng = fastrand::Rng::new();
 

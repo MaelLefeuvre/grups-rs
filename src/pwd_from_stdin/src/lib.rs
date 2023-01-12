@@ -1,21 +1,18 @@
+use std::{fs, collections::{HashSet, HashMap}, io::{BufReader, BufRead}};
+
+use log::{warn, info, debug};
+use located_error::prelude::*;
+
+use genome::{Genome, coordinate::{Coordinate}};
+use grups_io::{parse::{self, FileKey}, read::SNPReader};
+
 pub mod pileup;
+
 pub mod comparisons;
-pub mod io;
-
-//extern crate logger;
-//use parser;
-
 use comparisons::Comparisons;
-use genome::Genome;
-use io::{FileKey, SNPReader};
 
-use std::fs;
-use std::error::Error;
-use std::collections::{HashSet, HashMap};
-use std::io::{BufReader, BufRead};
-
-use log::{error, warn, info, debug, trace};
-use std::process;
+pub mod error;
+pub use error::PwdFromStdinError;
 
 /// Main function. Run pwd-from-stdin, using the user-provided parameters and input file.
 /// Returns a `Comparisons` struct, containing the results.
@@ -28,7 +25,7 @@ pub fn run<'a>(
     pwd_cli           : &'a parser::PwdFromStdin,
     requested_samples : &'a [usize],
     genome            : &'a Genome,
-) -> Result<(Comparisons, HashMap<String, String>), Box<dyn Error>>{
+) -> Result<(Comparisons, HashMap<String, String>)> {
 
     // ----------------------------- Sanity checks.
     //pwd_cli.check_depth()?; // Ensure min_depths are > 2 when allowing self-comparisons
@@ -44,7 +41,7 @@ pub fn run<'a>(
 
     // ----------------------------- Prepare output files
     // ---- Add pwd files.
-    let mut output_files = io::get_output_files(
+    let mut output_files = parse::get_output_files(
         &mut com_cli.get_file_prefix(None)?,  // extract the user requested file prefix
         com_cli.overwrite,                    // Should we allow file overwriting ?
         FileKey::Ext,                         // What key are we using to hash these files ?
@@ -54,7 +51,7 @@ pub fn run<'a>(
 
     // ---- Add blocks files.
     output_files.extend(
-        io::get_output_files(
+        parse::get_output_files(
             &mut com_cli.get_file_prefix(Some("blocks/"))?,
             com_cli.overwrite,
             FileKey::Suffix,
@@ -76,8 +73,7 @@ pub fn run<'a>(
 
     // Early exit If the user requested transition filtration without specifying an SNP panel.
     if ! target_required && pwd_cli.exclude_transitions {
-        return Err("The use of --exclude-transitions requires an input SNP targets file, with known <REF> and <ALT> columns. \
-        Please provide such a file, using the --targets argument".into())
+        return Err(PwdFromStdinError::MissingTargetPositions).loc("While initializing main event loop")
     }
 
     // ----------------------------- Parse requested Chromosomes
@@ -96,13 +92,13 @@ pub fn run<'a>(
 
     // ---------------------------- Read Pileup
     info!("Parsing pileup...");   
+    let loc_msg = {|c: &Coordinate| format!("While parsing coordinate coordinate: {c}")};
     for entry in pileup_reader.lines() {
         // ----------------------- Parse line.
         let entry = entry?;
-        let mut line: pileup::Line = match pileup::Line::new(&entry, pwd_cli.ignore_dels){
-            Ok(line) => line,
-            Err(e)   => {error!("Error: {:?}", e); process::exit(1);},
-        };
+        let mut line = pileup::Line::new(&entry, pwd_cli.ignore_dels)
+            .loc("While attempting to parse the next pileup line.")?;
+
 
         // ----------------------- Check if line should be skipped.
         if ! valid_chromosomes.contains(&line.coordinate.chromosome) {
@@ -114,15 +110,14 @@ pub fn run<'a>(
         }
 
         // ------------------------ Apply quality filtering on all individuals.
-        line.filter_base_quality(&com_cli.min_qual);
+        line.filter_base_quality(com_cli.min_qual);
 
         // ------------------------ Apply target filtration if requested.
         if pwd_cli.known_variants {
-            let current_coord = match target_positions.get(&line.coordinate) {
-                Some(coordinate) => coordinate,
-                None => return Err("Cannot filter known variants when REF/ALT allele are unknown! Please use a different file format.".into())
-            };
-            line.filter_known_variants(current_coord)?;
+            let known_coord = target_positions.get(&line.coordinate)
+                .ok_or(PwdFromStdinError::MissingKnownVariant)
+                .with_loc(|| loc_msg(&line.coordinate))?;
+            line.filter_known_variants(known_coord)?;
         }
 
         // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        

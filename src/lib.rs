@@ -1,13 +1,15 @@
 extern crate parser;
 extern crate logger;
 
+use std::fs::File;
+
 use parser::{Cli, Commands::*};
 use genome::Genome;
 
 #[macro_use]
 extern crate log;
 
-use std::error::Error;
+use anyhow::{anyhow, Result};
 
 pub fn cite() {
     // If this ever becomes bloated, consider using the 'indoc' crate.
@@ -45,7 +47,7 @@ pub fn cite() {
 }
 
 /// @TODO : Stay dry...
-pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
+pub fn run(cli: Cli) -> Result<()> {
     match cli.commands {
         PedigreeSims {common, pwd, ped} => {
             // ----------------------------- Set seed (randomly assigned by parser-rs if none was provided.)
@@ -56,7 +58,7 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             info!("Indexing reference genome...");
             let genome = match &common.genome {
                 Some(file) => Genome::from_fasta_index(file)?,
-                None => Genome::default(),
+                None       => Genome::default(),
             };
             // ----------------------------- Run PWD_from_stdin.
             let (mut comparisons, output_files) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
@@ -72,7 +74,7 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             info!("Indexing reference genome...");
             let genome = match &common.genome {
                 Some(file) => Genome::from_fasta_index(file)?,
-                None => Genome::default(),
+                None       => Genome::default(),
             };
             // ----------------------------- Run PWD_from_stdin.
             let (comparisons, output_files) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
@@ -86,9 +88,10 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         },
 
         FromYaml{yaml} => {
-            let cli: Cli = match serde_yaml::from_reader(std::fs::File::open(&yaml)?) {
+            let yaml_file = File::open(&yaml)?;
+            let cli: Cli = match serde_yaml::from_reader(yaml_file){
                 Ok(cli)  => cli,
-                Err(e) => return Err(format!("Unable to deserialize arguments from {yaml:?} file: [{e}]").into())
+                Err(e)   => return Err(anyhow!("Unable to deserialize arguments from {yaml:?} file: [{e}]"))
             };
             self::run(cli)?;
         },

@@ -1,4 +1,3 @@
-use crate::snp::SNPCoord;
 use crate::genome::Genome;
 use std::collections::HashMap;
 use itertools::Itertools;

@@ -1,41 +1,34 @@
-use std::borrow::Borrow;
-use std::cmp::Ordering;
-
-use crate::pileup::{Nucleotide, Line};
-use genome::SNPCoord;
+use crate::pileup::Line;
+use genome::{Nucleotide};
 
 use super::Individual;
 
-use genome::coordinate::Coordinate;
+use genome::coordinate::{Coordinate, derive::*};
 
-#[derive(Debug)]
+#[derive(Debug, Coord, CoordEq, CoordOrd, CoordHash, CoordBorrow)]
 pub struct Pwd {
     pub coordinate  : Coordinate,
-    pub phreds      : [f64; 2],
+    pub phred_sums  : [f64; 2],
     pub pwd         : f64,
     observations    : u32,
 }
 
 impl Pwd {
     #[must_use]
-    pub fn initialize(coordinate: SNPCoord) -> Self {
+    pub fn initialize(coordinate: Coordinate) -> Self {
         Self{
-            coordinate  : Coordinate{chromosome: coordinate.coordinate.chromosome, position: coordinate.coordinate.position},
-            phreds      : [0.0,0.0],
+            coordinate,
+            phred_sums  : [0.0,0.0],
             pwd         : 0.0,
             observations: 0
         }
     }
     
     #[must_use]
-    pub fn one(coordinate: SNPCoord, random_nucl: &[&Nucleotide]) -> Self {
+    pub fn one(coordinate: Coordinate, random_nucl: &[&Nucleotide]) -> Self {
         Self {
-            coordinate  : Coordinate{chromosome: coordinate.coordinate.chromosome, position: coordinate.coordinate.position},
-            //nucleotides: [*random_nucl[0], *random_nucl[1]],
-            phreds      : [
-                f64::from(random_nucl[0].phred),
-                f64::from(random_nucl[1].phred)
-            ],
+            coordinate,
+            phred_sums  : [0, 1].map(|i| f64::from(random_nucl[i].phred.score()) ),
             pwd         : Self::check_pwd(random_nucl),
             observations: 1,
         }
@@ -53,30 +46,26 @@ impl Pwd {
             } //else if nucs[0].base != '.' { // WIP: heterozygocity ratio
             //    hom_alt_sum += 1.0
             //}
-            phreds[0] += f64::from(nucs[0].phred);
-            phreds[1] += f64::from(nucs[1].phred);
+            [0, 1].into_iter().for_each(|i| phreds[i] += f64::from(nucs[i].phred.score()));
             counter += 1.0; 
         }
         
-        let coordinate = Coordinate{chromosome: line.coordinate.chromosome, position: line.coordinate.position};
-        let phreds = [phreds[0]/counter , phreds[1]/counter];
+        let phred_sums = [phreds[0]/counter , phreds[1]/counter];
         let pwd = pwd/counter ;
 
-        Self { coordinate, phreds, pwd, observations: 1 }
+        Self { coordinate: line.coordinate, phred_sums, pwd, observations: 1 }
     }
 
     #[must_use]
     pub fn deterministic_pairwise(line: &Line, pair: &[Individual; 2]) -> Self {
         // Breaks if self.comparison == true
-        let set0 = line.individuals[pair[0].index].observation_set();
-        let set1 = line.individuals[pair[1].index].observation_set();
-        let phreds = [set0.1, set1.1];
+        let observation_sets = [0, 1].map(|i| line.individuals[pair[i].index].observation_set());
+        
         let mut prob_pwd = 0.0;
 
         //let mut hom_alt_sum = 0.0;
-
-        for (base0, prob0) in &set0.0 {
-            for (base1, prob1) in &set1.0 {
+        for (base0, prob0) in &observation_sets[0].0 {
+            for (base1, prob1) in &observation_sets[1].0 {
                 if base0 != base1 {
                     prob_pwd += prob0 * prob1;
                     
@@ -85,9 +74,9 @@ impl Pwd {
                 //}
             }
         }
-
         let coordinate = Coordinate{chromosome: line.coordinate.chromosome, position: line.coordinate.position};
-        Self { coordinate, phreds, pwd: prob_pwd, observations: 1 }
+        let phred_sums = observation_sets.map(|set| set.1);
+        Self { coordinate, phred_sums, pwd: prob_pwd, observations: 1 }
     }
 
     pub fn update(&mut self, random_nucl: &[&Nucleotide]) {
@@ -97,8 +86,7 @@ impl Pwd {
     }
 
     fn update_phreds(&mut self, random_nucl: &[&Nucleotide]) {
-        self.phreds[0] += f64::from(random_nucl[0].phred);
-        self.phreds[1] += f64::from(random_nucl[1].phred);
+        [0,1].into_iter().for_each(|i| self.phred_sums[i] += f64::from(random_nucl[i].phred.score()) );
     }
     
     // Check if there is a pairwise difference.
@@ -113,41 +101,13 @@ impl Pwd {
 
     #[must_use]
     pub fn compute_avg_phred(&self) -> f64 {
-        (self.phreds[0] + self.phreds[1]) / 2.0 / f64::from(self.observations)
+        (self.phred_sums[0] + self.phred_sums[1]) / 2.0 / f64::from(self.observations)
     }
 
     #[must_use]
     pub fn error_probs(&self) -> [f64; 2] {
-        [
-            f64::powf(10.0, -1.0 * (self.phreds[0]) / 10.0),
-            f64::powf(10.0, -1.0 * (self.phreds[1]) / 10.0)
-        ]
-    }
-}
-
-impl PartialEq<Pwd> for Pwd {
-    fn eq(&self, other: &Self) -> bool { 
-        self.coordinate == other.coordinate
-    }
-}
-
-impl Eq for Pwd {}
-
-impl Ord for Pwd {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.coordinate.cmp(&other.coordinate)
-    }
-}
-
-impl PartialOrd for Pwd {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Borrow<Coordinate> for Pwd {
-    fn borrow(&self) -> &Coordinate {
-        &self.coordinate
+        // @ TODO: this is very wrong, since we're re-implementing a phred method.
+        [0, 1].map(|i|  f64::powf(10.0, -1.0 * (self.phred_sums[i]) / 10.0) )
     }
 }
 
@@ -168,7 +128,7 @@ mod tests {
         ];
         let pwd = Pwd::deterministic_pairwise(&line, &pair);
         assert_eq!(pwd.pwd, 0.5);
-        assert_eq!(pwd.phreds, [38.5, 41.0]);
+        assert_eq!(pwd.phred_sums, [38.5, 41.0]);
         Ok(())
     }
 
@@ -182,7 +142,7 @@ mod tests {
         ];
         let pwd = Pwd::deterministic_self(&line, &pair);
         assert_eq!(pwd.pwd, 0.6);
-        assert_eq!(pwd.phreds, [40.0, 37.0]);
+        assert_eq!(pwd.phred_sums, [40.0, 37.0]);
         Ok(())
     }
 

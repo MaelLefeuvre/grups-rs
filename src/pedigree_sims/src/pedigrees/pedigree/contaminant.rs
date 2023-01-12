@@ -1,12 +1,7 @@
-use std::{
-    ops::{Deref, DerefMut},
-    error::Error
-};
+use std::{ops::{Deref, DerefMut}};
 
-use crate::io::{
-    vcf::SampleTag,
-    genotype_reader::GenotypeReader
-};
+use grups_io::read::{ SampleTag, genotype_reader::GenotypeReader };
+use located_error::prelude::*;
 
 /// Size-two array set of contaminating individuals, one for each compared pileup individual.
 #[derive(Debug)]
@@ -52,9 +47,9 @@ impl Contaminant {
     /// # Panics:
     /// - whenever a contaminating individual carries multi-allelic alternate allele (i.e. alt allele is > 1)
     /// - if the output array's len() != 2
-    pub fn compute_local_cont_af(&self, reader: &dyn GenotypeReader) -> Result<[f64; 2], Box<dyn Error>> {
+    pub fn compute_local_cont_af(&self, reader: &dyn GenotypeReader) -> Result<[f64; 2]> {
+        let loc_msg = "While attempting to compute local contaminating allele frequency";
         let mut output : [f64; 2] = [0.0, 0.0];
-
         // ---- For each individual being compared....
         for (i, contaminant) in self.0.iter().enumerate() {
 
@@ -65,15 +60,15 @@ impl Contaminant {
             // ---- For each individual contaminating our compared individual...
             for tag in contaminant.iter() { 
                 // ---- Extract the alleles of the contaminant from the reader, and dynamically compute the allele frequency.
-                let contaminant_alleles = reader.get_alleles(tag)?;
+                let contaminant_alleles = reader.get_alleles(tag).loc(loc_msg)?;
 
-                contaminant_alleles.iter().for_each(|allele: &u8| {
+                contaminant_alleles.iter().try_for_each(|allele: &u8| {
                     match allele {
-                        0          => ref_allele_count += 1.0,
-                        1          => alt_allele_count += 1.0,
-                        other => panic!("Contaminating individual is multiallelic: {other}")
+                        0 => {ref_allele_count += 1.0; Ok(())},
+                        1 => {alt_allele_count += 1.0; Ok(())},
+                        n => Err(anyhow!("Contaminating individual is multiallelic: {n}"))
                     }
-                })
+                }).loc(loc_msg)?;
             }
 
             // ---- Contaminating allele frequency is a ratio of all the observed ALT alleles 
@@ -100,8 +95,8 @@ impl std::fmt::Display for Contaminant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::genotype_reader::MockGenotypeReader;
-
+    
+    use grups_io::read::genotype_reader::MockGenotypeReader;
     fn dummy_sample_tags(nums: [usize; 2]) -> [Vec<SampleTag>; 2] {
         let mut sample_tags = [vec![], vec![]];
         let mut id = 0;

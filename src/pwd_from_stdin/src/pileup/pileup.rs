@@ -1,10 +1,9 @@
-use genome::{SNPCoord, snp::Allele};
-use std::{iter::Peekable, collections::HashMap, str::FromStr};
+use genome::{Nucleotide, SNPCoord, snp::Allele, Phred} ;
+use std::{iter::Peekable, collections::HashMap};
 //use std::error::Error;
 use located_error::prelude::*;
-use crate::io::SNPReaderError;
 
-use super::{Nucleotide, PileupError};
+use super::PileupError;
 
 
 /// Pileup record of a single individual, at a given position.
@@ -71,7 +70,7 @@ impl Pileup {
         let mut sum_phred: u32 = 0;
         for nucleotide in &self.nucleotides {
             *set.entry(nucleotide.base).or_insert(0.0) += 1.0;
-            sum_phred += u32::from(nucleotide.phred);
+            sum_phred += u32::from(nucleotide.phred.score());
         }
         for count in set.values_mut() {
             *count /= self.nucleotides.len() as f64;
@@ -81,9 +80,9 @@ impl Pileup {
     }
 
     /// Apply base quality filtration for each Nucleotide, using a given a phred treshold
-    pub fn filter_base_quality(&mut self, phred_treshold: &u8) {
+    pub fn filter_base_quality(&mut self, phred_treshold: Phred) {
         self.nucleotides.retain(|nucleotide| {
-            nucleotide.phred >= *phred_treshold
+            nucleotide.phred >= phred_treshold
         });
         self.update_depth();
     }
@@ -97,13 +96,8 @@ impl Pileup {
     ///  - Throws `MissingAltRef` if the `known_variant` does not contain REF/ALT information.
     /// 
     pub fn filter_known_variants(&mut self, known_variant: &SNPCoord) -> Result<()> {
-        use crate::io::SNPReaderError::MissingAltRef;
-        let (reference, alternate) = (
-            known_variant.reference,//.ok_or(MissingAltRef(*known_variant))?,
-            known_variant.alternate//.ok_or(MissingAltRef(*known_variant))?
-        );
         self.nucleotides.retain(|nucleotide| {
-            [reference, alternate].contains(&nucleotide.base)
+            [known_variant.reference, known_variant.alternate].contains(&nucleotide.base)
         });
         self.update_depth();
         Ok(())
@@ -134,16 +128,12 @@ impl Pileup {
     /// Run through a Peekable Iterator of nucleotides to parse the number of characters that should be skipped
     /// When encountering an indel.
     /// 
-    /// 
     /// ```Text
-    /// Indel regex: `[+-][0-9]+[ATCGANatcgan]+`
-    ///                --  ---   ------------
-    ///                |   |     | 
+    /// Indel regex: `[+-][0-9]+[ATCGANatcgn]+`
+    ///                --  ---   -----------
     ///                |   |     +- Sequence
-    ///                |   | 
     ///                |   +- Length of Sequence
-    ///                | 
-    ///                +- Identifier ('+' = insertion, '-' = deletion)
+    ///                +- [+: insertion, -: deletion]
     /// ```
     /// # Errors
     /// - If the length of the sequence (following [+-]) cannot get parsed into an integer.
@@ -158,13 +148,7 @@ impl Pileup {
         }
 
         // Convert digit from string to numeric. Throw an error if this fails.
-        let digit = digit.parse::<usize>()
-            .with_loc(|| {
-                format!("Invalid indel identifier within the pileup file. \
-                    Got [{{err}}] while attempting to skip indel"
-            )
-        })?;
-        let skip = digit -1 ;
+        let skip = digit.parse::<usize>().loc("Failed to parse indel length into a valid usize")? - 1;
         chars.nth(skip);
         Ok(())
     }
@@ -184,7 +168,7 @@ mod tests {
     use super::*;
 
     fn create_dummy_pileup(reference: Allele, line_input: &str, score_input: &str, ignore_dels: bool) -> Result<Pileup> {
-        return Pileup::new(reference, line_input.len() as u16, line_input, score_input, ignore_dels);
+        Pileup::new(reference, line_input.len() as u16, line_input, score_input, ignore_dels)
     }
 
     #[test]

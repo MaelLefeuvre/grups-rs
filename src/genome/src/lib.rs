@@ -1,5 +1,9 @@
 pub mod coordinate;
 
+pub mod nucleotide;
+pub use nucleotide::Nucleotide;
+pub use nucleotide::Phred;
+
 pub mod snp;
 pub use snp::SNPCoord;
 
@@ -12,6 +16,6 @@ mod genome;
 pub use crate::genome::Genome; 
 
 mod chromosome;
-pub use crate::chromosome::Chromosome;
+pub use chromosome::Chromosome;
 
 

@@ -4,14 +4,13 @@ use super::pedigree;
 use std::{
     collections::HashMap,
     path::Path,
-    error::Error,
     ops::{Deref, DerefMut}
 };
 
-use crate::io::vcf::{
-    SampleTag,
-    reader::VCFPanelReader,
-};
+use grups_io::read::PanelReader;
+use grups_io::read::SampleTag;
+
+use located_error::prelude::*;
 
 /// A vector of pedigree simulation replicates. This struct is generally assigned to a given Pileup-Comparison.
 /// # Fields:
@@ -50,15 +49,15 @@ impl PedigreeReps {
     /// # Arguments
     /// - `pedigree_path`: path leading to the pedigree definition file. 
     /// - `pop`          : name of the pedigree's desired (super-)population of origin
-    /// - `panel`        : input samples definition file, in the form of a `VCFPanelReader`.
+    /// - `panel`        : input samples definition file, in the form of a `PanelReader`.
     ///
     /// # Errors:
     /// - if any of the offspring `self.parents` field is set to None
     /// - if pop label is invalid.
     /// - returns `std::io::result::InvalidData` if an error occurs while parsing the pedigree definition file.
-    pub fn populate(&mut self, pedigree_path: &Path, pop: &String, panel: &VCFPanelReader) -> Result<(), Box<dyn Error>> {
+    pub fn populate(&mut self, pedigree_path: &Path, pop: &String, panel: &PanelReader) -> Result<()> {
         for _ in 0..self.inner.capacity() {
-            let mut pedigree = pedigree::io::pedigree_parser(pedigree_path)?;
+            let mut pedigree = pedigree::parser::pedigree_parser(pedigree_path)?;
             pedigree.set_tags(panel, pop, self.contaminants.as_ref())?;
             pedigree.assign_offspring_strands()?;
             self.inner.push(pedigree);
@@ -69,7 +68,7 @@ impl PedigreeReps {
     /// Aggregate the sum of all simulated pairwise differences for each pedigree comparison.
     /// Returns a hashmap with Key = comparison_label | Value = ( sum(avg_pwd), sumsq(avg_pwd) )
     /// # @TODO: This data structure is error prone and should be converted to a struct or named tuple.
-    pub fn compute_sum_simulated_stats(&self) -> Result<HashMap<String, (f64,f64)>, String> {
+    pub fn compute_sum_simulated_stats(&self) -> Result<HashMap<String, (f64,f64)>> {
         let mut sum_simulated_stats = HashMap::new();
         for pedigree in self.iter() {
             // Sum the avg pwd of each replicate
@@ -84,13 +83,10 @@ impl PedigreeReps {
 
                 // ---- Access summary statistics 
                 let mut summary_statistics = sum_simulated_stats.get_mut(&comparison.label)
-                    .ok_or_else(|| {
-                        format!(
-                            "While computing simulation statistics : Attempting to access a missing pedigree-comparison \
-                            summary statistics, using the comparison label '{}'",
-                            comparison.label
-                        )
-                    })?;
+                    .with_loc(|| format!("While computing simulation summary statistics:\
+                        Attempting to access a missing summary statistic using the comparison label {}",
+                        comparison.label
+                    ))?;
 
                 // ---- Compute the avg + sum of squares for variance / std err estimation.
                 let simulation_avg = summary_statistics.0 / self.len() as f64;

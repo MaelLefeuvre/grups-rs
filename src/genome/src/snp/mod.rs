@@ -1,15 +1,15 @@
 mod allele;
 pub use allele::Allele;
+pub use allele::ParseAlleleError;
+
 
 use anyhow::Result;
-use crate::{jackknife::JackknifeBlock, coordinate::Coordinate};
-use std::{hash::{Hash, Hasher}, cmp::Ordering, error::Error, borrow::Borrow};
+use located_error::LocatedError;
+use std::error::Error;
 
-use crate::coordinate::{ChrIdx, Position};
+use crate::coordinate::{Coordinate, ChrIdx, Position, derive::*};
+
 //pub use crate::snp::Allele;
-
-const CHR_FORMAT_LEN: usize = 2;
-const POS_FORMAT_LEN: usize = 9;
 
 /// A simple struct representing an `SNPCoordinate` position.
 /// Note that :
@@ -19,11 +19,21 @@ const POS_FORMAT_LEN: usize = 9;
 ///     See: `pwd_from_stdin::jackknife::JackknifeBlock`
 ///   - Hashable, but only in regards to chr and pos.
 ///     -> don't insert alternate variations.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Coord, CoordEq, CoordBlockEq, CoordOrd, CoordHash, CoordBorrow)]
 pub struct SNPCoord {
     pub coordinate: Coordinate,
     pub reference  : Allele,
     pub alternate  : Allele,
+}
+
+impl std::fmt::Display for SNPCoord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {} {}", 
+            self.coordinate(),
+            self.reference,
+            self.alternate,
+        )
+    }
 }
 
 impl SNPCoord {
@@ -38,7 +48,9 @@ impl SNPCoord {
             T::Error: Error + Sync + Send + 'static
     {
         let coordinate = Coordinate::new(chromosome, position);
-        Ok(Self{coordinate, reference: reference.try_into()?, alternate: alternate.try_into()?})
+        let reference = reference.try_into().with_loc(|| format!("While parsing coordinate {coordinate}"))?;
+        let alternate = alternate.try_into().with_loc(|| format!("While parsing coordinate {coordinate}"))?;
+        Ok(Self{coordinate, reference, alternate})
     }
     
     /// Check if this coordinate contains known REF/ALT alleles.
@@ -48,62 +60,13 @@ impl SNPCoord {
     }
 }
 
-impl Ord for SNPCoord {
-    fn cmp(&self, other: &Self) -> Ordering {
-        (self.coordinate.chromosome, self.coordinate.position).cmp(&(other.coordinate.chromosome, other.coordinate.position))
-    }
-}
-
-impl PartialOrd for SNPCoord {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq<SNPCoord> for SNPCoord {
-    fn eq(&self, other: &Self) -> bool { 
-        self.coordinate.chromosome == other.coordinate.chromosome && self.coordinate.position == other.coordinate.position
-    }
-}
-
-impl PartialEq<JackknifeBlock> for SNPCoord {
-    fn eq(&self, other: &JackknifeBlock) -> bool {
-        other.chromosome == self.coordinate.chromosome && self.coordinate.position >= other.range.start && self.coordinate.position < other.range.end
-    }
-}
-
-impl Eq for SNPCoord {}
-
-impl Hash for SNPCoord {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.coordinate.chromosome.hash(state);
-        self.coordinate.position.hash(state);
-    }
-}
-
-impl std::fmt::Display for SNPCoord {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{: <CHR_FORMAT_LEN$} {: >POS_FORMAT_LEN$}]: {} {}", 
-            self.coordinate.chromosome,
-            self.coordinate.position,
-            self.reference,
-            self.alternate,
-        )
-    }
-}
-
-impl Borrow<Coordinate> for SNPCoord {
-    fn borrow(&self) -> &Coordinate {
-        &self.coordinate
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use  crate::jackknife::JackknifeBlock;
     use rand::{self, prelude::SliceRandom};
     use anyhow::Result;
-
     const N_ITERS: u32 = 1_000_000;
 
     #[test]
@@ -202,20 +165,22 @@ mod tests {
 
     #[test]
     fn display_some_refalt() -> Result<()> {
-        let (chromosome, position) = (1, 1_357_165);
+        use crate::coordinate::{CHR_FORMAT_LEN, POS_FORMAT_LEN};
 
+        let (chromosome, position) = (1, 1_357_165);
         let coord = SNPCoord::try_new(chromosome, position, 'A', 'C')?;
-        let expected_output = format!("[{: <CHR_FORMAT_LEN$} {: >POS_FORMAT_LEN$}]: {} {}", chromosome, position, 'A', 'C');
+        let expected_output = format!("[{chromosome: <CHR_FORMAT_LEN$} {position: >POS_FORMAT_LEN$}]: A C");
         assert_eq!(format!("{coord}"), expected_output);
         Ok(())
     }
 
     #[test]
     fn display_none_refalt() -> Result<()> {
+        use crate::coordinate::{CHR_FORMAT_LEN, POS_FORMAT_LEN};
         let (chromosome, position) = (1, 1_357_165);
 
         let coord = SNPCoord::try_new(chromosome, position, 'N', 'N')?;
-        let expected_output = format!("[{: <CHR_FORMAT_LEN$} {: >POS_FORMAT_LEN$}]: {} {}", chromosome, position, "N", "N");
+        let expected_output = format!("[{chromosome: <CHR_FORMAT_LEN$} {position: >POS_FORMAT_LEN$}]: N N");
         assert_eq!(format!("{coord}"), expected_output);
         Ok(())
     }

@@ -11,12 +11,14 @@ use error::*;
 mod recomb_range;
 use recomb_range::RecombinationRange;
 
+use crate::coordinate::{Coordinate, Position, ChrIdx};
+
 
 /// `HashMap` of Genetic Maps, in the form of a BITS Tree (Key = chromosome name | Value = Interval Tree)
 /// 
 /// See: <https://doi.org/10.1093/bioinformatics/bts652>
 #[derive(Default)]
-pub struct GeneticMap(HashMap<u8, Lapper<u32, RecombinationRange>>);
+pub struct GeneticMap(HashMap<ChrIdx, Lapper<u32, RecombinationRange>>);
 
 impl GeneticMap {
     /// Instantiate a `GeneticMap` from an OS directory.
@@ -50,12 +52,12 @@ impl GeneticMap {
     /// - when the value of `path` is not found and/or does not have read permissions
     /// - can return either `ParseIntError` or `ParseFloatError` if one of the fields
     ///   contains invalid information. 
-    pub fn from_map<'a>(&'a mut self, path: impl AsRef<Path> ) -> Result<()> {
+    pub fn from_map(&mut self, path: impl AsRef<Path> ) -> Result<()> {
         use GeneticMapError::*;
 
         // ---- Open the genetic recombination file and initialize HashMap
         let source = BufReader::new(File::open(path).loc("Failed to open file")?);
-        let mut intervals: HashMap<u8, Vec<Interval<u32, RecombinationRange>>> = HashMap::new();
+        let mut intervals: HashMap<ChrIdx, Vec<Interval<u32, RecombinationRange>>> = HashMap::new();
 
         // ---- Parse file and generate intervals from each line.
         let mut start = 0;
@@ -66,12 +68,12 @@ impl GeneticMap {
 
             match fields.len() { // baild if we don't have 4 fields.
                 4 => Ok(()),
-                n @ _ => Err(anyhow!("Expected 4 fields, got {n}")).with_loc(|| InvalidFields(i))
+                n => Err(anyhow!("Expected 4 fields, got {n}")).with_loc(|| InvalidFields(i))
             }?;
 
-            let chr  = fields[0].replace("chr", "").parse::<u8>().with_loc(|| ParseChr(i))?;
-            let stop = fields[1].parse::<u32>().with_loc(|| ParsePos(i))?;
-            let rate = fields[2].parse::<f64>().with_loc(|| ParseRate(i))?;
+            let chr : ChrIdx = fields[0].parse().with_loc(|| ParseChr(i))?;
+            let stop: u32    = fields[1].parse::<u32>().with_loc(|| ParsePos(i))?;
+            let rate: f64    = fields[2].parse::<f64>().with_loc(|| ParseRate(i))?;
 
             // ---- Instantiate a new Interval, tied to a recombination range.
             let interval = Interval{ start, stop, val: RecombinationRange::new(start, stop, rate) };
@@ -110,10 +112,14 @@ impl GeneticMap {
     /// # Panics:
     /// - if `chromosome` does not match any key within `self`
     #[must_use]
-    pub fn compute_recombination_prob(&self, chromosome: u8, previous_position: u32, current_position: u32) -> f64 {
+    pub fn compute_recombination_prob(&self, coordinate: &Coordinate, previous_position: Position) -> f64 {
+        // @TODO: Lapper Struct only allows for items implementing num_traits::PrimInt and num_trait::Unsigned.
+        //This conversion could be avoided if I manage to implement these traits for position.
+        let current_position : u32 = coordinate.position.into(); 
+        let previous_position: u32 = previous_position.into();
         let mut interval_prob_recomb = 0.0;
         // ---- Search for all intervals contained between the range [previous_position, current_position[
-        for recombination_range in self.0[&chromosome].find(previous_position, current_position) {
+        for recombination_range in self.0[&coordinate.chromosome].find(previous_position, current_position) {
             let real_start = if previous_position < recombination_range.start {recombination_range.start} else {previous_position};
             let real_stop  = if current_position  > recombination_range.stop  {recombination_range.stop } else {current_position };
 

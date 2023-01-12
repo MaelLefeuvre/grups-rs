@@ -1,0 +1,253 @@
+use std::{io::{BufRead, BufReader, Read}, path::{Path, PathBuf}, fs::File};
+
+mod info;
+use info::InfoField;
+
+use genome::coordinate::{Coordinate, Position, ChrIdx};
+use located_error::{LocatedError, LocatedOption};
+use located_error::loc;
+
+use crate::{
+    parse,
+    read::SampleTag,
+    read::genotype_reader::{GenotypeReader, GenotypeReaderError},
+};
+
+use gzp::{deflate::Bgzf, par::decompress::{ParDecompressBuilder}};
+use anyhow::Result;
+use log::debug;
+
+mod error;
+pub use error::VCFReaderError;
+
+const INFO_FIELD_INDEX   : usize = 7;  /// 0-based expected column index of the INFO field.
+const GENOTYPES_START_IDX: usize = 9;  /// 0-based expected column index where genotype entries are expected to begin.
+
+const VCF_EXT: [&str; 2] = ["vcf", "vcf.gz"];
+
+
+
+
+/// GenotypeReader using a `.vcf`, of `.vcf.gz` file.
+/// # Description 
+/// Reader tries to be as efficient as possible, and will read lines as lazily as possible.  
+/// Thus, lines are actually read field by field, as conservatively as possible, making various checks along the way
+/// (e.g. 'is this chromosome coordinate relevant', 'is this line actually a bi-allelic SNP?', etc.) and skipped as soon as
+/// a discrepancy is found out. 
+/// 
+/// # Fields:            
+/// - `source`          : Boxed BufReader for the given `.vcf(.gz)` file.
+/// - `samples`         : Vector of Sample-Id. These are extracted from the VCF Header, from fields 9 to n
+/// - `info`            : `InfoField` representing the `INFO` column of the VCF file, for the current position.
+/// - `buf`             : Raw string-byte buffer.
+/// - `genotypes_filled`: boolean representing whether or not `buf` field is filled.
+/// - `idx`             : index counter, indicating at which column index the reader is currently at.
+/// 
+/// # Implemented Traits: 
+/// - `GenotypeReader`
+pub struct VCFReader<'a> {
+    pub source           : Box<dyn BufRead + 'a>,
+    samples              : Vec<String>,
+    info                 : InfoField,
+    buf                  : Vec<u8>,
+    pub genotypes_filled : bool,
+    idx                  : usize,
+}
+
+impl<'a> VCFReader<'a> {
+    /// Instantiate an initialize new VCFReader.
+    /// # Arguments:
+    /// - `path`: path leading to the `.vcf(.gz)` file.
+    /// - `threads`: number of decompression threads (This is only relevant in the case of BGZF compressed `.vcf.gz` files)
+    pub fn new(path: &'a Path, threads: usize) -> Result<VCFReader<'a>>{
+        let loc_msg = "While attempting to create a new VCFReader";
+        let mut reader = Self::get_reader(path, threads).loc(loc_msg)?;
+        let samples = Self::parse_samples_id(&mut reader).loc(loc_msg)?;
+
+        Ok(VCFReader{source: reader, samples, buf: Vec::new(), info: InfoField::default(), genotypes_filled: false, idx:0})
+    }
+
+    /// Skip to the next line field and fill the buffer with its contents.
+    pub fn next_field(&mut self) -> Result<&str> {
+        use VCFReaderError::{FillBuffer, InvalidField};
+        let loc_msg = "While attempting to parse next field" ;
+        self.clear_buffer();
+        self.source.read_until(b'\t', &mut self.buf).map_err(FillBuffer).loc(loc_msg)?;
+        self.buf.pop();
+        self.idx += 1;
+        std::str::from_utf8(&self.buf).map_err(InvalidField).loc(loc_msg)
+    }
+
+    /// Fill `self.buffer` until an EOL is encountered and reset the `self.idx` counter to 0.
+    fn next_eol(&mut self) -> Result<()> {
+        let _ = self.source.read_until(b'\n', &mut self.buf)
+            .map_err(VCFReaderError::FillBuffer)
+            .loc("While attempting to find next EOL")?;
+        self.idx=0;
+        Ok(())
+    }
+
+    /// Skip to the next line and clear all buffers: `self.buf`, `self.info`, `self.idx`
+    pub fn next_line(&mut self)-> Result<()> {
+        if ! self.genotypes_filled {
+            self.next_eol().map_err(VCFReaderError::SkipLineError)?;
+        }
+        self.info.clear();
+        self.clear_buffer();
+        self.idx = 0; 
+        self.genotypes_filled = false;
+        Ok(())
+    }
+
+    /// Return `true` if the `INFO` field of the current line contains a `MULTI_ALLELIC` tag.
+    pub fn is_multiallelic(&self) -> bool {
+        self.info.is_multiallelic()
+    }
+
+    /// Return `true` if the `INFO` field of the current line contains a `VT=SNP` tag.
+    pub fn is_snp(&self) -> Result<bool> {
+        self.info.is_snp().loc("While checking if this coordinate is an SNP")
+    }
+
+    /// Skip `n` fields on the current line and increment `self.idx` accordingly.
+    /// # Arguments: 
+    /// - `n`: number of fields to skip. 
+    pub fn skip(&mut self, n: usize) -> Result<()> {
+        for _ in 0..n {
+            self.source.read_until(b'\t', &mut Vec::new())
+                .map_err(VCFReaderError::FillBuffer)
+                .with_loc(|| format!("While attempting to skip {n} fields within the line"))?;
+        }
+        self.idx+=n;
+        Ok(())
+    }
+
+    /// Parse fields 0 and 1 of the VCF line and return the current chromosome and position coordinates.
+    /// # Errors:
+    /// - if `self.idx` != 0 (i.e. we're not currently at the beginning at the line.)
+    pub fn parse_coordinate(&mut self) -> Result<Coordinate> {
+        use VCFReaderError::{ParseChrError, ParsePosError, InvalidFieldIdx};
+        let loc_msg = "While parsing the genomic coordinate of this entry";
+        if self.idx != 0 {
+            return Err(InvalidFieldIdx(0, self.idx)).loc(loc_msg)
+        }
+        let chromosome : ChrIdx   = self.next_field()?.parse().map_err(ParseChrError).loc(loc_msg)?; // 1
+        let position   : Position = self.next_field()?.parse().map_err(ParsePosError).loc(loc_msg)?; // 2
+        Ok(Coordinate::new(chromosome, position))
+    }
+
+    /// Skip to the expected `INFO` field idx and serialize it into `self.info` as a `InfoField` struct.
+    /// # Errors:
+    /// - if `self.idx > INFO_FIELD_INDEX constant.
+    pub fn parse_info_field(&mut self) -> Result<()> {
+        let loc_msg = "While attempting to parse INFO field";
+        if self.idx > INFO_FIELD_INDEX {
+            return Err(VCFReaderError::InvalidFieldIdx(INFO_FIELD_INDEX, self.idx)).loc(loc_msg)
+        }
+        
+        self.skip(INFO_FIELD_INDEX - self.idx).loc(loc_msg)?;
+        self.info = InfoField::new(self.next_field().loc(loc_msg)?);
+        Ok(())
+    }
+
+    /// Skip to othe expected sample genotypes fields and fill `self.buf` with all subsequent fields until an EOL is found.
+    /// - Once this method is called, `self.buf` is expected to contain all the samples genotypes for the current line.
+    /// - Since we're working with raw bytes:
+    ///   - REF (0) == 48
+    ///   - ALT (1) == 49
+    ///   - SEP (|) == 124
+    pub fn fill_genotypes(&mut self) -> Result<()> {
+        let loc_msg = "While attempting to parse INFO field";
+        if self.idx > GENOTYPES_START_IDX {
+            return Err(VCFReaderError::InvalidFieldIdx(GENOTYPES_START_IDX, self.idx)).loc(loc_msg)
+        }
+        self.clear_buffer();
+        self.skip(GENOTYPES_START_IDX-self.idx).loc(loc_msg)?;
+        self.next_eol().loc(loc_msg)?;
+        self.genotypes_filled = true;
+        Ok(())
+    }
+
+    /// Clear out the contents of `self.buf`
+    pub fn clear_buffer(&mut self) {
+        self.buf.clear();
+    }
+
+    /// Returns `true` if the file has not yet encountered an EOF.
+    pub fn has_data_left(&mut self) -> std::io::Result<bool> {
+        self.source.fill_buf().map(|b| ! b.is_empty())
+    }
+
+    /// Clone and return the contents of `self.samples`
+    pub fn samples(&self) -> Vec<String> {
+        self.samples.clone()
+    }
+
+    /// Check the file extension of the provided file, and return an appropriate BufReader
+    /// - `.vcf` -> Return a default BufReader
+    /// - `.gz`  -> Return a parallel BGZF decompressor/reader
+    /// # Arguments 
+    /// - `path`   : path leading to the targeted vcf file.
+    /// - `threads`: number of user-provided decompression threads for the BGZF decompressor.
+    ///              (Only relevant if the file extension ends with `.gz`)
+    fn get_reader(path: &Path, threads: usize) -> Result<Box<dyn BufRead>> {
+        use VCFReaderError::{InvalidFileExt, Open};
+        let path_ext = path.extension().with_loc(||InvalidFileExt)?;
+        let vcf      = File::open(path).with_loc(|| Open)?;
+        let source: Box<dyn Read> = match path_ext.to_str(){
+            Some("vcf") => Box::new(vcf),
+            Some("gz")  => ParDecompressBuilder::<Bgzf>::new().maybe_num_threads(threads).maybe_par_from_reader(vcf),
+            _           => return loc!(InvalidFileExt)
+        };
+        Ok(Box::new(BufReader::new(source)))
+    }
+
+    /// Skip all vcf description lines until the header line has been found (i.e. the line starts with '#CHROM').
+    /// Then, fill `self.samples` with the contents of this line. 
+    /// # Arguments:
+    /// - `reader`: a BufReader targeting a vcf file.
+    /// 
+    /// # Panics:
+    /// - If the reader reads all the file contents without encountering any line starting with the '#CHROM' pattern.
+    fn parse_samples_id(reader: &mut Box<dyn BufRead + 'a>) -> Result<Vec<String>>{
+        let mut samples = Vec::new();
+        for line in reader.lines() {
+            let line = line.with_loc(|| VCFReaderError::ParseLine)?;
+            let split_line: Vec<&str> = line.split('\t').collect();
+            if split_line[0] == "#CHROM" {
+                samples.reserve(split_line.len());
+                samples.extend(split_line.iter().map(|ind| ind.to_string()));
+                return Ok(samples)
+            }
+        }
+        panic!();
+    }
+}
+
+impl<'a> GenotypeReader for VCFReader<'a> {
+    // Return the alleles for a given SampleTag. Search is performed using `sample_tag.idx()`;
+    fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2]> {
+        use GenotypeReaderError::{MissingAlleles, InvalidSampleIndex};
+        let geno_idx = 4 * sample_tag.idx().as_ref().ok_or(InvalidSampleIndex)
+            .with_loc(|| format!("While retrieving alleles of {}", sample_tag.id()))?;
+            
+        let retrieve_err = || format!("Failed to retrieve the alleles of sample {} within the current VCF.", sample_tag.id());
+        let haplo1 = self.buf.get(geno_idx  ).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
+        let haplo2 = self.buf.get(geno_idx+2).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
+        Ok([haplo1, haplo2])
+    }
+    
+    // Return the alleles frequencies for a given population id.
+    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64> {
+        use GenotypeReaderError::MissingFreq;
+        self.info.get_pop_allele_frequency(pop)
+            .map_err(|_|MissingFreq(pop.to_string()))
+            .loc("While parsing coordinate")
+    }
+
+    fn fetch_input_files(input_dir: &Path) -> Result<Vec<PathBuf>> {
+        let vcfs = parse::fetch_input_files(input_dir, &VCF_EXT).loc("While searching for candidate vcf files.")?;
+        debug!("Found the following vcf file candidates as input for the pedigree simulations: {:#?}", vcfs);
+        Ok(vcfs)
+    }
+}

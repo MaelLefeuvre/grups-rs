@@ -1,15 +1,17 @@
-use genome::jackknife::{JackknifeBlocks, JackknifeEstimates};
-use genome::{Genome};
-use crate::pileup::{Pileup, Line};
+use std::{fmt, collections::BTreeSet};
 
+use genome::jackknife::{JackknifeBlocks, JackknifeEstimates};
+use genome::Genome;
+use located_error::LocatedError;
+
+use crate::pileup::{Pileup, Line};
+use super::ComparisonError;
 use super::{Individual, Pwd};
 use super::{PAIRS_FORMAT_LEN, COUNT_FORMAT_LEN, AVERG_FORMAT_LEN, DISPL_SEP, FLOAT_FORMAT_PRECISION};
 
-use std::error::Error;
-use std::{
-    fmt,
-    collections::BTreeSet
-};
+use anyhow::Result;
+
+
 use log::warn;
 
 // One pass standard deviation calculator: http://suave_skola.varak.net/proj2/stddev.pdf
@@ -108,22 +110,20 @@ impl Comparison {
 
     /// Compare our two individuals at the given SNP position ; increment the appropriate counters after the comparison 
     /// has been made.
-    pub fn compare(&mut self, line: &Line) -> Result<(), Box<dyn Error>> {
+    pub fn compare(&mut self, line: &Line) -> Result<()> {
         //let pwd = Pwd::one(line.coordinate, &random_nucl);
-
-        let pwd = if self.self_comparison {
-            Pwd::deterministic_self(line, &self.pair)
-        } else {
-            Pwd::deterministic_pairwise(line, &self.pair)
+        let loc_msg = || format!("While comparing pair {:?}", self.pair);
+        let pwd = match self.self_comparison {
+            true  => Pwd::deterministic_self(line, &self.pair),
+            false => Pwd::deterministic_pairwise(line, &self.pair)
         };
 
         let current_block = self.blocks
             .find_block(&line.coordinate)
-            .ok_or(format!("Cannot find corresponding Jackknife Block for {}", line.coordinate))?;
-        current_block.add_count();
+            .ok_or(ComparisonError::MissingBlock(line.coordinate)).with_loc(loc_msg)?;
 
+        current_block.add_count();
         current_block.add_pwd(pwd.avg_local_pwd());
-        
 
         self.positions.insert(pwd);
         Ok(())
@@ -206,9 +206,10 @@ mod tests {
     use genome::SNPCoord;
 
     use crate::pileup;
-    use crate::comparisons::tests::common;
+    use crate::comparisons::test::common;
     use super::*;
     use super::super::UNDEFINED_LABEL_PREFIX;
+
 
     #[test]
     fn pair_indices_getter() {
@@ -217,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    fn satisfiable_depth_both() -> Result<(), Box<dyn Error>> {
+    fn satisfiable_depth_both() -> Result<()> {
         // If both individual has depth >= pileup.depth ==> return false. 
         let comparison = common::mock_comparison(false);
         let pileups = common::mock_pileups(&[2,2], 30, false)?;
@@ -226,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn satisfiable_depth_one() -> Result<(), Box<dyn Error>> {
+    fn satisfiable_depth_one() -> Result<()> {
         // If one or the other individual has depth < pileup.depth ==> return false. 
         let comparison = common::mock_comparison(false);
         let pileups = common::mock_pileups(&[3,1], 30, false)?;
@@ -238,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn satisfiable_depth_none() -> Result<(), Box<dyn Error>> {
+    fn satisfiable_depth_none() -> Result<()> {
         // If both individual has depth < pileup.depth ==> return false. 
         let comparison = common::mock_comparison(false);
         let pileups = common::mock_pileups(&[1,1], 30, false)?;
@@ -253,7 +254,7 @@ mod tests {
         ref_base  : char,
         nucs      : [&str; 2],
         quals     : [&str; 2]
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<()> {
         for pos in positions {
             let raw_line=format!("22\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 *pos,
@@ -271,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compare_pairwise_no_pwd() -> Result<(), Box<dyn Error>> {
+    fn test_compare_pairwise_no_pwd() -> Result<()> {
         let mut mock_comparison = common::mock_comparison(false);
         test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "TT"], ["JJ", "AA"])?;
 
@@ -284,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compare_self_no_pwd() -> Result<(), Box<dyn Error>> {
+    fn test_compare_self_no_pwd() -> Result<()> {
         let mut mock_comparison = common::mock_comparison(true);
 
         test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "GG"], ["JJ", "AA"])?;
@@ -299,7 +300,7 @@ mod tests {
 
 
     #[test]
-    fn test_compare_pairwise_pwd() -> Result<(), Box<dyn Error>> {
+    fn test_compare_pairwise_pwd() -> Result<()> {
         let mut mock_comparison = common::mock_comparison(false);
         test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "CC"], ["JJ", "AA"])?;
 
@@ -312,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phred_increment() -> Result<(), Box<dyn Error>> {
+    fn test_phred_increment() -> Result<()> {
         let mut mock_comparison = common::mock_comparison(false);
         let mut expected_sum_phred: u32 = 0;
         let test_quals = ["5", "?"];
@@ -333,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn update_positions() -> Result<(), Box<dyn Error>> {
+    fn update_positions() -> Result<()> {
         let mut mock_comparison = common::mock_comparison(false);
         test_compare(&mut mock_comparison, &[10,20], 'C', ["TT", "TT"], ["JJ", "JJ"])?;
         test_compare(&mut mock_comparison, &[30,40], 'C', ["TT", "CC"], ["JJ", "AA"])?; 
@@ -347,7 +348,7 @@ mod tests {
         
         // Remove the last position from the comparisons.
         let x = SNPCoord::try_new(22, 40, 'N', 'N')?;
-        mock_comparison.positions.remove(&Pwd::initialize(x));
+        mock_comparison.positions.remove(&Pwd::initialize(x.coordinate));
 
         // Check pwd statistics are updated and sane...
         assert_eq!(mock_comparison.get_sum_phred(), 118.5);       // (J + A)

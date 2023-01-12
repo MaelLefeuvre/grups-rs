@@ -1,6 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use genome::{SNPCoord, coordinate::{Position, ChrIdx, Coordinate}, snp::Allele};
+use genome::{coordinate::{Position, ChrIdx, Coordinate}, snp::Allele};
 use pwd_from_stdin::pileup::{Pileup, Line};
+
 
 use located_error::prelude::*;
 use itertools::Itertools;
@@ -9,7 +10,7 @@ use itertools::Itertools;
 /// e.g.: 1|75681|G|5|..,..|JJEJJ|3|..C DDD$
 ///       + --------- + --------- + ------ +
 ///           step 0      step 1     step 2
-fn iter_window<'a>(line: &'a str) -> impl Iterator<Item=(usize, usize)> + 'a {
+fn iter_window(line: &str) -> impl Iterator<Item=(usize, usize)> + '_ {
     std::iter::once(0).chain(
         line.match_indices('\t').skip(2)
             .step_by(3)

@@ -1,7 +1,12 @@
-use std::error::Error;
 use log::{info, debug, warn};
+use located_error::prelude::*;
+//pub mod io;
+use grups_io::{
+    parse::{self, FileKey},
+    read::PanelReader,
+    read::genotype_reader::{GenotypeReader, VCFReader, FSTReader},
+};
 
-pub mod io;
 pub mod pedigrees;
 
 use pwd_from_stdin::comparisons::Comparisons;
@@ -25,10 +30,10 @@ use pwd_from_stdin::comparisons::Comparisons;
 //   + [ DONE  ][CRUCIAL] Document pedigree_sims::* libraries.
 //
 pub fn run(
-    com_cli          : parser::Common,
+    com_cli           : parser::Common,
     ped_cli           : parser::PedigreeSims,
     comparisons       : &mut Comparisons,
-) -> Result<(), Box<dyn Error>>
+) -> Result<()>
 {
 
     // ----------------------------- Sanity checks 
@@ -53,25 +58,22 @@ pub fn run(
         }
     }
 
-
-
-
     // ----------------------------- Prepare output files
     // ---- Add final_results files.
-    let mut output_files = pwd_from_stdin::io::get_output_files(
+    let mut output_files = parse::get_output_files(
         &mut com_cli.get_file_prefix(None)?, // extract the user requested file prefix
         com_cli.overwrite,                       // Should we allow file overwriting ?
-        pwd_from_stdin::io::FileKey::Ext,                   // What key are we using to hash these files ?
+        FileKey::Ext,                   // What key are we using to hash these files ?
         &["".to_string()],   // Vector of filename suffixes.
         &["result"]          // Vector of file extensions.
     )?;
 
     // ---- Add blocks files.
     output_files.extend(
-        pwd_from_stdin::io::get_output_files(
+        parse::get_output_files(
             &mut com_cli.get_file_prefix(Some("simulations/"))?,
             com_cli.overwrite,
-            pwd_from_stdin::io::FileKey::Suffix,
+            FileKey::Suffix,
             &comparisons.get_pairs(),
             &["sims"]
         )?.into_iter());
@@ -79,24 +81,21 @@ pub fn run(
     debug!("Output files: {:#?}", output_files);
 
     // --------------------- Fetch the input panel.
-    let panel = match ped_cli.panel.clone() {
-        Some(path) => path,
-        None => io::vcf::fetch_input_panel(&ped_cli.data_dir)?,
-    };
-
-    // --------------------- Parse Input Samples Panel
-    let mut panel = io::vcf::reader::VCFPanelReader::new(panel.as_path())?;
+    let mut panel = match ped_cli.panel.as_ref() {
+        Some(path) => PanelReader::new(path),
+        None       => PanelReader::from_dir(&ped_cli.data_dir),
+    }?;
 
     let input_paths = match ped_cli.mode {
         parser::Mode::Vcf => {
             // --------------------- Get the list of input vcfs.
             info!("Fetching input VCF files in {}", &ped_cli.data_dir.to_str().unwrap_or("None"));
-            let input_vcf_paths = io::vcf::get_input_vcfs(&ped_cli.data_dir)?;
+            let input_vcf_paths = VCFReader::fetch_input_files(&ped_cli.data_dir)?;
             panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
             input_vcf_paths
         },
         parser::Mode::Fst => {
-            io::fst::get_input_fst(&ped_cli.data_dir)?
+            FSTReader::fetch_input_files(&ped_cli.data_dir)?
         },
     };
 
@@ -125,7 +124,8 @@ pub fn run(
         ped_cli.snp_downsampling_rate,
         ped_cli.af_downsampling_rate,
         &ped_cli.seq_error_rate, 
-        &ped_cli.contamination_rate)?;
+        &ped_cli.contamination_rate
+    )?;
 
     
     // --------------------- Perform pedigree simulations for each pedigree, using all chromosomes.

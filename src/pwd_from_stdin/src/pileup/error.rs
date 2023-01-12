@@ -14,8 +14,18 @@ pub enum PileupError {
     RefSkip,
     #[error("Length of nucleotides and scores differ vector differ.")]
     UnequalLength,
-    #[error("Failed to parse pileup line")]
-    ParseLine,
+
+    #[error("Failed to parse allele within pileup")]
+    ParseRef(#[from] genome::snp::ParseAlleleError),
+
+    #[error("Failed to parse chromosome into a valid u8")]
+    ParseChr(#[from] genome::coordinate::ChrIdxError),
+    
+    #[error("Failed to parse genomic position into a valid u32")]
+    ParsePos(#[from] genome::coordinate::ParsePositionError),
+
+    #[error("Failed to parse pileup depth int a valid u8")]
+    ParseDepth(#[from] std::num::ParseIntError),
 }
 
 #[cfg(test)]
@@ -33,11 +43,4 @@ mod tests {
         let error = format!("{}", PileupError::UnequalLength);
         assert!( !error.is_empty())
     }
-
-    #[test]
-    fn pileup_err_parseline_display() {
-        let error = format!("{}", PileupError::ParseLine);
-        assert!( !error.is_empty())
-    }
-
 }

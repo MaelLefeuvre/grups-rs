@@ -1,7 +1,7 @@
 mod error;
 use std::{fmt::{Display, Debug}, str::FromStr, borrow::Borrow};
 
-use error::ParseAlleleError;
+pub use error::ParseAlleleError;
 
 /// Struct representing a pileup Allele
 /// Usual cases:     A: Adenine    C: Cytosine    G: Guanine    T: Thymine
@@ -44,7 +44,7 @@ impl FromStr for Allele {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let char = s.parse::<char>().map_err(|_| ParseAlleleError)?;
-        Ok(Self::try_from(char)?)
+        Self::try_from(char)
     }
 }
 
@@ -69,10 +69,7 @@ impl Borrow<char> for Allele {
 
 impl Allele {
     pub fn is_known(&self) -> bool {
-        match self {
-            Self::N => false,
-            _       => true,
-        }
+        !matches!{self, Self::N}
     }
 }
 

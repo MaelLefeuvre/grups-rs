@@ -1,7 +1,7 @@
 use std::{str::FromStr, fmt::{Display, Formatter, self}, ops::{Deref, Add}, hash::{Hash, Hasher}, cmp::Ordering};
 
 mod error;
-use error::ChrIdxError;
+pub use error::ChrIdxError;
 
 use located_error::prelude::*;
 
@@ -9,14 +9,9 @@ use located_error::prelude::*;
 pub struct ChrIdx(pub u8);
 
 impl FromStr for ChrIdx {
-    
-    type Err = anyhow::Error;
-
+    type Err = ChrIdxError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let inner = s.replace("chr", "")
-            .parse::<u8>()
-            .loc(ChrIdxError(s.to_owned()))?;
-        Ok(Self(inner))
+        Ok(Self(s.replace("chr", "").parse::<u8>()?))
     }
 }
 
@@ -38,9 +33,9 @@ impl From<u8> for ChrIdx {
     }
 }
 
-impl Into<u8> for ChrIdx {
-    fn into(self) -> u8 {
-        self.0
+impl From<ChrIdx> for u8 {
+    fn from(val: ChrIdx) -> u8 {
+        val.0
     }
 }
 

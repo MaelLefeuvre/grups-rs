@@ -87,10 +87,10 @@ impl Genome {
     
         let mut skipped_chrs = Vec::new();
         for (index,line) in file.lines().enumerate() {
-            let line = line.map_err(|err| ParseLine{idx: index, err: err})?;
+            let line = line.map_err(|err| ParseLine{idx: index, err})?;
             match Chromosome::from_str(&line) {
                 Err(_) => {
-                    let skipped = line.split("\t").take(1).collect::<Vec<&str>>()[0].to_string();
+                    let skipped = line.split('\t').take(1).collect::<Vec<&str>>()[0].to_string();
                     skipped_chrs.push(skipped);
                 }
                 Ok(chr) =>{ 

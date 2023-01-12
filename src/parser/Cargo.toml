@@ -1,24 +1,28 @@
 [package]
   name              = "parser"
-  edition           = "2021"
   version.workspace = true
   authors.workspace = true
   publish.workspace = true
+  edition.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
   name = "parser"
-  path = "src/parser.rs"
+  path = "src/lib.rs"
 
 [dependencies]
-  clap       = {version = "3.2.15", features = ["derive"]}
-  serde      = {version = "1.0",   features = ["derive"]} 
-  atty       = "0.2" 
-  serde_yaml = "0.8"
-  chrono     = "0.4"
-  log        = "0.4.16"
-  num        = "0.4.0"
-  fastrand   = "1.8.0"
+  located-error = {path = "../located-error"}
+  clap          = {version = "3.2.15", features = ["derive"]}
+  serde         = {version = "1.0",   features = ["derive"]} 
+  atty          = "0.2" 
+  serde_yaml    = "0.8"
+  chrono        = "0.4"
+  log           = "0.4.16"
+  num           = "0.4.0"
+  fastrand      = "1.8.0"
+  thiserror     = "1.0"
+  anyhow        = "1.0"
+
 
 

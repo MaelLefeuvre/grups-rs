@@ -1,9 +1,9 @@
 [package]
   name              = "logger"
-  edition           = "2021"
   version.workspace = true
   authors.workspace = true
   publish.workspace = true
+  edition.workspace = true
 
 [lib]
   name = "logger"

@@ -1,0 +1,25 @@
+[package]
+  name              = "grups-io"
+  version.workspace = true
+  authors.workspace = true
+  publish.workspace = true
+  edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+  located-error  = {path = "../located-error"}
+  genome         = {path = "../genome"}
+  log            = "0.4.16"
+  fastrand       = "1.8.0"
+  gzp            = "0.9.5"
+  ahash          = "0.7.6"
+  fst            = "0.4"
+  memmap         = "0.7.0"
+  thiserror      = "1.0"
+  anyhow         = "1.0"
+  mockall        = "0.11.0" #@TODO: find a way to put this back in dev-dependencies 
+  regex         = "1.5.0"
+
+[dev-dependencies]  
+
