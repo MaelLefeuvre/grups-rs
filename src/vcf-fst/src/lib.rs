@@ -317,10 +317,11 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
         return Err(GenomeFstError::DisplayPath).loc(loc_msg)
     };
 
-    let Some(source_file) = panel.source_file.to_str() else {
+    let Some(Some(source_file)) = panel.source_file.file_name().map(|path| path.to_str()) else {
         return Err(GenomeFstError::DisplayPath).loc(loc_msg)
     };
     let output_panel_path = format!("{output_dir}/{source_file}");
+    
     info!("output_panel_path: {output_panel_path}");
     panel.copy_from_source(Path::new(&output_panel_path))?;
     
