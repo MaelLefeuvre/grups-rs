@@ -4,7 +4,13 @@
 \alias{app}
 \title{Main shiny dashboard application}
 \usage{
-app(ui, server, data_dir = "./grups_output", ...)
+app(
+  ui,
+  server,
+  data_dir = "./grups_output",
+  sample_regex = "[A-Za-z0-9]+([-0-9]+){0,1}",
+  ...
+)
 }
 \description{
 Main shiny dashboard application

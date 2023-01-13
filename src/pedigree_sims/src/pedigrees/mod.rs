@@ -92,7 +92,7 @@ impl Pedigrees {
 
         // ---- Randomly sample contaminant SampleTags, according to the requested population and number of individuals.
         let samples_contam_tags: Vec<Vec<SampleTag>> = panel.fetch_contaminants(contam_pop, contam_num_ind)
-            ?;
+            .with_loc(|| format!("Failed to fetch contaminating individuals from the {contam_pop:?} population"))?;
 
         // ---- Iterate on each pileup comparison, and initialize pedigree simulation replicates for them.
         for comparison in comparisons.iter() {
@@ -114,7 +114,8 @@ impl Pedigrees {
 
             // ---- Initialize pedigree replicates.
             pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel)
-                .with_loc(|| format!("While attempting to populate vector of pedigrees for {}", comparison.get_pair()))?;
+                .map_err(PedigreeError::PopulateError)
+                .with_loc(|| format!("While attempting to populate a vector of pedigrees for {}", comparison.get_pair()))?;
             self.pedigrees.insert(comparison_label.to_owned(), pedigree_reps);
         }
         Ok(())
@@ -147,7 +148,6 @@ impl Pedigrees {
             let pair_indices  = comparison.get_pair_indices();
             let pair_label    = comparison.get_pair();
             let pedigree_reps = self.pedigrees.get_mut(&pair_label).ok_or_else(|| MissingPedVec(pair_label.to_string())).loc(loc_msg)?;
-
 
             // ---- Instantiate a sequencing error `ParamRateGenerator` if the user specified sequencing error rates.
             //      If the user did not provide any, assign `None` -> the phred-scores of the pileup will then be used to compute the seq-error probability

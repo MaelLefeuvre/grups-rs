@@ -9,5 +9,8 @@ pub enum PedigreeError {
     MissingPedVec(String),
 
     #[error("Pedigree Vector does not contain any contaminant")]
-    MissingContaminant
+    MissingContaminant,
+
+    #[error("Failed to populate vector of pedigrees")]
+    PopulateError(#[source] anyhow::Error)
 }

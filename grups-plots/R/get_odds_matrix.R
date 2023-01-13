@@ -6,11 +6,11 @@ get_odds_matrix <- function(sims_data, observed_results, pair, labels_to_keep) {
 
   obs_pwd = observed_results[which(observed_results$Pair_name == pair),]$Corr.Avg.PWD
 
-  # Compute a matrix of z-scores. (this computation is all over the place)
+  # Compute a matrix of z-scores. (@TODO this computation is all over the place)
   obsDistZ = rep(NA, length(labels_relationships))
-  names(obsDistZ) <- labels_relationships
+  names(obsDistZ)  <- labels_relationships
   obsProb = rep(NA, length(labels_relationships))
-  names(obsProb) <- labels_relationships
+  names(obsProb)   <- labels_relationships
   for (rel in labels_relationships) {
     relrows         <- which(sims_data$label == rel)
     rel_avg         <- sims_data[relrows,]$avg

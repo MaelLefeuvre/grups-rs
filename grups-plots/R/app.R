@@ -10,7 +10,6 @@ app <- function(ui,
 		sample_regex = "[A-Za-z0-9]+([-0-9]+){0,1}", 
 		...
 ) {
-
   # ----- Format a file pair regular expression
   pair_regex = paste0("(?<=-)(",sample_regex,"-",sample_regex,")")
 
@@ -97,6 +96,23 @@ app <- function(ui,
   )
 
   ui <- shiny::fluidPage(
+
+  # ---- Dimensions of the current window
+  tags$head(tags$script('
+                        var dimension = [0, 0];
+                        $(document).on("shiny:connected", function(e) {
+                        dimension[0] = window.innerWidth;
+                        dimension[1] = window.innerHeight;
+                        Shiny.onInputChange("dimension", dimension);
+                        });
+                        $(window).resize(function(e) {
+                        dimension[0] = window.innerWidth;
+                        dimension[1] = window.innerHeight;
+                        Shiny.onInputChange("dimension", dimension);
+                        });
+                        ')),
+
+
     theme = bslib::bs_theme(bootswatch = "darkly", version = 4),
     shiny::navbarPage("GRUPS-plots",
       # ---- 1. Render summary table.
@@ -231,6 +247,20 @@ app <- function(ui,
         )
       ),
 
+      # ----- TEST: Render kinship matrix
+      shiny::tabPanel("Kinship Matrix",
+        shiny::fluidPage(
+          shiny::sidebarLayout(
+            shiny::sidebarPanel(
+                shiny::uiOutput("kinship_matrix_order") %>% shinycssloaders::withSpinner()
+            ),
+            shiny::mainPanel(
+              plotly::plotlyOutput("kinship_matrix") %>% shinycssloaders::withSpinner(),
+            )
+          ),
+        )
+      ),
+
       # ---- 3. Render violin plots
       shiny::tabPanel("Simulations plot",
         shiny::fluidPage(
@@ -252,7 +282,7 @@ app <- function(ui,
             ),
             shiny::mainPanel(
               shiny::tabsetPanel(
-                shiny::tabPanel("Plot",
+                shiny::tabPanel("Violin Plots",
                   plotly::plotlyOutput("sims_violinplot") %>%
                     shinycssloaders::withSpinner(),
                   DT::dataTableOutput("ks_normality_test") %>%
@@ -341,6 +371,16 @@ app <- function(ui,
       )
     )
 
+    # ---- Test: Get relatednes
+    output$kinship_matrix_order <- shiny::renderUI({
+      shinyjqui::orderInput(
+        inputId = "kinship_matrix_ordered_labels",
+        label = "Re-order (drag items to change)",
+        items = unique(load_results_file()$Most_Likely_rel)
+      )
+    })
+
+
     # ---- 2a. Render pairwise difference barplot.
     output$pwd_barplot <- plotly::renderPlotly(
       grups.plots::plot_pairwise_diff(
@@ -351,7 +391,20 @@ app <- function(ui,
       )
     )
 
-    # ---- 2b. Render pairwise dataframe
+    # ---- 2b.Render kinship matrix
+    shiny::observeEvent(input$dimension, {
+      output$kinship_matrix <- plotly::renderPlotly(
+        grups.plots::plot_kinship_matrix(
+          kinship_matrix = grups.plots::get_kinship_matrix(load_results_file()),
+          dimensions = input$dimension,
+          order = input$kinship_matrix_ordered_labels
+        )
+      )
+    })
+
+    #kinship_matrix_ordered_labels
+
+    # ---- 2c. Render pairwise dataframe
     output$pwd_dataframe <- DT::renderDataTable(
       DT::datatable(
         load_pairwise_dataframe()$data,

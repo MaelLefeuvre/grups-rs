@@ -24,8 +24,10 @@ pub fn pedigree_parser(path: &Path) -> Result<Pedigree> {
     let reader = BufReader::new(File::open(path).map_err(ParsePedigree).with_loc(loc_msg)?);
 
     // ---- Parse the pedigree definition file.
-    for line in reader.lines() {
-        let line = line.map_err(ParsePedigree).with_loc(loc_msg)?;
+    let loc_msg = |ctxt: &str, i: usize| format!("{ctxt} while parsing line n°{i} in the pedigree definition file");
+    for (i, line) in reader.lines().enumerate() {
+        let line = line.map_err(ParsePedigree)
+            .with_loc(||loc_msg("Failed to convert line to string", i))?;
         let line: Vec<&str> = line.split('#').collect();
         match line[0].chars().next() { // Skip comments and empty lines.
             Some('#') | None => continue,
@@ -46,16 +48,22 @@ pub fn pedigree_parser(path: &Path) -> Result<Pedigree> {
         match parse_mode {
             Some(ParseMode::Individuals)   => {
                 let label = line[0].to_string();
-                pedigree.add_individual(&label, None)?;
+                pedigree.add_individual(&label, None)
+                    .with_loc(||loc_msg(&format!("Failed add individual {label}"), i))?;
             },
             Some(ParseMode::Relationships) => {
-                let (offspring, parent1, parent2) = parse_pedline(line, "=repro(")?;
-                pedigree.set_relationship(&offspring, (&parent1, &parent2))?;
+                let (offspring, parent1, parent2) = parse_pedline(line, "=repro(")
+                    .with_loc(||loc_msg("Failed to parse a valid relationship", i))?;
+                pedigree.set_relationship(&offspring, (&parent1, &parent2))
+                    .with_loc(||loc_msg(&format!("Failed to set a valid relationship for {offspring}"), i))?;
 
             },
             Some(ParseMode::Comparisons)   => {
-                let (label, ind1, ind2) = parse_pedline(line, "=compare(")?;
-                pedigree.add_comparison(&label, (&ind1, &ind2))?;
+                let (label, ind1, ind2) = parse_pedline(line, "=compare(")
+                    .with_loc(||loc_msg("Failed to parse a valid comparison", i))?;
+                pedigree.add_comparison(&label, (&ind1, &ind2))
+                    .with_loc(||loc_msg(&format!("Failed to set a valid comparison for {label}"), i))?;
+
             },
             None                           => continue
         };

@@ -26,11 +26,11 @@ ggggson=repro(gggson,gggson_mate)
 
 # finally, define pairwise comparisons for which to calculate/output genetic distances and later perform plotting
 COMPARISONS
-Self=compare(father,father)      # IDENTICAL RELATIONSHIP
-First=compare(father,son)        # First Degree
-Second=compare(father,gson)      # Second Degree
-Third=compare(father,ggson)      # Third Degree
-Fourth=compare(father,gggson)    # Fourth Degree
-Fifth=compare(father,ggggson)    # Fifth Degree
-
+Self=compare(father,father)       # Identical Twins or Self comparison.
+First=compare(father,son)         # First Degree
+Second=compare(father,gson)       # Second Degree
+Third=compare(father,ggson)       # Third Degree
+Fourth=compare(father,gggson)     # Fourth Degree
+Fifth=compare(father,ggggson)     # Fifth Degree
+Unrelated=compare(father,mother)  # Unrelated
 

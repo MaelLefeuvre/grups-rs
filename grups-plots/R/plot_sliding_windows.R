@@ -46,7 +46,7 @@ plot_sliding_window <- function(block_dataframe, pair) {
                    scrollZoom  = TRUE,
                    toImageButtonOptions = list(
                     format = "svg",
-                    filename = paste0("sliding_window-", pair),
+                    filename = paste0("sliding_window-", pair)
                     )
                   )
 }

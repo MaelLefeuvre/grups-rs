@@ -56,10 +56,11 @@ impl PedigreeReps {
     /// - if pop label is invalid.
     /// - returns `std::io::result::InvalidData` if an error occurs while parsing the pedigree definition file.
     pub fn populate(&mut self, pedigree_path: &Path, pop: &String, panel: &PanelReader) -> Result<()> {
-        for _ in 0..self.inner.capacity() {
-            let mut pedigree = pedigree::parser::pedigree_parser(pedigree_path)?;
-            pedigree.set_tags(panel, pop, self.contaminants.as_ref())?;
-            pedigree.assign_offspring_strands()?;
+        let loc_msg = |ctxt: &str, i: usize| format!("While attempting to {ctxt} pedigree n°{i}");
+        for i in 0..self.inner.capacity() {
+            let mut pedigree = pedigree::parser::pedigree_parser(pedigree_path).with_loc(||loc_msg("parse", i))?;
+            pedigree.set_tags(panel, pop, self.contaminants.as_ref()).with_loc(||loc_msg("set population tags of", i))?;
+            pedigree.assign_offspring_strands().with_loc(||loc_msg("assign offspring strands of", i))?;
             self.inner.push(pedigree);
         }
         Ok(())

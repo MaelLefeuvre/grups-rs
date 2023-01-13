@@ -14,9 +14,13 @@ RoxygenNote: 7.2.0
 Imports:
   plotly,
   shiny,
+  shinyjqui,
   shinycssloaders,
   DT,
   dplyr,
   zoo,
   stringr,
-  reshape2
+  reshape2,
+  tidyr,
+  catmaply,
+  viridis
