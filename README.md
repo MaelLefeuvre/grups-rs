@@ -21,6 +21,15 @@ user@desktop:~$ curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
     
 See `Cargo.toml` for a complete list of crate dependencies (these are automatically downloaded by cargo when setting up compilation)
 
+### 2. libsvm
+
+Rust uses ordinally partitionned Sequence Vector Machines (SVMOPs) to find the best separation between expected distributions of relatedness and thus requires `libsvm-dev` to be installed on your workspace:
+```Bash
+user@desktop:~$ sudo apt-get install libsvm-dev
+```
+
+The original publication of libsvm can be found [here](https://doi.org/10.1145/1961189.1961199). More specifically, see [this paper](https://doi.org/10.1007/3-540-44795-4_13) for a more detailled explanation regarding SVMOPs.
+
 ---
 ## Installation from source
 

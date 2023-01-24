@@ -20,9 +20,9 @@ load_simfile <- function(path) {
   data$label <- factor(data$label)
   data$label <- factor(
     data$label,
-    levels = levels(data$label)[order(aggregate(avg~label,
-                                                data,
-                                                FUN = mean)$avg)]
+    levels = levels(data$label)[
+      order(aggregate(avg ~ label, data, FUN = mean)$avg)
+    ]
   )
   data
 }

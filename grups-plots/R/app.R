@@ -3,15 +3,23 @@
 #' @import plotly
 #' @import stringr
 #' @import shinycssloaders
+#' @import bslib
+#' @import progressr
+#' @importFrom dplyr %>%
 #' @export
-app <- function(ui, 
-		server, 
-		data_dir = "./grups_output", 
-		sample_regex = "[A-Za-z0-9]+([-0-9]+){0,1}", 
-		...
+app <- function(
+  ui,
+  server,
+  data_dir     = "./grups_output",
+  sample_regex = "[A-Za-z0-9]+([-0-9]+){0,1}",
+  threads      = 1,
+  ...
 ) {
+
+  progressr::handlers(global = TRUE)
+
   # ----- Format a file pair regular expression
-  pair_regex = paste0("(?<=-)(",sample_regex,"-",sample_regex,")")
+  pair_regex <- paste0("(?<=-)(", sample_regex, "-", sample_regex, ")")
 
   # ---- 0a. Configure loading spinner animation
   options(spinner.type = 8, spinner.color = "#0dc5c1")
@@ -53,6 +61,7 @@ app <- function(ui,
     full.names = TRUE,
     pattern = "\\.sims$"
   )
+
   # ---- 4b. Extract simulations, pair names, parse them into a df. [B FUNC]
   sim_files <- data.frame(
     path = sim_files,
@@ -98,7 +107,7 @@ app <- function(ui,
   ui <- shiny::fluidPage(
 
   # ---- Dimensions of the current window
-  tags$head(tags$script('
+    tags$head(tags$script('
                         var dimension = [0, 0];
                         $(document).on("shiny:connected", function(e) {
                         dimension[0] = window.innerWidth;
@@ -252,10 +261,12 @@ app <- function(ui,
         shiny::fluidPage(
           shiny::sidebarLayout(
             shiny::sidebarPanel(
-                shiny::uiOutput("kinship_matrix_order") %>% shinycssloaders::withSpinner()
+                shiny::uiOutput("kinship_matrix_order") %>%
+                  shinycssloaders::withSpinner()
             ),
             shiny::mainPanel(
-              plotly::plotlyOutput("kinship_matrix") %>% shinycssloaders::withSpinner(),
+              plotly::plotlyOutput("kinship_matrix") %>%
+                shinycssloaders::withSpinner(),
             )
           ),
         )
@@ -285,6 +296,8 @@ app <- function(ui,
                 shiny::tabPanel("Violin Plots",
                   plotly::plotlyOutput("sims_violinplot") %>%
                     shinycssloaders::withSpinner(),
+                  DT::dataTableOutput("assigned_svm_probabilities") %>%
+                    shinycssloaders::withSpinner(),
                   DT::dataTableOutput("ks_normality_test") %>%
                     shinycssloaders::withSpinner(),
                   shiny::hr(),
@@ -311,6 +324,12 @@ app <- function(ui,
         )
       ),
 
+      # ---- TEST. Render SVM results table.
+      shiny::tabPanel("SVM probabilities",
+        DT::dataTableOutput("SVM_results_df") %>%
+          shinycssloaders::withSpinner()
+      ),
+
       # ---- 4. Render yaml configuration file:
       shiny::tabPanel("Configuration",
         shiny::verbatimTextOutput("config_file") %>%
@@ -318,25 +337,54 @@ app <- function(ui,
       )
     )
   )
+
   server <- function(input, output, session) {
 
-  # 0 ---- Update block slider inputs
-  shiny::observe({
-    max_blockstep_value <- input$block_width - 1
-    new_step_value <- ifelse(
-      input$block_step < max_blockstep_value,
-      input$block_step,
-      max_blockstep_value
-    )
-    shiny::updateSliderInput(
-      session,
-      "block_step",
-      value = new_step_value,
-      min = 1,
-      max = max_blockstep_value
-    )
-  })
+    # 0 ---- Update block slider inputs
+    shiny::observe({
+      max_blockstep_value <- input$block_width - 1
+      new_step_value <- ifelse(
+        input$block_step < max_blockstep_value,
+        input$block_step,
+        max_blockstep_value
+      )
 
+      shiny::updateSliderInput(
+        session,
+        "block_step",
+        value = new_step_value,
+        min = 1,
+        max = max_blockstep_value
+      )
+    })
+
+    # 0 ---- Fit SVMOPs and compute probabilities.
+    prog_msg <-  "Fitting SVM against simulations. This may take a while..."
+    load_svm_probs <- shiny::reactive(
+      progressr::withProgressShiny(message = prog_msg, value = 0, {
+        progress <- progressr::progressor(along = seq_along(sim_files))
+        grups.plots::get_svmop_probs(
+          load_results_file(),
+          sim_files,
+          progressor = progress,
+          threads = threads
+        )
+      })
+    )
+
+    output$SVM_results_df <- DT::renderDataTable({
+      probs <- load_svm_probs()
+      DT::datatable(
+        probs,
+        style   = "bootstrap5",
+        options = list(ordering = TRUE, scrollX = FALSE),
+        class   = "table-condensed",
+        filter  = "top",
+      ) %>% DT::formatRound(
+        columns = colnames(probs)[3:length(colnames(probs))],
+        digits = 5
+      )
+    })
 
     load_results_file <- shiny::reactive({
       grups.plots::load_res_file(res_files[1])
@@ -376,7 +424,8 @@ app <- function(ui,
       shinyjqui::orderInput(
         inputId = "kinship_matrix_ordered_labels",
         label = "Re-order (drag items to change)",
-        items = unique(load_results_file()$Most_Likely_rel)
+        items = levels(load_sims_dataframe()$label),
+        width = "100px"
       )
     })
 
@@ -454,7 +503,7 @@ app <- function(ui,
     #      list(x = data[which(data$chr == x),]$start,
     #           y = data[which(data$chr == x),]$avg_pwd,
     #           color = ~as.factor(x),
-    #           #colors = RColorBrewer::brewer.pal(n=22, "Set2"),
+    #           colors = RColorBrewer::brewer.pal(n=22, "Set2"),
     #           name = x,
     #           group = as.factor(x),
     #           type = 'scatter',
@@ -546,10 +595,11 @@ app <- function(ui,
       shiny::updateCheckboxGroupInput(
         session  = session,
         inputId  = "violin_labels",
-        choices = levels(load_sims_dataframe()$label),
+        choices  = levels(load_sims_dataframe()$label),
         selected = levels(load_sims_dataframe()$label)
       )
     })
+
     shiny::observeEvent(input$violin_labels_deselect, {
       shiny::updateCheckboxGroupInput(
         session  = session,
@@ -564,6 +614,27 @@ app <- function(ui,
       load_sims_dataframe()
     )
 
+    # ---- Test
+
+    shiny::observeEvent(input$sim_pair, {
+      probs <- load_svm_probs()
+      output$assigned_svm_probabilities <- DT::renderDataTable(
+        DT::datatable(
+          probs[which(probs$Pair_name == input$sim_pair), -1],
+          style    = "bootstrap5",
+          rownames = FALSE,
+          options  = list(
+              dom = "t",
+              ordering = FALSE,
+              scrollX = TRUE,
+              width = "100%"
+            )
+        ) %>% DT::formatRound(
+          columns = colnames(probs)[3:length(colnames(probs))],
+          digits = 5
+        )
+      )
+    })
     # ---- 4h. Render KS normality test
     output$ks_normality_test <- DT::renderDataTable(
       grups.plots::test_normality(
@@ -578,13 +649,12 @@ app <- function(ui,
                        width    = "100%"
                       )
       ) %>%
-      DT::formatStyle(1:999,
-                      rows  = "p.val",
-                      color = DT::JS(paste("value  < ",
-                                           input$ks_alpha,
-                                           " ? 'red' : ''"
-                                          )
-                                    )
+      DT::formatStyle(
+        1:999,
+        rows  = "p.val",
+        color = DT::JS(
+          paste("value  < ", input$ks_alpha, " ? 'red' : ''")
+        )
       ),
       rownames = TRUE
     )

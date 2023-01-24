@@ -82,6 +82,13 @@ plot_pairwise_diff <- function(
     annotations = plot_annotations,
     margin      = list(r = 60)
   ) %>%
-
-  plotly::config(editable = TRUE, displaylogo = FALSE, scrollZoom = TRUE)
+  plotly::config(
+    editable             = TRUE,
+    displaylogo          = FALSE,
+    scrollZoom           = TRUE,
+    toImageButtonOptions = list(
+      format   = "svg",
+      filename = "raw-genetic-distances"
+    )
+  )
 }

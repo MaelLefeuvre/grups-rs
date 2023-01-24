@@ -1,5 +1,7 @@
 #' @export
 #' @import plotly
+#' @import RColorBrewer
+#' @importFrom magrittr %>%
 #' @param block_dataframe dataframe of block jackknife information.
 #' @param pair Pairwise comparison identifier, or label.
 #' @param subset string or vector of chromosomes to subset.

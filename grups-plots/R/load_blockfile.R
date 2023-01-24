@@ -16,9 +16,9 @@ load_blockfile <- function(path, width, step = 1) {
     lapply(
       unique(data$chr),
       FUN = function(chr) {
-        subset_data = data[which(data$chr == chr),]
+        subset_data <- data[which(data$chr == chr), ]
         rolled <- zoo::rollapply(
-          zoo::zoo(subset_data),
+          data  = zoo::zoo(subset_data),
           width = width,
           by    = step,
           FUN   = sum,
@@ -27,7 +27,9 @@ load_blockfile <- function(path, width, step = 1) {
 
         # Get window start values. (output $start of rollapply is the sum)
         rolled$start <- na.omit(
-          head(subset_data$start, -width + step)[seq(nrow(subset_data)) %% step == 0]
+          head(subset_data$start, -width + step)[
+            seq(nrow(subset_data)) %% step == 0
+          ]
         )
 
         data.frame(

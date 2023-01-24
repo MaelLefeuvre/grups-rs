@@ -84,11 +84,13 @@ impl FSTReader {
         let loc_msg = || format!("While attempting to set the memory of {path}");
         use FSTReaderError::{OpenFST, LoadFST, BuildFST};
         info!("Loading in memory : {path}");
+        // ---- Get file size
+        let size = std::fs::metadata(path).map_err(OpenFST).with_loc(loc_msg)?.len();
         // ---- Open FST file in ro mode.
         let mut file_handle = File::open(path).map_err(OpenFST).with_loc(loc_msg)?;
 
         // ---- Load FST set into memory.
-        let mut bytes = vec![];
+        let mut bytes = Vec::with_capacity(size as usize);
         Read::read_to_end(&mut file_handle, &mut bytes).map_err(LoadFST).with_loc(loc_msg)?;
 
         // ---- Generate FST set

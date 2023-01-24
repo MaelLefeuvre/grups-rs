@@ -67,12 +67,12 @@ impl PedigreeReps {
     }
 
     /// Aggregate the sum of all simulated pairwise differences for each pedigree comparison.
-    /// Returns a hashmap with Key = comparison_label | Value = ( sum(avg_pwd), sumsq(avg_pwd) )
+    /// Returns a hashmap with Key = comparison_label | Value = ( avg_avg_pwd, (avg_avg_pwd) )
     /// # @TODO: This data structure is error prone and should be converted to a struct or named tuple.
-    pub fn compute_sum_simulated_stats(&self) -> Result<HashMap<String, (f64,f64)>> {
+    pub fn compute_sum_simulated_stats(&self) -> Result<Vec<(String, (f64,f64))>> {
         let mut sum_simulated_stats = HashMap::new();
         for pedigree in self.iter() {
-            // Sum the avg pwd of each replicate
+            // Sum the avg pwd of each replicate.
             for comparison in pedigree.comparisons.iter() {
                 sum_simulated_stats.entry(comparison.label.to_owned()).or_insert((0.0, 0.0)).0 += comparison.get_avg_pwd()
             }
@@ -81,7 +81,6 @@ impl PedigreeReps {
         // ---- Compute the sum-squared for sample variance for each comparison.
         for pedigree in self.iter() {
             for comparison in pedigree.comparisons.iter() {
-
                 // ---- Access summary statistics 
                 let mut summary_statistics = sum_simulated_stats.get_mut(&comparison.label)
                     .with_loc(|| format!("While computing simulation summary statistics:\
@@ -92,10 +91,20 @@ impl PedigreeReps {
                 // ---- Compute the avg + sum of squares for variance / std err estimation.
                 let simulation_avg = summary_statistics.0 / self.len() as f64;
                 summary_statistics.1 += (comparison.get_avg_pwd() - simulation_avg).powf(2.0);
-
             }
         }
-        Ok(sum_simulated_stats)
+
+        // Divide by the length of the inner vector to get the avg_avg, and standard deviation.
+        let divisor = self.inner.len() as f64;
+        for stat in sum_simulated_stats.values_mut() {
+            stat.0 /= divisor;                          // avg of averages.
+            stat.1 = (stat.1 / (divisor - 1.0)).sqrt(); //std.dev.
+        }
+
+        // Sort according to decreasing values of Avg(pwd)
+        let mut ordered_rels: Vec<_> = sum_simulated_stats.into_iter().map(|(rel, stats)| (rel, stats)).collect();
+        ordered_rels.sort_by(|a, b| f64::total_cmp(&b.1.0, &a.1.0) );
+        Ok(ordered_rels)
     }
 
     //// WIP: heterozygocity ratio

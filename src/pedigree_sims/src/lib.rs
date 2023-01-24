@@ -7,6 +7,8 @@ use grups_io::{
     read::genotype_reader::{GenotypeReader, VCFReader, FSTReader},
 };
 
+mod svm;
+
 pub mod pedigrees;
 
 use pwd_from_stdin::comparisons::Comparisons;
@@ -155,13 +157,17 @@ pub fn run(
 
     //pedigrees.filter(comparisons);
 
+    // --------------------- TEST: Fit Ordinally Partitionned SVMs
+    //pedigrees.fit_svm(comparisons).expect("Failed to fit SVMOP");
+
     // --------------------- Print pedigree simulation results.
     pedigrees.write_simulations(comparisons, &output_files)?;
 
 
     // --------------------- Compute most likely relationship for each Comparison
+    info!("Assigning most likely relationships using {}...", ped_cli.assign_method);
     println!("--------------------------------------------------------------");
-    pedigrees.compute_results(comparisons, &output_files["result"])?;
+    pedigrees.compute_results(comparisons, &output_files["result"], ped_cli.assign_method)?;
 
     Ok(())
 }

@@ -1,7 +1,8 @@
 #' @export
-#' @importFrom dplyr %>%
+#' @importFrom magrittr %>%
 #' @importFrom utils read.table
 #' @import plotly
+#' @import RColorBrewer
 #' @param block_dataframe dataframe of raw simulation results
 #' @param pair Pairwise comparison identifier, or label.
 #' @return plotly violin plot
@@ -13,7 +14,9 @@ plot_pedigree_sims <- function(
 ) {
 
   # remove labels which were not requested by the user:
-  sims_dataframe <- sims_dataframe[which(sims_dataframe$label %in% labels_to_plot), ]
+  sims_dataframe <- sims_dataframe[
+    which(sims_dataframe$label %in% labels_to_plot),
+  ]
 
   # Compute mean_pwd according to label:
   simulation_avgs <- with(sims_dataframe, tapply(avg, label, mean))
@@ -76,13 +79,11 @@ plot_pedigree_sims <- function(
   lines <- list(fin_rel, sd_plus, sd_min, uncert)
 
 
-  # ---- Select color palette and suppress RColorBrewer Warnings:
-  colorpalette <- suppressWarnings(
-    RColorBrewer::brewer.pal(
-      length(levels(sims_dataframe$label)),
-      "Set2"
-    )
-  )
+
+colorpalette <- viridis::viridis_pal(
+    option    = "D",
+    direction = -1
+  )(length(labels_to_plot))
 
 
   # ---- A. Main plot.
@@ -92,7 +93,8 @@ plot_pedigree_sims <- function(
                   y        = ~avg,
                   color    = ~label,
                   colors   = colorpalette,
-                  box      = list(visible = TRUE),
+                  points   = "outliers",
+                  box      = list(visible = TRUE, notched = TRUE, notchwidth = 0.5),
                   meanline = list(visible = TRUE)
                  ) %>%
 
@@ -101,9 +103,19 @@ plot_pedigree_sims <- function(
                                y    = 0.99,
                                yref = "paper"
                               ),
-                xaxis  = list(title = "Pairwise comparison"),
+                xaxis  = list(
+                  title          = "Pairwise comparisons",
+                  showticklabels = FALSE
+                ),
                 yaxis  = list(title = "Mean genetic distance"),
-                legend = list(title = list(text = "<b>Label</b>")),
+                legend = list(
+                  title       = list(text = "<b>Label</b>"),
+                  orientation = "h",
+                  x = 0,
+                  y = -0.2,
+                  xref = "paper",
+                  yref = "paper"
+                ),
                 shapes = lines
                 ) %>%
 

@@ -1,4 +1,4 @@
-#' @export 
+#' @export
 #' @import shiny
 #' @param values vector of checkbox elements.
 #' @param title  title of the div / section.

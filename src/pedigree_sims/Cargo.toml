@@ -22,7 +22,12 @@
   ahash          = "0.7.6"
   thiserror      = "1.0"
   anyhow         = "1.0"
-
+  linfa          = "0.6"
+  linfa-svm      = "0.6"
+  linfa-datasets = { version = "0.6", features = ["winequality"] }
+  ndarray        = "0.15"
+  libsvm         = "0.4"
+  smartcore      = {version = "0.3", features=[ "ndarray-bindings", "datasets"]}
 
 [dev-dependencies]
   mockall        = "0.11.0"

@@ -11,18 +11,18 @@ load_pairwise_file <- function(
   norm_request = FALSE,
   norm_method  = "Raw",
   norm_metric  = "Pairwise-comparisons",
-  norm_value = NULL
+  norm_value   = NULL
 ) {
   # Load dataset
   pwd_data <- read.table(path, sep = "\t", header = TRUE)
 
-    subset <- c(
+    subset_cols <- c(
       "Pair_name", "Corr.Overlap", "Corr.Avg.PWD", "Corr.Sum.PWD",
       "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred"
     )
     pwd_data <- merge(
       pwd_data,
-      res_data[, subset],
+      res_data[, subset_cols],
       by.x = "Pair_name",
       by.y = "Pair_name"
     )

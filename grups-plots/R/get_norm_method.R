@@ -24,8 +24,6 @@ get_norm_method <- function(
       }
     )
   } else {
-    function(x) {
-      1
-    }
+    function(x) 1
   }
 }

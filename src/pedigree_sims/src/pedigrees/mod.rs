@@ -1,4 +1,4 @@
-use std::{ collections::HashMap, path::{Path} };
+use std::{ collections::HashMap, path::{Path}};
 
 
 use grups_io::{
@@ -10,14 +10,15 @@ use grups_io::{
 
 use located_error::prelude::*;
 use genome::{ GeneticMap, coordinate::{Coordinate, Position }};
+use parser::RelAssignMethod;
 use pwd_from_stdin::comparisons::Comparisons as PileupComparisons;
 
 use fastrand;
 use ahash::AHashMap;
-use log::{info, trace, debug};
+use log::{info, trace, debug, warn};
 
 mod pedigree_reps;
-use pedigree_reps::PedigreeReps;
+pub use pedigree_reps::PedigreeReps;
 mod pedigree;
 use pedigree::{Pedigree, pedparam::ParamRateGenerator};
 use pedigree::Contaminant;
@@ -25,6 +26,9 @@ use pedigree::Contaminant;
 mod error;
 use error::PedigreeError;
 
+mod pedigree_sim_builder;
+
+use crate::svm::LibSvmBuilder;
 
 /// A Pedigree simulator, aggregating all pileup-comparison pedigree simulation replicates.
 /// # Fields
@@ -421,6 +425,7 @@ impl Pedigrees {
     ///                     Key = comparison label | value = target output path.
     pub fn write_simulations(&self, comparisons: &PileupComparisons, output_files: &HashMap<String, String>) -> Result<()> {
         let loc_msg = "While attempting to write simulation results";
+
         // --------------------- Print pedigree simulation results.
         for comparison in comparisons.iter() {
             let comparison_label = comparison.get_pair();
@@ -441,7 +446,7 @@ impl Pedigrees {
     /// # Arguments
     /// - `comparisons`   : pileup Comparisons of our real samples.
     /// - `output_files`  : target output file where results are written.
-    pub fn compute_results(&self, comparisons: &mut PileupComparisons, output_file: &str) -> Result<()> {
+    pub fn compute_results(&self, comparisons: &mut PileupComparisons, output_file: &str, assign_method: RelAssignMethod) -> Result<()> {
         let loc_msg = "While attempting to compute corrected summary statistics";
         // ---- Resource acquisition
         let mut simulations_results = Vec::with_capacity(comparisons.len());
@@ -469,25 +474,60 @@ impl Pedigrees {
             let pedigree_vec = self.get_pedigree_vec(&comparison_label).loc(loc_msg)?;
     
             // ---- Aggregate the sum of avg. PWD for each relatedness scenario.
-            let sum_simulated_stats = pedigree_vec.compute_sum_simulated_stats()?;
-    
-            // ---- Select the scenario having the least amount of Z-score with our observed avg.PWD
-            let observed_avg_pwd        : f64 = comparison.get_avg_pwd();
-            let mut min_z_score         : f64 = f64::MAX;
-            let mut most_likely_avg_pwd : f64 = 0.0;
-            let mut most_likely_rel     : String = "None".to_string();
+            let stats = pedigree_vec.compute_sum_simulated_stats()?;
 
-            for (scenario, simulated_sum_stats) in sum_simulated_stats.iter() {
-                let avg_avg_pwd: f64 =  simulated_sum_stats.0 / pedigree_vec.len() as f64;
-                let std_dev    : f64 = (simulated_sum_stats.1 / (pedigree_vec.len() as f64 - 1.0)).sqrt();
+            let ordered_rels: Vec<&String> = stats.iter().map(|(rel, _)| rel ).collect();
+
+            // ---- Select the scenario having the least amount of Z-score with our observed avg.PWD
+            let observed_avg_pwd        : f64            = comparison.get_avg_pwd();
+            let mut min_z_score         : f64            = f64::MAX;
+            let mut most_likely_avg_pwd : f64            = 0.0;
+            let mut most_likely_rel     : Option<String> = None;
+            
+            let mut svm_builder = match assign_method {
+                RelAssignMethod::Zscore => None,
+                RelAssignMethod::SVM    => Some(LibSvmBuilder::default())
+            }.map(|mut builder| {
+                builder.sims(pedigree_vec).label_order(&ordered_rels); 
+                builder
+            });
+
+            'relassign: for (i, (scenario, (avg_avg_pwd, std_dev))) in stats.iter().enumerate() {
+                let loc_msg = || format!("While attempting to assess likelihood of comparison '{scenario}' for {comparison_label}");
 
                 let scenario_z_score = (avg_avg_pwd - observed_avg_pwd) / std_dev;
-                if  scenario_z_score.abs() < min_z_score.abs() {
+
+                let is_more_likely = match assign_method {
+                    RelAssignMethod::Zscore => scenario_z_score.abs() < min_z_score.abs(),
+                    RelAssignMethod::SVM    => {
+                        let prediction = svm_builder.as_mut().expect("Error")
+                            .labels(pedigree_vec, &i)
+                            .build()
+                            .and_then(|svm| svm.predict(comparison.get_avg_pwd()))
+                            .with_loc(loc_msg)?;
+
+                        prediction == 0.0
+                    }
+
+                };
+                
+                if is_more_likely {
                     min_z_score =  scenario_z_score;
-                    most_likely_rel = scenario.to_owned();
-                    most_likely_avg_pwd = avg_avg_pwd;
+                    most_likely_rel = Some(scenario.to_owned());
+                    most_likely_avg_pwd = *avg_avg_pwd;
+                    if matches!(assign_method, RelAssignMethod::SVM) {
+                        break 'relassign
+                    }
                 }
             }
+
+            let assigned_rel = match most_likely_rel {
+                Some(rel) => rel,
+                None => {
+                    warn!("Failed to assign a most likely relationship for {comparison}");
+                    "None".to_string()
+                }
+            };
     
             // ---- Correct with f64::NaN in case there were not enough SNPs to compute a simulated avg.pwd.
             let min_z_score = if min_z_score == f64::MAX {f64::NAN} else {min_z_score};
@@ -503,7 +543,7 @@ impl Pedigrees {
             //"Pair_name", "Most_Likely_rel", "Corr.Overlap", "Corr.Sum.PWD", "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred", "Sim.Avg.PWD", "Min.Z_Score", 
             let simulation_result = format!(
                 "{pair_name: <20} - \
-                 {most_likely_rel: <20} - \
+                 {assigned_rel: <20} - \
                  {corrected_overlap: <12.6} - \
                  {corrected_sum_pwd: <12.6} - \
                  {observed_avg_pwd: <12.6} - \

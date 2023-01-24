@@ -259,7 +259,23 @@ pub enum Mode {
 }
 
 impl Default for Mode {
-    fn default() -> Self {Mode::Vcf}
+    fn default() -> Self {Self::Vcf}
+}
+
+#[derive(Debug, Copy, Clone, ArgEnum, Serialize, Deserialize)]
+pub enum RelAssignMethod {Zscore, SVM }
+
+impl Default for RelAssignMethod {
+    fn default() -> Self {Self::SVM}
+}
+
+impl Display for RelAssignMethod {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Zscore => write!(f, "Z-score assignation"),
+            Self::SVM    => write!(f, "Ordinally Partitionned SVM fitting")
+        }
+    }
 }
 
 /// Run pwd-from-stdin and perform pedigree simulations in one go.
@@ -359,8 +375,18 @@ pub struct PedigreeSims {
 
     /// Provide the RNG with a set seed.
     #[clap(long, required(false), default_value_t=fastrand::u64(u64::MIN..=u64::MAX))]
-    pub seed: u64
+    pub seed: u64,
 
+    /// Select the method for most likely relationship assignment
+    /// 
+    /// zscore: Perform minimum zscore assignation, i.e. the distribution with the lowest z-score from the observed PWD is selected as the most likely candidate.
+    /// Computationally inexpensive, but can provide with surprising results, when the different distributions carry drastically different standard deviations.
+    /// 
+    /// svm: Compute treshold using Ordinally Partitionned Support Vector Machines. Binary SVMs are instantiated iteratively, from the lowest relatedness order to the lowest.
+    /// Each SVM is fitted against the hypothesis that the observed PWD belongs to a higher degree than given distribution. i.e., the question asked by the svm can be translated into: "Is this observed PWD greater than than the currently observed distribution?"
+    /// The most likely relationship is assigned as soon as an SVM answers 'no'.
+    #[clap(long, arg_enum, default_value("svm"))]
+    pub assign_method: RelAssignMethod
 }
 
 /// Convert VCF files into FST-indexes (Finite State Transcucer).

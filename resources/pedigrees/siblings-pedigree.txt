@@ -5,6 +5,8 @@
 INDIVIDUALS
 father
 mother
+stepfather
+stepson
 child1
 child2
 wife
@@ -17,6 +19,7 @@ husband
 RELATIONSHIPS
 child1=repro(father,mother)
 child2=repro(father,mother)
+stepson=repro(mother,stepfather)
 gchild=repro(child1,wife)
 cousin=repro(child2,husband)
 
@@ -25,7 +28,7 @@ cousin=repro(child2,husband)
 COMPARISONS
 Self=compare(father,father)               # IDENTICAL RELATIONSHIP
 Siblings=compare(child1,child2)           # SIBLING RELATIONSHIP
-GPGC=compare(mother,cousin)               # GRANDPARENT-GRANDCHILD RELATIONSHIP
+Half-siblings=compare(child1,stepson)     # HALF-SIBLINGS RELATIONSHIP
 Cousins=compare(cousin,gchild)            # COUSIN RELATIONSHIP
 Unrelated=compare(father,mother)          # UNRELATED RELATIONSHIP
 
