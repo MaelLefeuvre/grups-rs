@@ -641,7 +641,6 @@ where   T                   : FromStr + Add<Output = T> + Ord + One,
         Ok(vec) => vec.into_iter().flatten().collect(),
         Err(err) => return Err(ParserError::ParseArg{arg: arg.to_string(), err: err.to_string()}),
     };
-
     parsed_ranges.sort();
     parsed_ranges.dedup();
     Ok(parsed_ranges)

@@ -122,7 +122,7 @@ impl PedigreeReps {
 }
 
 impl Deref for PedigreeReps {
-    type Target = Vec<Pedigree>;
+    type Target = [Pedigree];
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
@@ -138,7 +138,7 @@ impl std::fmt::Display for PedigreeReps {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.inner.iter().enumerate().fold(Ok(()), |_, (idx, pedigree)| {
             pedigree.comparisons.iter().fold(Ok(()), |result, comparison| {
-                result.and_then(|_| writeln!(f, "{idx} - {}", comparison))
+                result.and_then(|_| writeln!(f, "{idx} - {comparison}"))
             })
         })
     }

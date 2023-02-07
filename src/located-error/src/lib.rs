@@ -94,7 +94,7 @@ where
             Ok(ok) => Ok(ok),
             Err(_) => {
                 let loc = loc_caller!(Location::caller());
-                self.context(format!("{loc} {}", context))
+                self.context(format!("{loc} {context}"))
             }
         }
     }
@@ -184,7 +184,7 @@ impl<T> LocatedOption<T> for Option<T>
             Some(ok) => Ok(ok),
             None     => {
                 let loc = loc_caller!(Location::caller());
-                self.context(format!("{loc} {}", context))
+                self.context(format!("{loc} {context}"))
             }
         }
     }

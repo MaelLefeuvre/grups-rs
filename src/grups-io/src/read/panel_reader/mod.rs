@@ -90,11 +90,12 @@ impl PanelReader {
         for line in source.lines(){
             let line = line?;
             let split_line = line.split('\t').collect::<Vec<&str>>();
-            let (id, pop) = (split_line[0], split_line[1]);
-            if self.samples.get(pop).unwrap_or(&Vec::new()).contains(&SampleTag::new(id, None)) {
+            let (pop, superpop) = (split_line[1], split_line[2]);
+            if self.samples.contains_key(superpop) || self.samples.contains_key(pop) {
                 writer.write_all(format!("{line}\n").as_bytes())?;
             }
         }
+        writer.flush()?;
         Ok(())
     }
 
@@ -171,6 +172,11 @@ impl PanelReader {
             }
         }
         transposed_data
+    }
+
+    /// Return a list of unique population keys
+    pub fn pop_keys(&mut self) -> impl Iterator<Item = &String>{
+        self.samples.keys()
     }
 
     /// Pretty self-explanatory: sort each Vec<SampleTag> found within `self.samples`

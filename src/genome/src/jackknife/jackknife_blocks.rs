@@ -92,7 +92,7 @@ impl fmt::Display for JackknifeBlocks {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.blocks.keys().sorted().fold(Ok(()), |_result, chr  | {
             self.blocks[chr].iter().fold(Ok(()), |result, block| {
-                result.and_then(|_| writeln!(f, "{}", block))
+                result.and_then(|_| writeln!(f, "{block}"))
             })
         })
     }

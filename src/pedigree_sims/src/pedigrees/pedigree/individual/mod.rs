@@ -56,7 +56,7 @@ impl std::fmt::Display for Individual {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let parents = match &self.parents {
             None => "None".to_string(),
-            Some(parents) => format!("{}", parents)
+            Some(parents) => format!("{parents}")
         };
         let tag = match &self.tag {
             Some(tag) => tag.id().clone(),

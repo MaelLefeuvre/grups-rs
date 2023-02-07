@@ -354,7 +354,7 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
                 };
 
                 // -------------------------- Format the output file and destination directory.
-                let output_path =format!("{}/{}{}", output_dir, file_stem, pop_tag);
+                let output_path =format!("{output_dir}/{file_stem}{pop_tag}");
                 info!("Output path: {output_path:?}");
 
                 // -------------------------- Build an FST set for this vcf file. 

@@ -62,7 +62,7 @@ impl std::cmp::PartialOrd for SampleTag {
 
 impl std::fmt::Display for SampleTag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let idx_str = match self.idx { Some(idx) => format!(" ({})", idx), None => String::from("")};
+        let idx_str = match self.idx { Some(idx) => format!(" ({idx})"), None => String::from("")};
         write!(f, "{}{}", self.id, idx_str)
     }
 }

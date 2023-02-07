@@ -8,7 +8,7 @@ use located_error::prelude::*;
 pub struct Contaminant([Vec<SampleTag>; 2]);
 
 impl Deref for Contaminant {
-    type Target = [Vec<SampleTag>; 2];
+    type Target = [Vec<SampleTag>];
 
     fn deref(&self) -> &Self::Target {
         &self.0

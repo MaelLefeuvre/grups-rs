@@ -41,13 +41,13 @@ pub struct Comparisons (Vec<Comparison>);
 impl Display for Comparisons {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         self.0.iter().fold(Ok(()), |result, comparison| {
-            result.and_then(|_| writeln!(f, "{}", comparison))
+            result.and_then(|_| writeln!(f, "{comparison}"))
         })
     }
 }
 
 impl Deref for Comparisons {
-    type Target = Vec<Comparison>;
+    type Target = [Comparison];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -108,11 +108,11 @@ impl Comparisons {
              {: <AVERG_FORMAT_LEN$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$}",
              "Pair_name", "Raw.Overlap", "Raw.Sum.PWD", "Raw.Avg.PWD", "Raw.CI.95", "Raw.Avg.Phred");
-        println!("{}", header);
+        println!("{header}");
         pwd_writer.write_iter(&vec![header])?; // Print PWD results to file.
         pwd_writer.write_iter(self.iter())?;   // 
 
-        println!("{}", self);                 // Print PWD results to console
+        println!("{self}");                    // Print PWD results to console
 
         if print_blocks {
             for comparison in self.iter() {
@@ -219,7 +219,7 @@ mod tests {
         let mut empty_comp = Comparisons::default();
         assert!(empty_comp.is_empty());
 
-        empty_comp.push(common::mock_comparison(false));
+        empty_comp.0.push(common::mock_comparison(false));
         assert!(! empty_comp.is_empty());
     }
 

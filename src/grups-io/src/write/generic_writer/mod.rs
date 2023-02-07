@@ -57,7 +57,7 @@ impl<'a> GenericWriter<'a>{
         // @TODO: Lazy static this regex!
         let re = Regex::new(r"[ ]+-[ ]+").unwrap(); // Remove pretty print trailing and leading whitespace.
         iter.into_iter()
-            .map(|obj| self.source.write(re.replace_all(&format!("{}\n", obj), WRITER_SEPARATOR).as_bytes()))
+            .map(|obj| self.source.write(re.replace_all(&format!("{obj}\n"), WRITER_SEPARATOR).as_bytes()))
             .collect::<Result<Vec<usize>, _>>()
             .map_err(WriterError::IOError)
             .loc("While writing contents into file")?;

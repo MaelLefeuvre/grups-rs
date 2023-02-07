@@ -21,7 +21,7 @@ impl Parents{
 }
 
 impl Deref for Parents {
-    type Target = [Rc<RefCell<Individual>>; 2];
+    type Target = [Rc<RefCell<Individual>>];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -46,7 +46,7 @@ mod tests {
         let father = Rc::new(RefCell::new(common::mock_founder(parents_labels[0])));
         let mother = Rc::new(RefCell::new(common::mock_founder(parents_labels[1])));
         let parents = Parents::new([father, mother]);
-        let display = format!("{}", parents);
+        let display = format!("{parents}");
 
         assert!(display.contains("father"));
         assert!(display.contains("mother"));

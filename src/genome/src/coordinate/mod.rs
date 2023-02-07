@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 pub mod chr_index;
 pub use chr_index::{ChrIdx, ChrIdxError};
@@ -6,6 +6,8 @@ pub use chr_index::{ChrIdx, ChrIdxError};
 pub mod position;
 pub use position::{Position, ParsePositionError};
 
+mod error;
+pub use error::CoordinateError;
 // import for internal use 
 extern crate coordinate_derive;
 use coordinate_derive::*;
@@ -115,6 +117,25 @@ impl Coordinate {
     #[must_use]
     pub fn new(chromosome: impl Into<ChrIdx>, position: impl Into<Position>) -> Self {
         Self{chromosome: chromosome.into(), position: position.into()}
+    }
+}
+
+impl TryFrom<(&str, &str)> for Coordinate {
+    type Error = CoordinateError;
+
+    fn try_from(value: (&str, &str)) -> Result<Self, Self::Error> {
+        Ok(Self{chromosome: value.0.parse()?, position: value.1.parse()?})
+    }
+}
+
+impl FromStr for Coordinate {
+    type Err = CoordinateError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        const DELIM: char = ':';
+        let (chr, pos) = s.split_once(DELIM)
+            .ok_or(CoordinateError::MissingDelimiter(DELIM))?;
+        Self::try_from((chr, pos))
     }
 }
 

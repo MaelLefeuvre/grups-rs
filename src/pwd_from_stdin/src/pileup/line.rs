@@ -93,7 +93,6 @@ impl Line {
             self.individuals[pair[1].index].nucleotides.choose(&mut rng)?,
         ])
     }
-
 }
 
 #[cfg(test)]
