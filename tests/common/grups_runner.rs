@@ -4,6 +4,9 @@ use std::fs::File;
 
 use super::Fixture;
 
+const TEST_PEDIGREE_SIMS_REPS: usize = 10;
+const TEST_PEDIGREE_SIMS_SEED: usize = 42;
+
 fn get_bufreader(filename: &str) -> BufReader<File> {
     let inner = File::open(filename)
         .unwrap_or_else(|_| panic!("Failed to open test output file: {filename}"));
@@ -15,6 +18,7 @@ fn parse_line<'a, E: std::fmt::Debug>(line: &'a Result<String,E>, sep: &str) -> 
     line.split(sep).map(|field| field.trim()).collect::<Vec<&str>>()
 }
 
+// @TODO: not really needed anymore. but better safe than sorry.
 fn assert_pwd_matches(
     filename: &str,
     expected_overlap: Vec<&str>,
@@ -33,6 +37,7 @@ fn assert_pwd_matches(
     }
 }
 
+// @TODO: not really needed anymore. but better safe than sorry.
 fn assert_simulation_results(
     filename: &str,
     expected_relationships: Vec<&str>
@@ -74,7 +79,8 @@ pub fn test_grups_run(mode: parser::Mode, data_dir: &str) {
         --overwrite
         --mode {mode_str}
         --samples 0-2
-        --reps 10
+        --reps {TEST_PEDIGREE_SIMS_REPS}
+        --seed {TEST_PEDIGREE_SIMS_SEED}
     ",);
 
     println!("{args}");
@@ -83,9 +89,25 @@ pub fn test_grups_run(mode: parser::Mode, data_dir: &str) {
     grups::run(cli).unwrap();
 
     let output_pwd            = format!("{output_dir}/{FILESTEM}.pwd");
+    let output_res            = format!("{output_dir}/{FILESTEM}.result");
     let expected_overlap   = vec!["107"     , "86"      , "31"      ];
     let expected_avg_pwd   = vec!["0.186916" , "0.197674" , "0.322581" ];
     assert_pwd_matches(&output_pwd, expected_overlap, expected_avg_pwd);
+
+    // ---- Ensure pwd-from-stdin output results are the same.
+    let want = include_bytes!("../expect/parents-offspring.pwd");
+    let got  = std::fs::read(output_pwd).unwrap();
+    assert_eq!(want.to_vec(), got);
+
+    // ---- Ensure pedigree-sims output results are the same.
+    // Note files are different because simulated pwd will differ depending on the file type,
+    // even with seeding.
+    let want = match mode {
+        parser::Mode::Fst => include_bytes!("../expect/parents-offspring-fst.result"),
+        parser::Mode::Vcf => include_bytes!("../expect/parents-offspring-vcf.result"),
+    };
+    let got = std::fs::read(output_res).unwrap();
+    assert_eq!(want.to_vec(), got);
 
     let output_results            = format!("{output_dir}/{FILESTEM}.result");
     let expected_relationships   = vec!["First Degree", "First Degree", "Unrelated"];

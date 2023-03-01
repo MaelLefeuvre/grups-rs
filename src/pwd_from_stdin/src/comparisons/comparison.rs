@@ -262,11 +262,8 @@ mod tests {
                 nucs[0].len(), nucs[0], quals[0],
                 nucs[1].len(), nucs[1], quals[1])
             ;
-            println!("{pos}: Creating line");
             let line = pileup::Line::new(raw_line.as_str(), true)?;
-            println!("{pos}: Comparing...");
             comparison.compare(&line)?;
-            println!("{pos}: Done");
         }
         Ok(())
     }
