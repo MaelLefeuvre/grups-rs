@@ -10,7 +10,7 @@ use error::InfoFieldError;
 pub struct InfoField (Option<Vec<String>>);
 
 impl Deref for InfoField {
-    type Target = Vec<String>;
+    type Target = [String];
     fn deref(&self) -> &Self::Target {
         self.0.as_ref().expect("Attempting to access empty InfoField!")
     }
@@ -51,13 +51,13 @@ impl InfoField {
     /// # Behavior: 
     /// for a given `pop` raw string slice, this method will search for any field matching "{pop}_AF="
     /// and return its value.
-    pub fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64> {
-        let pop_af_regex = format!("{}_AF", pop);
+    pub fn get_pop_allele_frequency(&self, pop: &str) -> Result<f32> {
+        let pop_af_regex = format!("{pop}_AF");
         self.iter()
             .find(|&field| field.starts_with(&pop_af_regex))
             .and_then(|x| x.split('=').last())
             .ok_or(InfoFieldError::MissingAF(pop_af_regex))?
-            .parse::<f64>()
+            .parse::<f32>()
             .map_err(InfoFieldError::ParseAlleleFrequency)
             .loc("While attempting to retrieve the allele frequency of population '{pop}'")
     }

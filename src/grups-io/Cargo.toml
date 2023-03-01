@@ -15,11 +15,11 @@
   gzp            = "0.9.5"
   ahash          = "0.7.6"
   fst            = "0.4"
-  memmap         = "0.7.0"
+  memmap2        = "0.5.10"
   thiserror      = "1.0"
   anyhow         = "1.0"
   mockall        = "0.11.0" #@TODO: find a way to put this back in dev-dependencies 
-  regex         = "1.5.0"
+  regex          = "1.5.0"
 
 [dev-dependencies]  
 

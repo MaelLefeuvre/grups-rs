@@ -334,7 +334,7 @@ pub struct PedigreeSims {
 
     /// Minimum allele frequency within the pedigree superpopulation that is required to include a given SNP within the simulations.
     #[clap(short='m', long, default_value("0.00"))]
-    pub maf: f64,
+    pub maf: f32,
 
     /// Superpopulation with which to perform pedigree simulations
     #[clap(short='P', long, default_value("EUR"))]

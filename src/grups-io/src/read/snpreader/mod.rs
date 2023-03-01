@@ -1,8 +1,10 @@
-use std::{collections::HashSet, fs::File,  io::{self, Read, BufRead, BufReader}};
+use std::{fs::File, io::{self, Read, BufRead, BufReader}};
 use genome::{SNPCoord, snp::Allele};
 use located_error::*;
 use anyhow::Result;
 use log::{info};
+
+use ahash::AHashSet;
 
 pub mod error;
 pub use error::SNPReaderError;
@@ -105,8 +107,8 @@ impl<'a> SNPReader<'a> {
     /// 
     /// # @TODO: 
     ///  - This should take a &self reference.
-    pub fn hash_target_positions(self, exclude_transitions: bool) -> Result<HashSet<SNPCoord>> {
-        let mut target_positions : HashSet<SNPCoord> = HashSet::new(); // Output
+    pub fn hash_target_positions(self, exclude_transitions: bool) -> Result<AHashSet<SNPCoord>> {
+        let mut target_positions : AHashSet<SNPCoord> = AHashSet::new(); // Output
         let context = || "While hashing target positions";
         for line in self.source.lines() {
             let line = line?;

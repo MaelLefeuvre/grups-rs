@@ -1,10 +1,11 @@
 use crate::genome::Genome;
-use std::collections::HashMap;
 use itertools::Itertools;
 use std::fmt;
 
 use super::JackknifeBlock;
 use crate::coordinate::{ChrIdx, Coordinate};
+
+use ahash::AHashMap;
 
 pub struct JackknifeEstimates {
     pub estimate: f64,
@@ -22,15 +23,15 @@ pub struct JackknifeEstimates {
 /// # TODO:
 ///   - add a header for the `Display trait`
 pub struct JackknifeBlocks {
-    blocks : HashMap<ChrIdx, Vec<JackknifeBlock>>
+    blocks : AHashMap<ChrIdx, Vec<JackknifeBlock>>
 }
 
 impl JackknifeBlocks {
     #[must_use]
     pub fn new(genome: &Genome, blocksize: u32) -> JackknifeBlocks {
-        let mut jackknives = HashMap::new();
+        let mut jackknives = AHashMap::with_capacity(genome.len());
         for chr in genome.values() {
-            let mut blocks = Vec::new();
+            let mut blocks = Vec::with_capacity((chr.length / blocksize) as usize);
             let mut add_block = |chr, start, end| {
                 blocks.push(JackknifeBlock::new(chr, start, end));
             };

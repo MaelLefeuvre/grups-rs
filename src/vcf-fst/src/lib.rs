@@ -1,4 +1,6 @@
-use std::{str, path::Path, error::Error, fs::File, io::{BufRead, BufWriter}, collections::BTreeMap};
+use std::{str, path::Path, fs::File, io::{BufRead, BufWriter}, collections::BTreeMap};
+
+use genome::coordinate::Coordinate;
 
 use located_error::prelude::*;
 use parser::VCFFst;
@@ -8,7 +10,7 @@ use grups_io::read::{
 };
 
 use fst::SetBuilder;
-use log::{info};
+use log::{info, error};
 use rayon::{self}; 
 
 mod error;
@@ -21,7 +23,6 @@ fn create_set_builder(file: &str) -> Result<SetBuilder<BufWriter<File>>> {
     let file    = File::create(file).map_err(CreateFile).loc(loc_msg)?;
     SetBuilder::new(BufWriter::new(file)).map_err(CreateSetBuilder).loc(loc_msg)
 }
-
 
 /// Convert a `.vcf(.gz)` file into a Finite-State-Transducer Set.
 /// See the following resources for a recap on the theory and applications of FST Sets :
@@ -65,12 +66,10 @@ pub struct VCFIndexer<'a>{
     previous_coordinate : Vec<u8>,
     genotypes_buffer    : Vec<u8>,
     genotype_keys       : Vec<Vec<u8>>,
-    frequency_keys      : Vec<String>
+    frequency_keys      : Vec<Vec<u8>>
 }      
 
 impl<'a> VCFIndexer<'a> {
-
-
     /// Initialize a new `VCFIndexer`.
     /// # Arguments:
     /// - `vcf`    : path leading to the target `.vcf`|`.vcf.gz` file
@@ -103,7 +102,9 @@ impl<'a> VCFIndexer<'a> {
     /// This function is unsafe because parsing keys requires constructing &mut Vec without utf8 validation.
     /// If this constraint is violated, using the original String after dropping the &mut Vec may violate memory safety
     /// as Rust assumes that Strings are valid UTF-8
-    pub unsafe fn build_fst(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn build_fst(&mut self) -> Result<()> {
+        use GenomeFstError::{MissingVTTag, ParseAlleleFrequency};
+        let loc_msg = "While constructing FST set.";
         'line: while self.reader.has_data_left()? {
             // ---- Parse the current position 
             self.fill_current_position_buffer()?;
@@ -111,12 +112,12 @@ impl<'a> VCFIndexer<'a> {
             // ---- Flush the previous position if and only if the current position is not a duplicate.
             //      i.e.: Check if the previous line had the same coordinates, and do NOT insert keys 
             //            of the previous line if it is the case.
-            if self.insert_previous_keys()? {     
+            if self.insert_previous_keys()? {
                 continue 'line
             }
             // ---- Save the current coordinate for the next iteration if this position is not a duplicate.
             self.save_previous_line();
-    
+
 
             // ---- Go to INFO field.
             self.skip_fields(5)?;                                      // 6 
@@ -131,13 +132,14 @@ impl<'a> VCFIndexer<'a> {
 
             // ---- Get the mutation type from INFO...
             let vtype = info.iter()
-                .find(|&&field| field.starts_with("VT=")).unwrap()
+                .find(|&&field| field.starts_with("VT="))
+                .with_loc(||MissingVTTag {c:self.coordinate_buffer.clone()})?
                 .split('=')
                 .collect::<Vec<&str>>()[1];
 
             // ...and skip line if this is not an SNP.
             if vtype != "SNP" {
-                self.clear_buffers()?;
+                self.clear_buffers().with_loc(||"While attempting to skip non-SNP position.")?;
                 self.coordinate_buffer.clear();
                 continue 'line
             }
@@ -150,14 +152,23 @@ impl<'a> VCFIndexer<'a> {
 
             // ---- and insert the relevant entries within our frequency_set.
             for pop_af in &pop_afs {
-                let pop_af_key = format!("{}{} {}", str::from_utf8(&self.coordinate_buffer)?, pop_af[0], pop_af[1]);
-                self.frequency_keys.push(pop_af_key);
+                // "{chromosome(u8)}{position(u32_be)}{pop(chars)}{freq(f32_be)}"
+                let pop_tag    = pop_af[0].as_bytes();
+                let pop_af_be  = pop_af[1].parse::<f32>()
+                    .with_loc(|| ParseAlleleFrequency { c: self.coordinate_buffer.clone() })?
+                    .to_be_bytes();
+
+                let frequency_key = self.coordinate_buffer.iter()
+                    .chain(pop_tag.iter())
+                    .chain(pop_af_be.iter())
+                    .copied();
+                self.frequency_keys.push(Vec::from_iter(frequency_key));
             }
 
 
-            self.skip_fields(1)?;                 // Skip INFO field
-            self.fill_genotypes_buffer()?;        
-            self.print_progress(50000)?;              
+            self.skip_fields(1).with_loc(|| loc_msg)?;                 // Skip INFO field
+            self.fill_genotypes_buffer().with_loc(|| loc_msg)?;        
+            self.print_progress(50000).with_loc(|| loc_msg)?;              
             self.parse_keys();
             self.genotypes_buffer.clear();
             self.coordinate_buffer.clear();
@@ -169,35 +180,41 @@ impl<'a> VCFIndexer<'a> {
 
     /// Finish the construction of our genotype/frequency sets and flush their underlying writers.
     /// # Errors
-    /// - if either the `.fst` or `.fst.frq` file fails to finish building and writting itself.s
-    pub fn finish_build(self) -> Result<(), Box<dyn Error>> {
-        self.gen_builder.finish()?;
-        self.frq_builder.finish()?;
+    /// - if either the `.fst` or `.fst.frq` file fails to finish building and writing itself.
+    pub fn finish_build(self) -> Result<()> {
+        use GenomeFstError::CompleteBuild;
+        self.gen_builder.finish().map_err(CompleteBuild)?;
+        self.frq_builder.finish().map_err(CompleteBuild)?;
         Ok(())
     }
 
     /// Parse the current VCF line's coordinate and fill `self.coordinate_buffer` with it.
-    fn fill_current_position_buffer(&mut self) -> Result<(), Box<dyn Error>> {
+    #[inline]
+    fn fill_current_position_buffer(&mut self) -> Result<()> {
+        use GenomeFstError::{ReadField, EncodeChr, EncodePos};
         // ---------------------------- Get current chromosome and position.
-        let chr_bytes = self.reader.source.read_until(b'\t', &mut self.coordinate_buffer)?; // Add chromosome
-        self.add_field_separator(b' ');
-        let pos_bytes = self.reader.source.read_until(b'\t', &mut self.coordinate_buffer)?; // Add position.
-        self.add_field_separator(b' ');
-        for _ in 0..(10-pos_bytes) {                 // Add 9 leading zeroes for padding (this ensure our key is sorted.)
-            self.coordinate_buffer.insert(chr_bytes, b'0');
-        }
+        let mut chr_buffer = Vec::with_capacity(3);
+        self.reader.source.read_until(b'\t', &mut chr_buffer).with_loc(||ReadField { c: self.coordinate_buffer.clone() })?;
+        chr_buffer.pop();
+
+        let mut pos_buffer = Vec::with_capacity(10);
+        self.reader.source.read_until(b'\t', &mut pos_buffer).with_loc(||ReadField { c: self.coordinate_buffer.clone() })?;
+        pos_buffer.pop();
+
+        let chr: u8  = std::str::from_utf8(&chr_buffer).ok().and_then(|c| c.parse::<u8>().ok())
+            .with_loc(||EncodeChr { c: self.coordinate_buffer.clone() })?;
+
+        let pos: [u8; 4] = std::str::from_utf8(&pos_buffer).ok().and_then(|c| c.parse::<u32>().ok()).map(|p| p.to_be_bytes())
+            .with_loc(||EncodePos { c: self.coordinate_buffer.clone() })?;
+
+        self.coordinate_buffer.push(chr);
+        self.coordinate_buffer.extend(pos);
         Ok(())
     }
 
-    /// remove the last character of `self.coordinate_buffer` (i.e. the vcf field separator) and add our own Field separator.
-    /// # Arguments:
-    /// - `field`: byte character value of the desired field separator.
-     fn add_field_separator(&mut self, field: u8) {
-        self.coordinate_buffer.pop();
-        self.coordinate_buffer.push(field);
-    }
     
     /// Check if the current vcf coordinate is the same as the previous line.
+    #[inline]
     fn duplicate_line(&self) -> bool {
         self.coordinate_buffer == self.previous_coordinate
     }
@@ -205,40 +222,50 @@ impl<'a> VCFIndexer<'a> {
     /// Checks if the current VCF line coordinate is a duplicate of the previous.
     /// - Skip and clear buffers if this is the case...
     /// - Flush the contents of our buffers within their respective `SetBuilders` if it is not the case 
-    fn insert_previous_keys(&mut self) -> Result<bool, Box<dyn Error>> {
+    #[inline]
+    fn insert_previous_keys(&mut self) -> Result<bool> {
+        use GenomeFstError::InsertPreviousEntry;
         if self.duplicate_line() {
-            self.clear_buffers()?;     // If so, skip this lines, and don't insert the keys of the previous line.
+            // If so, skip this lines, and don't insert the keys of the previous line.
+            self.clear_buffers().with_loc(||InsertPreviousEntry)?;     
             self.coordinate_buffer.clear();
             Ok(true)
         } else {
-            self.insert_keys()?;       // If the line is different, we can then insert the keys of the previous line.
+             // If the line is different, we can then insert the keys of the previous line.
+            self.insert_keys().with_loc(||InsertPreviousEntry)?;      
             Ok(false)
         }
     }
 
     /// Reset `self.reader` to the next line and clear our buffers.
-    fn clear_buffers(&mut self) -> Result<(), Box<dyn Error>> {
-        self.reader.source.read_until(b'\n', &mut Vec::new())?;
+    #[inline]
+    fn clear_buffers(&mut self) -> Result<()> {
+        use GenomeFstError::MissingEOL;
+        self.reader.source.read_until(b'\n', &mut Vec::new())
+            .with_loc(||MissingEOL{c: self.coordinate_buffer.clone()})?;
         self.genotype_keys.clear();
         self.frequency_keys.clear();
         Ok(())
     }
 
     /// Flush the contents of `self.genotypes_keys` and `self.frequency_keys` into their respective setbuilders.
-    fn insert_keys(&mut self) -> Result<(), Box<dyn Error>> {
+    #[inline]
+    fn insert_keys(&mut self) -> Result<()> {
+        use GenomeFstError::InsertFstKey;
         for gen in &self.genotype_keys {
-            self.gen_builder.insert(gen)?;
+            self.gen_builder.insert(gen).with_loc(|| InsertFstKey{c:self.coordinate_buffer.clone()})?;
         }
         self.genotype_keys.clear();
 
         for frq in &self.frequency_keys {
-            self.frq_builder.insert(frq)?;
+            self.frq_builder.insert(frq).with_loc(|| InsertFstKey{c:self.coordinate_buffer.clone()})?;
         } 
         self.frequency_keys.clear();
         Ok(())
     }
 
     /// Clone and keep track of the current coordinate into `self.previous_coordinate`
+    #[inline]
     fn save_previous_line(&mut self) {
         self.previous_coordinate = self.coordinate_buffer.clone();
     }
@@ -246,39 +273,47 @@ impl<'a> VCFIndexer<'a> {
     /// Skip a defined number of column fields within the VCF.
     /// # Arguments:
     /// - `n` number of fields to skip.
+    #[inline]
     fn skip_fields(&mut self, n: usize) -> Result<()> {
+        use GenomeFstError::ReadField;
         for _ in 0..n {
-            self.reader.source.read_until(b'\t', &mut Vec::new())?;
+            self.reader.source
+                .read_until(b'\t', &mut Vec::new())
+                .with_loc(||ReadField { c: self.coordinate_buffer.clone() })?;
         }    
         Ok(())
     }
 
     /// read the contents of the whole vcf line and dump them into `self.genotypes_buffer`
-    fn fill_genotypes_buffer(&mut self) -> Result<()> {   
-        self.reader.source.read_until(b'\n', &mut self.genotypes_buffer)?;
-        Ok(())
+    #[inline]
+    fn fill_genotypes_buffer(&mut self) -> Result<usize> {
+        use GenomeFstError::FillGenotypes;
+        self.reader.source.read_until(b'\n', &mut self.genotypes_buffer)
+            .with_loc(||FillGenotypes{ c: self.coordinate_buffer.clone() })
     }
 
     /// Log this Indexer's progress into the console, if `self.counter` is a multiple of `every_n`
+    #[inline]
     fn print_progress(&mut self, every_n: usize) -> Result<()> {
         if self.counter % every_n == 0 {
-            info!("{: >9} {:?}", self.counter, str::from_utf8(&self.coordinate_buffer)?);
+            let coord = Coordinate::try_from(&self.coordinate_buffer[0..5])?;
+            info!("{: >9} {coord}", self.counter);
         }
         self.counter+= 1;
         Ok(())
     }
 
     /// Parse the genotypes of all the requested `SampleTags` (`self.samples.keys()`) and index them within `self.genotype_keys`
-    unsafe fn parse_keys(&mut self) {
+    #[inline]
+    fn parse_keys(&mut self) {
         for sample_tag in self.samples.keys() {            
 
             // ---- Complete value to insert.
-            let mut key = self.coordinate_buffer.clone();
-            key.append(sample_tag.id().clone().as_mut_vec());  // UNSAFE: add sampleID
-            key.push(b' ');
+            let mut key = self.coordinate_buffer.clone(); // @TODO: That clone can be removed?
+            unsafe { key.append(sample_tag.id().clone().as_mut_vec()) };  // UNSAFE: add sampleID
 
             // ---- Extract genotype info for thesample and add it to the key.
-            let geno_idx = sample_tag.idx().unwrap()*4;                // x4, since each field+separator is four characters long. (e.g.: '0|0 ')
+            let geno_idx = sample_tag.idx().unwrap() * 4;                // x4, since each field+separator is four characters long. (e.g.: '0|0 ')
             key.push(self.genotypes_buffer[geno_idx  ]); // haplo1
             key.push(self.genotypes_buffer[geno_idx+2]); // haplo2
 
@@ -334,8 +369,6 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
         .loc(loc_msg)?;
 
 
-
-
     pool.scope(|scope|{
         for vcf in &input_vcf_paths{
             scope.spawn(|_| {
@@ -364,12 +397,20 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
                     panel.into_transposed_btreemap(),
                     fst_cli.decompression_threads
                 ).unwrap();
-                unsafe {setbuilder.build_fst().unwrap();}
+
+                if let Err(e) = setbuilder.build_fst() {
+                    error!("{:?}", e);
+                    std::process::exit(1);
+                };
 
                 // -------------------------- Finish the construction of our `.fst` and `.fst.frq` sets.
-                setbuilder.finish_build().unwrap();
+                if let Err(e) = setbuilder.finish_build() {
+                    error!("{:?}", e);
+                    std::process::exit(1);
+                };
             });
         }
     });
+
     Ok(())
 }

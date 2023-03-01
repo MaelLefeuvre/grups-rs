@@ -62,6 +62,7 @@
   pedigree_sims     = {path = "src/pedigree_sims" }
   genome            = {path = "src/genome"}
   coordinate-derive = {path = "src/genome/src/coordinate-derive"}
+  grups-io          = {path = "src/grups-io"}
   logger            = {path = "src/logger"}
   parser            = {path = "src/parser"}
   vcf-fst           = {path = "src/vcf-fst"}
@@ -91,4 +92,8 @@
 
 [[bench]]
   name    = "bench_pileup"
+  harness = false
+
+[[bench]]
+  name    = "bench_fst"
   harness = false

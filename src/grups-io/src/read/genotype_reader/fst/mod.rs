@@ -10,10 +10,10 @@ use crate::{
 use genome::coordinate::Coordinate;
 use located_error::prelude::*;
 
-use memmap::Mmap;
+use memmap2::Mmap;
 use ahash::AHashMap;
 use log::{info, debug};
-use fst::{Set, IntoStreamer, automaton::{Automaton, Str}};
+use fst::{Set, IntoStreamer, automaton::{Automaton, Str, StartsWith}, Streamer};
 
 mod error;
 use error::FSTReaderError;
@@ -26,8 +26,8 @@ pub const FRQ_EXT: &str = "fst.frq";
 pub struct FSTReader {
     genotypes_set: Set<Vec<u8>>,
     frequency_set: Set<Vec<u8>>,
-    genotypes    : AHashMap<String, [u8; 2]>,
-    frequencies  : AHashMap<String, f64>,
+    genotypes    : AHashMap<u128, [u8; 2]>,
+    frequencies  : AHashMap<String, f32>,
 }
 
 
@@ -36,14 +36,15 @@ impl GenotypeReader for FSTReader {
     fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2]> {
         use GenotypeReaderError::MissingAlleles;
         let loc_msg = || format!("While retrieving alleles of {}", sample_tag.id());
-        match self.genotypes.get(sample_tag.id()) {
+
+        match self.genotypes.get(&sample_tag.hashed_id()) {
             Some(alleles) => Ok(alleles.map(|all| all -48)),
             None          => Err(MissingAlleles).with_loc(loc_msg)
         }
     }
 
     // Return the alleles frequencies for a given population id.
-    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64> {
+    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f32> {
         use GenotypeReaderError::MissingFreq;
         match self.frequencies.get(pop) {
             Some(freq) => Ok(*freq),
@@ -86,6 +87,7 @@ impl FSTReader {
         info!("Loading in memory : {path}");
         // ---- Get file size
         let size = std::fs::metadata(path).map_err(OpenFST).with_loc(loc_msg)?.len();
+        debug!("File size (bytes): {size}");
         // ---- Open FST file in ro mode.
         let mut file_handle = File::open(path).map_err(OpenFST).with_loc(loc_msg)?;
 
@@ -110,45 +112,10 @@ impl FSTReader {
     /// Public wrapper for `find_chromosome()`. returns a sorted, unduplicated list of chromosomes contained within the set.
     pub fn find_chromosomes(&self) -> Result<Vec<u8>> {
         let root = self.genotypes_set.as_fst().root();
-        let mut string = Vec::with_capacity(4);
-        let mut chromosomes = Vec::new();
-        self.find_chromosome(root, &mut string, &mut chromosomes)
-            .loc("Failed to determine which chromosome(s) were contained within the set. File is possibly corrupt.")?;
+        let mut chromosomes = Vec::from_iter( root.transitions().map(|transition| transition.inp) );
         chromosomes.sort_unstable();
         chromosomes.dedup();
         Ok(chromosomes)
-    }
-
-
-    /// Recursively search through the raw genotype set and populate `chromosomes` each time a chromosome has been found.
-    /// # Arguments:
-    /// - `node`       : a raw fst-index node.
-    /// - `string`     : raw byte-string. This vector is passed and constructed upon each recursion step.
-    /// - `chromosomes`: vector of chromosomes names (in u8) form. This is the final desired output.
-    ///                  Each entry of `chromosomes` is constructed from `string`.
-    fn find_chromosome(&self, node: fst::raw::Node, string: &mut [u8], chromosomes: &mut Vec<u8>) -> Result<()> {
-        use FSTReaderError::{InvalidUTF8, InvalidChrId};
-        let loc_msg = "While recursing through the available chromosomes within the FST set";
-        let sep = b' '; // FST-set fields are space-separated. 
-        for transition in node.transitions() {
-            if transition.inp != sep { // If the next character is not a space, add the current character to the string being constructed.
-                let mut local_string = string.to_owned();
-                local_string.push(transition.inp); 
-                self.find_chromosome(self.genotypes_set.as_fst().node(transition.addr), &mut local_string, chromosomes)?;
-            }
-            else { // If we've found a separator character, the current string is fully defined. -> add this string to our chromosome list.
-                
-                // ---- Parse the string into a valid chromosome u8 value.
-                let chromosome = std::str::from_utf8(string)
-                    .map_err(InvalidUTF8)
-                    .and_then(|c| c.parse::<u8>().map_err(InvalidChrId))
-                    .loc(loc_msg)?;
-
-                chromosomes.push(chromosome);
-            }
-        }
-        Ok(())
-
     }
 
     /// Recursively search through the index for a given chromosome and return true if it has been found.
@@ -168,37 +135,35 @@ impl FSTReader {
         true
     }
 
-    fn format_coordinate_pattern(coordinate: &Coordinate) -> String {
-        format!("{} {:0>9}", coordinate.chromosome, coordinate.position)
+    /// @TODO: This should be a macro ?
+    #[inline]
+    fn format_coordinate_pattern(coord_bytes: &[u8; 5]) -> StartsWith<Str> {
+        let regex = unsafe { std::str::from_utf8_unchecked(coord_bytes) };
+        Str::new(regex).starts_with()
     }
+    
     /// Populate the `genotypes` field using genome coordinates.
     /// `self.genotypes` is thus a HashMap, with keys==<sample-id>, and values==<alleles>
-    /// # Arguments:
-    /// - `chr`: chromosome name
-    /// - `pos`: 0-based chromosome position
+    #[inline]
     pub fn search_coordinate_genotypes(&mut self, coordinate: &Coordinate) {
         // ---- Create a new fst-matcher, matching any entry starting with our chromosome coordinates.
         // ---- genotype-fst index fields are '{chr} {pos} {id} {alleles}'
-        let regex = Self::format_coordinate_pattern(coordinate);
-        let matcher = Str::new(&regex).starts_with();
+        let coord_bytes: [u8; 5] = (*coordinate).into();
+        let matcher = Self::format_coordinate_pattern(&coord_bytes);
 
         // ---- Search through the set and format each match within `self.genotypes` (key=<sample-id>, val=<alleles>)
-        self.genotypes_set.search(&matcher)
-            .into_stream()
-            .into_bytes()
-            .iter()
-            .map(|string| {
-                string.split(|char| *char == b' ')
-                .skip(2)
-            })
-            .for_each(|mut v| {
-                let tag = unsafe { std::str::from_utf8_unchecked(v.next().unwrap())};
-                let alleles: [u8; 2] = v.next()
-                    .map(|slice| {
-                        slice.try_into().unwrap()
-                    }).unwrap();
-                self.genotypes.insert(tag.to_string(), alleles);
-            });
+        let mut stream = self.genotypes_set.search(&matcher).into_stream();
+        while let Some(key) = stream.next() {
+            // ---- Retrieve alleles and sample id.
+            let key = &mut key[5..].to_vec();              // Skip coordinate bytes.
+            let (id, alleles) = key.split_at(key.len()-2); // alleles are the last two u8.
+
+            // ---- Hash sample id. to u128
+            let hashed_tag = SampleTag::hash_id_u128(id);
+            
+            let alleles: [u8; 2] = alleles.try_into().unwrap();
+            self.genotypes.insert(hashed_tag, alleles);
+        }
     }
 
     /// Populate the `frequencies` field using genome coordinates.
@@ -206,30 +171,29 @@ impl FSTReader {
     /// # Arguments:
     /// - `chr`: chromosome name
     /// - `pos`: 0-based chromosome position
+    #[inline]
     pub fn search_coordinate_frequencies(&mut self, coordinate: &Coordinate) {
         // ---- Create a new fst-matcher, matching any entry starting with our chromosome coordinates.
-        //----- genotype-fst index fields are '{chr} {pos} {id} {alleles}'
-        let regex = Self::format_coordinate_pattern(coordinate);
-        let matcher = Str::new(&regex).starts_with();
+        //----- genotype-fst index fields are '{chr(u8)}{pos(u32_be)}{pop(chars)}{freq(f32_be)}'
+        let coord_bytes: [u8; 5] = (*coordinate).into();
+        let matcher = Self::format_coordinate_pattern(&coord_bytes);
 
         // ---- Search through the set and format each match within `self.frequencies` (key=<sample-id>, val=<allele-frequency>)
-        self.frequency_set.search(&matcher)
-            .into_stream()
-            .into_bytes()
-            .iter()
-            .map(|string| {
-                string.split(|char| *char == b' ')
-                .skip(2)
-            })
-            .for_each(|mut v| {
-                let pop = unsafe { std::str::from_utf8_unchecked(v.next().unwrap())};
-                let freq: f64 = unsafe { 
-                    std::str::from_utf8_unchecked(v.next().unwrap())
-                    .parse::<f64>()
-                    .unwrap()
-                };
-                self.frequencies.insert(pop.to_string(), freq);
-            });
+        let mut stream = self.frequency_set.search(&matcher).into_stream();
+        while let Some(key) = stream.next() {
+            // ---- Retrieve population tag and frequency.
+            let key              = &mut key[5..].to_vec(); // Go from the end of the coordinate to the end.
+            let (tag, freq_be)   = key.split_at(key.len()-4); 
+
+            // ---- Parse population tag
+            let pop              = unsafe {String::from_utf8_unchecked(tag.to_vec())};
+
+            // ---- Convert frequency to f32
+            let freq_be: [u8; 4] = freq_be.try_into().unwrap();
+            let freq: f32        = f32::from_be_bytes(freq_be);
+
+            self.frequencies.insert(pop, freq);
+        }
     }
 
 

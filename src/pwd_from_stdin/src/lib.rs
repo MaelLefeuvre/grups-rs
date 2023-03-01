@@ -1,4 +1,6 @@
-use std::{fs, collections::{HashSet, HashMap}, io::{BufReader, BufRead}};
+use std::{fs, collections::HashMap, io::{BufReader, BufRead}};
+
+use ahash::AHashSet;
 
 use log::{warn, info, debug};
 use located_error::prelude::*;
@@ -65,7 +67,7 @@ pub fn run<'a>(
     // ----------------------------- Parse target_positions
     info!("Parsing target_positions...");
     let target_positions = match &com_cli.targets {
-        None => HashSet::new(),
+        None => AHashSet::new(),
         Some(filename) => SNPReader::new(filename)?.hash_target_positions(pwd_cli.exclude_transitions)?
     };
 

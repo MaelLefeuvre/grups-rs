@@ -19,6 +19,8 @@
   log               = "0.4.16"
   anyhow            = "1"
   thiserror         = "1"
+  ahash             = "0.7.6"
+
 [dev-dependencies]
   float-cmp         = "0.9.0"
   rand              = "0.8.5"

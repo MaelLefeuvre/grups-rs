@@ -26,7 +26,33 @@ const GENOTYPES_START_IDX: usize = 9;  /// 0-based expected column index where g
 const VCF_EXT: [&str; 2] = ["vcf", "vcf.gz"];
 
 
+impl<'a> GenotypeReader for VCFReader<'a> {
+    // Return the alleles for a given SampleTag. Search is performed using `sample_tag.idx()`;
+    fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2]> {
+        use GenotypeReaderError::{MissingAlleles, InvalidSampleIndex};
+        let geno_idx = 4 * sample_tag.idx().as_ref().ok_or(InvalidSampleIndex)
+            .with_loc(|| format!("While retrieving alleles of {}", sample_tag.id()))?;
+            
+        let retrieve_err = || format!("Failed to retrieve the alleles of sample {} within the current VCF.", sample_tag.id());
+        let haplo1 = self.buf.get(geno_idx  ).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
+        let haplo2 = self.buf.get(geno_idx+2).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
+        Ok([haplo1, haplo2])
+    }
+    
+    // Return the alleles frequencies for a given population id.
+    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f32> {
+        use GenotypeReaderError::MissingFreq;
+        self.info.get_pop_allele_frequency(pop)
+            .map_err(|_|MissingFreq(pop.to_string()))
+            .loc("While parsing coordinate")
+    }
 
+    fn fetch_input_files(input_dir: &Path) -> Result<Vec<PathBuf>> {
+        let vcfs = parse::fetch_input_files(input_dir, &VCF_EXT).loc("While searching for candidate vcf files.")?;
+        debug!("Found the following vcf file candidates as input for the pedigree simulations: {:#?}", vcfs);
+        Ok(vcfs)
+    }
+}
 
 /// GenotypeReader using a `.vcf`, of `.vcf.gz` file.
 /// # Description 
@@ -150,7 +176,7 @@ impl<'a> VCFReader<'a> {
         Ok(())
     }
 
-    /// Skip to othe expected sample genotypes fields and fill `self.buf` with all subsequent fields until an EOL is found.
+    /// Skip to the expected sample genotypes fields and fill `self.buf` with all subsequent fields until an EOL is found.
     /// - Once this method is called, `self.buf` is expected to contain all the samples genotypes for the current line.
     /// - Since we're working with raw bytes:
     ///   - REF (0) == 48
@@ -221,33 +247,5 @@ impl<'a> VCFReader<'a> {
             }
         }
         panic!();
-    }
-}
-
-impl<'a> GenotypeReader for VCFReader<'a> {
-    // Return the alleles for a given SampleTag. Search is performed using `sample_tag.idx()`;
-    fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2]> {
-        use GenotypeReaderError::{MissingAlleles, InvalidSampleIndex};
-        let geno_idx = 4 * sample_tag.idx().as_ref().ok_or(InvalidSampleIndex)
-            .with_loc(|| format!("While retrieving alleles of {}", sample_tag.id()))?;
-            
-        let retrieve_err = || format!("Failed to retrieve the alleles of sample {} within the current VCF.", sample_tag.id());
-        let haplo1 = self.buf.get(geno_idx  ).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
-        let haplo2 = self.buf.get(geno_idx+2).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
-        Ok([haplo1, haplo2])
-    }
-    
-    // Return the alleles frequencies for a given population id.
-    fn get_pop_allele_frequency(&self, pop: &str) -> Result<f64> {
-        use GenotypeReaderError::MissingFreq;
-        self.info.get_pop_allele_frequency(pop)
-            .map_err(|_|MissingFreq(pop.to_string()))
-            .loc("While parsing coordinate")
-    }
-
-    fn fetch_input_files(input_dir: &Path) -> Result<Vec<PathBuf>> {
-        let vcfs = parse::fetch_input_files(input_dir, &VCF_EXT).loc("While searching for candidate vcf files.")?;
-        debug!("Found the following vcf file candidates as input for the pedigree simulations: {:#?}", vcfs);
-        Ok(vcfs)
     }
 }

@@ -233,14 +233,15 @@ impl Pedigrees {
     /// # Panics:
     /// - when failing to convert `input_fst_path` to a string slice.
     #[allow(unused_labels)]
-    pub fn pedigree_simulations_fst(&mut self, comparisons: &mut PileupComparisons, input_fst_path: &Path, maf: f64) -> Result<()> {
+    pub fn pedigree_simulations_fst(&mut self, comparisons: &mut PileupComparisons, input_fst_path: &Path, maf: f32) -> Result<()> {
         let loc_msg = "While performing pedigree simulations";
         // ----  Initialize a new FSTReader.
         let mut fst_reader = FSTReader::new(&input_fst_path.to_string_lossy()).loc(loc_msg)?;
 
         // ---- Get a list of which chromosomes are found within the FST index. 
         let contained_chromosomes = fst_reader.find_chromosomes().loc(loc_msg)?;
-
+        debug!("Contained chromosomes: {contained_chromosomes:?}");
+        
         // ---- Extract the minimum and maximum values.
         let max = *contained_chromosomes.last().context("Failed to retrieve chromosome range").loc(loc_msg)?;
         let min = contained_chromosomes[0];
@@ -266,7 +267,7 @@ impl Pedigrees {
             let key = comparison.get_pair();
             'coordinate: for (i, pairwise_diff) in relevant_positions.enumerate() {                
                 let coordinate = pairwise_diff.coordinate;
-                //// --------------------- Print progress in increments of 10%
+                // --------------------- Print progress in increments of 10%
                 if (i % ((n/10)+1)) == 0 {
                     let percent = (i as f32 / (n as f32).floor()) * 100.0 ;
                     info!("{percent: >5.1}% : {coordinate}");
@@ -339,7 +340,7 @@ impl Pedigrees {
     /// 
     /// # Panics:
     /// - when failing to convert `input_vcf_path` to a string slice.
-    pub fn pedigree_simulations_vcf(&mut self, comparisons: &mut PileupComparisons, input_vcf_path: &Path, maf: f64, threads: usize) -> Result<()> {
+    pub fn pedigree_simulations_vcf(&mut self, comparisons: &mut PileupComparisons, input_vcf_path: &Path, maf: f32, threads: usize) -> Result<()> {
         let loc_file  = || format!("While attempting to perform pedigree simulations on {}", input_vcf_path.display());
         let loc_coord = {|c: &Coordinate| format!("While parsing coordinate: {c}")};
         // --------------------- Read VCF File line by line.

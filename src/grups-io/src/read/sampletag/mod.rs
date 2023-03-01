@@ -7,6 +7,7 @@
 pub struct SampleTag {
     id : String,
     idx: Option<usize>,
+    hash_id: u128,
 }
 
 impl SampleTag {
@@ -14,8 +15,8 @@ impl SampleTag {
     /// # Arguments:
     /// - `id` : raw string slice corresponding to the name of the sample
     /// - `idx`: optional vcf column field index of the sample.
-    pub fn new(id: &str, idx: Option<usize>) -> SampleTag {
-        SampleTag{id: id.to_string(), idx}
+    pub fn new(id: &str, idx: Option<usize>) -> Self {
+        SampleTag{id: id.to_string(), idx, hash_id: Self::hash_id_u128(id.as_bytes()) }
     }
 
     /// Return the name of the sample.
@@ -28,9 +29,22 @@ impl SampleTag {
         &self.idx
     }
 
+    /// Return the u128 hash representation of the sample id
+    pub fn hashed_id(&self) -> u128 {
+        self.hash_id
+    }
+
     /// Set the vcf column field index of the sample.
     pub fn set_idx(&mut self, idx: usize) {
         self.idx = Some(idx);
+    }
+
+    #[inline]
+    pub fn hash_id_u128(id: &[u8]) -> u128 {
+        let mut hashed_tag = [0u8; 16];
+        hashed_tag[..id.len()].copy_from_slice(&id[..id.len()]);
+        let hashed_tag: u128 = unsafe {std::mem::transmute(hashed_tag)};
+        hashed_tag
     }
 }
 

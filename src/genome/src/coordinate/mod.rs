@@ -120,11 +120,48 @@ impl Coordinate {
     }
 }
 
+/// Convert a Coordinate into a length 5 raw byte array: 
+/// First byte is chromosome as u8
+/// bytes 1..5 is position, encoded into u32 big endian.
+/// [{chr u8}, {pos u32_big_endian}]
+impl From<Coordinate> for [u8; 5] {
+    fn from(value: Coordinate) -> [u8; 5] {
+        let mut out: [u8;5] = [0; 5];
+        out[0] = u8::from(value.chromosome);
+        // @TODO: this could panic if 
+        u32::from(value.position).to_be_bytes().iter().enumerate().for_each(|(i,byte)| out[i+1] = *byte);
+        out
+    }
+}
+
+impl From<[u8; 5]> for Coordinate {
+    fn from(value: [u8; 5]) -> Self {
+        let chromosome = ChrIdx(value[0]);
+        let mut position_bytes = [0; 4];
+        value[1..5].iter().enumerate().for_each(|(i, byte)| position_bytes[i] = *byte);
+        let position = Position(u32::from_be_bytes(position_bytes));
+        Coordinate::new(chromosome, position)
+    }
+}
+
 impl TryFrom<(&str, &str)> for Coordinate {
     type Error = CoordinateError;
 
     fn try_from(value: (&str, &str)) -> Result<Self, Self::Error> {
         Ok(Self{chromosome: value.0.parse()?, position: value.1.parse()?})
+    }
+}
+
+
+impl TryFrom<&[u8]> for Coordinate {
+    type Error = CoordinateError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let chromosome = ChrIdx::from(value[0]);
+        let raw_pos    = u32::from_be_bytes(value[1..5].try_into().unwrap());
+        let position   = Position::from(raw_pos);
+        Ok(Self{chromosome, position})
+        
     }
 }
 
