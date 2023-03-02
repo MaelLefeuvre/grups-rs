@@ -17,8 +17,8 @@
   itertools         = "0.10.3"
   rust-lapper       = "1.0.0"
   log               = "0.4.16"
-  anyhow            = "1"
-  thiserror         = "1"
+  anyhow            = "1.0"
+  thiserror         = "1.0"
   ahash             = "0.7.6"
 
 [dev-dependencies]

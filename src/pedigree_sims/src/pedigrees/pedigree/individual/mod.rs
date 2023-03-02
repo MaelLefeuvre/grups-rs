@@ -183,14 +183,14 @@ impl Individual {
     }
 
     /// Check whether or not this individual is a founder individual. Returns `true` if `self.parents == None`
-    //#[inline(always)]
+    #[inline(always)]
     pub fn is_founder(&self) -> bool {
         self.parents.is_none()
     }
 
     /// Manually set the individuals SampleTag. meaningless for offsprings.*
     /// Arguments:
-    /// - `tag`: Input sample identification tag. (i.e. the name and idx of the snp-callsed individual being used for simulations)
+    /// - `tag`: Input sample identification tag. (i.e. the name and idx of the snp-callset individual being used for simulations)
     pub fn set_tag(&mut self, tag: SampleTag){
         self.tag = Some(tag);
     }

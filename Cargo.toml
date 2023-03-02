@@ -68,12 +68,12 @@
   vcf-fst           = {path = "src/vcf-fst"}
   located-error     = {path = "src/located-error"}
   
-  clap           = {version = "3.1.2", features = ["derive"]}
+  clap           = {version = "3.2", features = ["derive"]}
   log            = "0.4.16"
   fastrand       = "1.8.0"
   serde_yaml     = "0.8"
-  anyhow         = "1"
-  thiserror      = "1"
+  anyhow         = "1.0"
+  thiserror      = "1.0"
 
 [dev-dependencies]
   tempfile       = "3.3.0"

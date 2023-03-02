@@ -77,14 +77,14 @@ impl PedComparison {
 
         let random_sample0 = self.pair[0].borrow()
             .get_alleles()
-            .and_then(|allele| Self::simulate_observed_reads(1, rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], allele))
+            .and_then(|allele| Self::simulate_observed_read(rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], allele))
             .with_loc(||CompareAllele)?;
         let random_sample1 = self.pair[1].borrow()
             .get_alleles()
-            .and_then(|allele| Self::simulate_observed_reads(1, rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], allele))
+            .and_then(|allele| Self::simulate_observed_read(rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], allele))
             .with_loc(||CompareAllele)?;
 
-        if random_sample0[0] != random_sample1[0] {
+        if random_sample0 != random_sample1 {
             self.add_pwd();
         } // else if random_sample0[0] == 1 { // WIP: heterozygocity
         //    self.hom_alt_sum += 1;
@@ -96,7 +96,35 @@ impl PedComparison {
     //pub fn get_heterozygocity_ratio(&self) -> f64 {
     //    f64::from(self.pwd) / f64::from(self.hom_alt_sum)
     //}
+    
+    /// Simulate *one* random sampling from a set of alleles, given the provided contamination and sequencing parameters.
+    /// - `contam_rate`   : Modern human contamination rate required for the simulation.
+    /// - `contam_pop_af` : allele frequency of the contaminating population for the current SNP coordinate.
+    /// - `seq_error_rate`: sequencing error rate required for the simulation.
+    /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
+    #[inline]
+    fn simulate_observed_read(rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<u8> {
+        use ComparisonError::{SampleAllele, SimSeqError};
+        // ---- Simulate modern human contamination. 
+        let chosen_base: u8 = match rng.f64() < contam_rate {
+            true  => match rng.f64() < contam_pop_af {
+                true  => 1,  // Becomes the alternative reference allele, if contam_rate * contam_pop_af
+                false => 0,  // otherwise, pick the reference allele.
+            }
+            false => *alleles.get(rng.usize(0..=1)).with_loc(||SampleAllele)?
+        };
 
+        // ---- Simulate sequencing error rate.
+        // @ TODO: Find a smarter way to simulate error rates.
+        const SEQ_ERROR_CHOICES: [[u8; 3]; 4] = [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
+        if rng.f64() < seq_error_rate {
+            let wrong_base: u8 = *SEQ_ERROR_CHOICES[chosen_base as usize].get(rng.usize(0..3)).with_loc(||SimSeqError)?;
+            Ok(wrong_base)
+        }
+        else {
+            Ok(chosen_base)
+        }
+    }
 
     /// Simulate `n` observed pileup reads from a set of alleles and given the provided contamination and sequencing parameters.
     /// # Arguments:
@@ -105,32 +133,16 @@ impl PedComparison {
     /// - `contam_pop_af` : allele frequency of the contaminating population for the current SNP coordinate.
     /// - `seq_error_rate`: sequencing error rate required for the simulation.
     /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
-    // #[inline(always)]
-    fn simulate_observed_reads(n: u8, rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>> {
-        use ComparisonError::{SampleAllele, SimSeqError};
-        let mut reads = Vec::with_capacity(n as usize);
-
+    /// 
+    /// # Note: 
+    /// - this is a legacy function, which now wraps around the more performant [[`simulate_observed_read`]].
+    /// - Keeping this for unit-testing purposes.
+    #[cfg(test)]
+    fn _simulate_observed_reads(n: u8, rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>> {
         // ---- Simulate n pileup observations.
+        let mut reads = Vec::with_capacity(n as usize);
         for _ in 0..n {
-            // ---- Simulate modern human contamination. 
-            let chosen_base: u8 = match rng.f64() < contam_rate {
-                true  => match rng.f64() < contam_pop_af {
-                    true  => 1,  // Becomes the alternative reference allele, if contam_rate * contam_pop_af
-                    false => 0,  // otherwise, pick the reference allele.
-                }
-                false => *alleles.get(rng.usize(0..=1)).with_loc(||SampleAllele)?
-            };
-
-            // ---- Simulate sequencing error rate.
-            const SEQ_ERROR_CHOICES: [[u8; 3]; 4] = [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
-            if rng.f64() < seq_error_rate {
-                let wrong_base: u8 = *SEQ_ERROR_CHOICES[chosen_base as usize].get(rng.usize(0..3)).with_loc(||SimSeqError)?;
-
-                reads.push(wrong_base);
-            }
-            else {
-                reads.push(chosen_base);
-            }
+            reads.push(Self::simulate_observed_read(rng, contam_rate, contam_pop_af, seq_error_rate, alleles)?)
         }
         Ok(reads)
     }
@@ -203,7 +215,7 @@ mod tests {
             for contam_pop_af in binary_rates {
                 for alleles in binary_alleles {
                     let want = get_expected_simulated_allele(alleles[0], contam_rate, contam_pop_af);
-                    let got = PedComparison::simulate_observed_reads(1, &mut rng, contam_rate, contam_pop_af, 0.0, alleles)?;
+                    let got = PedComparison::_simulate_observed_reads(1, &mut rng, contam_rate, contam_pop_af, 0.0, alleles)?;
                     assert_eq!(want, got[0]);
                 }
             }

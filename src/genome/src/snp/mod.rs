@@ -147,7 +147,11 @@ mod tests {
         for chromosome in 1..22 {
             for position in (1..N_ITERS).step_by(1000) {
                 let mut random_nucl = nucleotides.choose_multiple(&mut rng, 2);
-                let coord = SNPCoord::try_new(chromosome, position, *random_nucl.next().unwrap(), *random_nucl.next().unwrap())?;
+                let coord = SNPCoord::try_new(
+                    chromosome, position,
+                    *random_nucl.next().expect("Missing random nucleotide"),
+                    *random_nucl.next().expect("Missing random nucleotide")
+                )?;
                 assert!(test_hashset.insert(coord));
             }
         }

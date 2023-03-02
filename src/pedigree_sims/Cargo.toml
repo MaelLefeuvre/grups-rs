@@ -17,19 +17,18 @@
   fst            = "0.4"
   log            = "0.4.16"
   rand           = "0.8.5"
-  memmap         = "0.7.0"
+  memmap2        = "0.5.10"
   fastrand       = "1.8.0"
   ahash          = "0.7.6"
   thiserror      = "1.0"
   anyhow         = "1.0"
   linfa          = "0.6"
   linfa-svm      = "0.6"
-  linfa-datasets = { version = "0.6", features = ["winequality"] }
   ndarray        = "0.15"
   libsvm         = "0.4"
   smartcore      = {version = "0.3", features=[ "ndarray-bindings", "datasets"]}
 
 [dev-dependencies]
   mockall        = "0.11.0"
-  itertools      = "0.8.0"
+  itertools      = "0.10.3"
 

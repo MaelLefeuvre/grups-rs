@@ -64,15 +64,19 @@ impl Cli{
 
         // Fetch the appropriate output-directory and parse the name of the output file.
         let current_time = chrono::offset::Local::now().format("%Y-%m-%dT%H%M%S").to_string();
-        let output_file = match &self.commands {
+
+        let output_file = match &self.commands { // @TODO: lots of repetition here. Stay dry: macro_rules!
             Commands::PedigreeSims {common, pwd: _, ped: _} => {
-                format!("{}/{current_time}-pedigree-sims.yaml", common.output_dir.to_str().unwrap())
+                let dir_string = common.output_dir.to_str().expect("Invalid characters in directory");
+                format!("{dir_string}/{current_time}-pedigree-sims.yaml")
             },
             Commands::PwdFromStdin {common, pwd: _} => {
-                format!("{}/{current_time}-pwd-from-stdin.yaml", common.output_dir.to_str().unwrap())
+                let dir_string = common.output_dir.to_str().expect("Invalid characters in directory");
+                format!("{dir_string}/{current_time}-pwd-from-stdin.yaml")
             },
             Commands::FST {fst} => {
-                format!("{}/{current_time}-fst-index.yaml", fst.output_dir.to_str().unwrap())
+                let dir_string = fst.output_dir.to_str().expect("Invalid characters in directory");
+                format!("{dir_string}/{current_time}-fst-index.yaml")
             },
 
             Commands::FromYaml {yaml: _} => return Ok(()),
@@ -256,6 +260,7 @@ pub struct PwdFromStdin {
 pub enum Mode {
     Vcf,
     Fst,
+    FstMmap
 }
 
 impl Default for Mode {
@@ -619,7 +624,7 @@ fn parse_pedigree_param(s: &str) -> Result<Vec<f64>> {
 ///```
 /////use pwd_from_stdin::parser::parse_user_ranges;
 /////let user_input:   Vec<&str> = vec!["5", "1-3", "7"];
-/////let parsed_input: Vec<usize>  = parse_user_ranges(&user_input, "chr").unwrap();
+/////let parsed_input: Vec<usize>  = parse_user_ranges(&user_input, "chr").expect("error");
 /////assert_eq!(parsed_input, vec![1, 2, 3, 5, 7])
 ///```
 /// 

@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn try_from_char() {
         for (allele, char) in expected() {
-            assert_eq!(Allele::try_from(char).unwrap(), allele);
+            assert_eq!(Allele::try_from(char).expect("Failed conversion from char to allele"), allele);
         }
     }
 

@@ -247,8 +247,8 @@ mod tests {
             let results = [error_bubble_2(), error_bubble_1(), error_bubble_0()];
             for result in results { 
                 assert_eq!(
-                    format!("{}", chain.next().unwrap()),
-                    format!("{}", result.err().unwrap())
+                    format!("{}", chain.next().expect("Empty error chain")),
+                    format!("{}", result.expect_err("Not an error."))
                 );
             }
 

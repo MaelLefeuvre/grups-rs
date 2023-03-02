@@ -67,6 +67,7 @@ impl Pedigree {
     /// # Errors:
     /// - if `self.params` is `None`
     /// - if an individual being compared carries `None` alleles.
+    #[inline]
     pub fn compare_alleles(&mut self, cont_af: [f64; 2], pileup_error_probs: &[f64; 2], rng: &mut fastrand::Rng) -> Result<()> {
         use PedigreeError::FailedAlleleComparison;
         // ---- Extract the user-defined contamination rate of this pedigree.
@@ -97,6 +98,7 @@ impl Pedigree {
     /// 
     /// # Panics
     /// - if any founder's tag is set to `None`
+    #[inline]
     pub fn update_founder_alleles(&mut self, reader: &dyn GenotypeReader, rng: &mut fastrand::Rng) -> Result<()> {
         let loc_msg = "While updating founder individiuals' alleles";
         // ---- Extract this pedigree allele frequency downsampling rate.
@@ -131,6 +133,7 @@ impl Pedigree {
     /// 
     /// # Panics
     /// - if any individual's `self.parents` is set to none `None` (i.e. Individual is a founder.)
+    #[inline]
     pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, rng: &fastrand::Rng) -> Result<()> {
         for mut offspring in self.offsprings_mut() {
             offspring.assign_alleles(interval_prob_recomb, pedigree_index, rng)
@@ -244,6 +247,7 @@ impl Pedigree {
     ///    - offsprings_mut : !ind.is_founder()
     ///  - collecting the iterator is useless, since we're always calling this method to iterate over the items.
     ///    --> return an iterator!!
+    #[inline]
     pub fn founders_mut(&mut self) -> impl Iterator<Item = RefMut<Individual>> {
         self.individuals
             .values_mut()
@@ -252,9 +256,7 @@ impl Pedigree {
     }
 
     /// Obtain a vector of mutable references leading to the offsprings of this pedigree.
-    /// # @TODO:
-    /// - collecting the iterator is useless, since we're always calling this method to iterate over the items.
-    ///   --> return an iterator!!
+    #[inline]
     pub fn offsprings_mut(&mut self) -> impl Iterator<Item = RefMut<Individual>> {
         self.individuals
             .values_mut()

@@ -158,7 +158,7 @@ impl TryFrom<&[u8]> for Coordinate {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let chromosome = ChrIdx::from(value[0]);
-        let raw_pos    = u32::from_be_bytes(value[1..5].try_into().unwrap());
+        let raw_pos    = u32::from_be_bytes(value[1..5].try_into()?);
         let position   = Position::from(raw_pos);
         Ok(Self{chromosome, position})
         

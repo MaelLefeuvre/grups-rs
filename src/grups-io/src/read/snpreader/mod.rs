@@ -149,31 +149,34 @@ impl<'a> SNPReader<'a> {
 mod tests {
     use super::*;
 
+    macro_rules! check_file_format {
+        ($cols:expr, $sep:expr, $ext:expr) => {
+            let path = format!("./targets /v50.0_1240K_public.{}", $ext);
+            assert_eq!(($cols, $sep), SNPReader::get_file_format(&path).expect("Failed to obtain file format"));
+        }
+    }
+
     #[test]
     fn snp_reader_file_ext_snp(){
-        let path = "./targets /v50.0_1240K_public.snp";
-        assert_eq!(([1,3,4,5], ' '), SNPReader::get_file_format(path).unwrap())
+        check_file_format!([1,3,4,5], ' ', "snp");
     }
     #[test]
     fn snp_reader_file_ext_vcf(){
-        let path = "./targets /v50.0_1240K_public.vcf";
-        assert_eq!(([0,1,3,4], '\t'), SNPReader::get_file_format(path).unwrap())
+        check_file_format!([0,1,3,4], '\t', "vcf");
+
     }
     #[test]
     fn snp_reader_file_ext_txt(){
-        let path = "./targets /v50.0_1240K_public.txt";
-        assert_eq!(([0,1,2,3], ' '), SNPReader::get_file_format(path).unwrap())
+        check_file_format!([0,1,2,3], ' ', "txt");
     }
 
     #[test]
     fn snp_reader_file_ext_tsv(){
-        let path = "./targets /v50.0_1240K_public.tsv";
-        assert_eq!(([0,1,2,3], '\t'), SNPReader::get_file_format(path).unwrap())
+        check_file_format!([0,1,2,3], '\t', "tsv");
     }
 
     #[test]
     fn snp_reader_file_ext_csv(){
-        let path = "./targets /v50.0_1240K_public.csv";
-        assert_eq!(([0,1,2,3],','), SNPReader::get_file_format(path).unwrap())
+        check_file_format!([0,1,2,3], ',', "csv");
     }
 }

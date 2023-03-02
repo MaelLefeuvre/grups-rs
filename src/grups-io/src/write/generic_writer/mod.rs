@@ -1,6 +1,7 @@
 use std::{fs::File, io::{Write, BufWriter}, path::Path};
 use anyhow::Result;
 use regex::Regex;
+use lazy_static::lazy_static;
 
 use located_error::LocatedError;
 
@@ -54,10 +55,12 @@ impl<'a> GenericWriter<'a>{
     where   T: IntoIterator<Item = I>,
             I: std::fmt::Display,
     {
-        // @TODO: Lazy static this regex!
-        let re = Regex::new(r"[ ]+-[ ]+").unwrap(); // Remove pretty print trailing and leading whitespace.
+        // Remove pretty print trailing and leading whitespace
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"[ ]+-[ ]+").expect("Failed to parse regex.");
+        }
         iter.into_iter()
-            .map(|obj| self.source.write(re.replace_all(&format!("{obj}\n"), WRITER_SEPARATOR).as_bytes()))
+            .map(|obj| self.source.write(RE.replace_all(&format!("{obj}\n"), WRITER_SEPARATOR).as_bytes()))
             .collect::<Result<Vec<usize>, _>>()
             .map_err(WriterError::IOError)
             .loc("While writing contents into file")?;

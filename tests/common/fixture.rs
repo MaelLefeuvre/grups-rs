@@ -22,13 +22,13 @@ impl Fixture {
         source.push(fixture_filename);
 
         // The "real" path of the file is going to be under a temporary directory:
-        let tempdir = tempfile::tempdir().unwrap();
+        let tempdir = tempfile::tempdir().expect("Failed to generate temp directory");
 
         // Check if the given path is absolute... match only the filename if so. (allows recursion.)
         let mut path = std::path::PathBuf::from(&tempdir.path());
         let fixture_path = Path::new(&fixture_filename);
         match fixture_path.is_absolute() {
-            true => path.push(fixture_path.file_name().unwrap()), // PathBuf overwrites the buffer if the given str is absolute.
+            true  => path.push(fixture_path.file_name().expect("Invalid filename")), // PathBuf overwrites buffer when path is absolute.
             false => path.push(fixture_filename), 
         };
 
@@ -40,10 +40,10 @@ impl Fixture {
     pub fn copy(fixture_filename: &str) -> Self {
         let fixture = Fixture::blank(fixture_filename);
         if fixture.source.is_dir() {
-            copy_dir_all(&fixture.source, &fixture.path).unwrap();
+            copy_dir_all(&fixture.source, &fixture.path).expect("Failed to copy directory");
         } else {
-            std::fs::create_dir_all(fixture.path.parent().unwrap()).unwrap();
-            std::fs::copy(&fixture.source, &fixture.path).unwrap();
+            std::fs::create_dir_all(fixture.path.parent().expect("No parent directory")).expect("Failed to create directory");
+            std::fs::copy(&fixture.source, &fixture.path).expect("Failed to copy Fixture files.");
         }
         fixture
     }
@@ -73,6 +73,6 @@ impl std::ops::Deref for Fixture {
 
 impl std::fmt::Display for Fixture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.path.to_str().unwrap())
+        write!(f, "{}", self.path.to_str().expect("Invalid path (non UTF8 characters ?)"))
     }
 }

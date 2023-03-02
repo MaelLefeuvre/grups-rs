@@ -11,5 +11,8 @@ pub enum CoordinateError {
     ParsePosition(#[from] ParsePositionError),
 
     #[error("Failed to parse Coordinate: missing delimiter '{0}' in string")]
-    MissingDelimiter(char)
+    MissingDelimiter(char),
+
+    #[error("Failed to parse Coordinate from byte slice.")]
+    ParseFromSlice(#[from] std::array::TryFromSliceError)
 }

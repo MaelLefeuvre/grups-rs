@@ -96,9 +96,8 @@ pub fn run(
             panel.assign_vcf_indexes(input_vcf_paths[0].as_path())?;
             input_vcf_paths
         },
-        parser::Mode::Fst => {
-            FSTReader::fetch_input_files(&ped_cli.data_dir)?
-        },
+        parser::Mode::Fst    => FSTReader::<Vec<u8>>::fetch_input_files(&ped_cli.data_dir)?,
+        parser::Mode::FstMmap => FSTReader::<memmap2::Mmap>::fetch_input_files(&ped_cli.data_dir)?
     };
 
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
@@ -135,24 +134,21 @@ pub fn run(
         parser::Mode::Vcf => {
             info!("Starting VCF pedigree comparisons.");
             for vcf in &input_paths {
-                pedigrees.pedigree_simulations_vcf(
-                    comparisons, 
-                    vcf,
-                    ped_cli.maf,
-                    ped_cli.decompression_threads
-                )?;
+                pedigrees.pedigree_simulations_vcf(comparisons,  vcf, ped_cli.maf, ped_cli.decompression_threads)?;
             }
         },
         parser::Mode::Fst => {
-            info!("Starting FST pedigree comparisons.");
+            info!("Starting FST pedigree comparisons (in RAM).");
             for fst in &input_paths{
-                pedigrees.pedigree_simulations_fst(
-                    comparisons,
-                    fst,
-                    ped_cli.maf
-                )?;
+                pedigrees.pedigree_simulations_fst::<Vec<u8>>(comparisons, fst, ped_cli.maf)?;
             }
         },
+        parser::Mode::FstMmap => {
+            info!("Starting FST pedigree comparisons (Memmap).");
+            for fst in &input_paths{
+                pedigrees.pedigree_simulations_fst::<memmap2::Mmap>(comparisons, fst, ped_cli.maf)?;
+            }
+        }
     }
 
     //pedigrees.filter(comparisons);

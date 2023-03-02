@@ -11,12 +11,10 @@
   genome         = {path = "../genome"}
   pedigree_sims  = {path = "../pedigree_sims" }
   located-error  = {path = "../located-error"}
-  grups-io       = {path ="../grups-io"}
+  grups-io       = {path = "../grups-io"}
   logger         = {path = "../logger"}
   parser         = {path = "../parser"}
   fst            = "0.4"
   log            = "0.4.16"
   rayon          = "1.5.2"
   thiserror      = "1.0"
-  anyhow         = "1.0"
-  byteorder      = "1.4"

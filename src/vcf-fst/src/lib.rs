@@ -313,7 +313,7 @@ impl<'a> VCFIndexer<'a> {
             unsafe { key.append(sample_tag.id().clone().as_mut_vec()) };  // UNSAFE: add sampleID
 
             // ---- Extract genotype info for thesample and add it to the key.
-            let geno_idx = sample_tag.idx().unwrap() * 4;                // x4, since each field+separator is four characters long. (e.g.: '0|0 ')
+            let geno_idx = sample_tag.idx().expect("Missing sample tag index") * 4;                // x4, since each field+separator is four characters long. (e.g.: '0|0 ')
             key.push(self.genotypes_buffer[geno_idx  ]); // haplo1
             key.push(self.genotypes_buffer[geno_idx+2]); // haplo2
 
@@ -375,8 +375,8 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
                 // -------------------------- Format output file stem
                 let file_stem = vcf.as_path()
                     .file_name()
-                    .unwrap()
-                    .to_str().unwrap()
+                    .and_then(|f| f.to_str())
+                    .expect("Invalid vcf file name (non-UTF8 characters present?)")
                     .replace(".vcf.gz", "")
                     .replace(".vcf", "");
 

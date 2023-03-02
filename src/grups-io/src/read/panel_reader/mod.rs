@@ -254,8 +254,10 @@ mod tests {
 
         // Since "NA06984" is part of the excluded inds, it's expected he'll never be sampled.
         for _ in 0..1000 {
-            let random = panel.random_sample(&pop, Some(&exclude.iter().collect()));
-            assert_eq!(random.unwrap().unwrap().id(), "HG00096");
+            let random = panel.random_sample(&pop, Some(&exclude.iter().collect()))
+                .expect("Failed to obtain random sample")
+                .expect("Missing random sample");
+            assert_eq!(random.id(), "HG00096");
         }
     }
 }

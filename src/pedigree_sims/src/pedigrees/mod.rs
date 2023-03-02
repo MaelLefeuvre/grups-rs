@@ -4,7 +4,7 @@ use std::{ collections::HashMap, path::{Path}};
 use grups_io::{
     write::GenericWriter,
     read::SampleTag,
-    read::genotype_reader::{GenotypeReader, VCFReader, FSTReader},
+    read::genotype_reader::{GenotypeReader, VCFReader, FSTReader, fst::SetRead},
     read::PanelReader,
 };
 
@@ -233,10 +233,10 @@ impl Pedigrees {
     /// # Panics:
     /// - when failing to convert `input_fst_path` to a string slice.
     #[allow(unused_labels)]
-    pub fn pedigree_simulations_fst(&mut self, comparisons: &mut PileupComparisons, input_fst_path: &Path, maf: f32) -> Result<()> {
+    pub fn pedigree_simulations_fst<T: SetRead<T> + AsRef<[u8]>>(&mut self, comparisons: &mut PileupComparisons, input_fst_path: &Path, maf: f32) -> Result<()> {
         let loc_msg = "While performing pedigree simulations";
         // ----  Initialize a new FSTReader.
-        let mut fst_reader = FSTReader::new(&input_fst_path.to_string_lossy()).loc(loc_msg)?;
+        let mut fst_reader: FSTReader::<T> = FSTReader::new(&input_fst_path.to_string_lossy()).loc(loc_msg)?;
 
         // ---- Get a list of which chromosomes are found within the FST index. 
         let contained_chromosomes = fst_reader.find_chromosomes().loc(loc_msg)?;
