@@ -280,7 +280,7 @@ impl Pedigrees {
 
                 // --------------------- If genotypes is empty, then this position is missing within the index... Skip ahead.
                 if ! fst_reader.has_genotypes() {
-                    debug!("Missing coordinate in fst index: {coordinate}");
+                    trace!("Missing coordinate in fst index: {coordinate}");
                     missing_snps += 1;                    // MODIFIED
                     continue 'coordinate
                 }
@@ -288,7 +288,7 @@ impl Pedigrees {
                 // --------------------- Skip line if allele frequency is < maf and keep in memory for filtration..
                 let pop_af = fst_reader.get_pop_allele_frequency(&self.pedigree_pop)?;
                 if pop_af < maf || pop_af > (1.0-maf) { 
-                    debug!("skip allele at {coordinate}: pop_af: {pop_af:<8.5} --maf: {maf}");
+                    trace!("skip allele at {coordinate}: pop_af: {pop_af:<8.5} --maf: {maf}");
                     positions_to_delete.entry(key.to_owned()).or_insert_with(Vec::new).push(pairwise_diff.coordinate);
                     continue 'coordinate
                 }
@@ -298,14 +298,11 @@ impl Pedigrees {
                 self.update_pedigrees(&fst_reader, &coordinate,  &key, &pileup_error_probs)?;
             }
 
-            // MODIFIED
-            for pedigree in self.pedigrees.get_mut(&comparison.get_pair()).unwrap().iter_mut() {
-                for comparison in pedigree.comparisons.iter_mut() {
-                    comparison.add_missing(missing_snps);
-                }
+            // ---- Count missing SNPs as non-informative positions. i.e. an overlap.
+            if missing_snps > 0 {
+                info!("{missing_snps} missing SNPs within the simulation dataset. Counting those as non-informative overlap.\n");
+                self.pedigrees.get_mut(&comparison.get_pair()).unwrap().add_non_informative_snps(missing_snps);
             }
-            info!("# -------------------------- Missing \n{missing_snps}\n ----");
-            // END MODIFIED
         }
 
 

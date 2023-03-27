@@ -5,6 +5,9 @@ use crate::read::SampleTag;
 mod vcf;
 pub use vcf::VCFReader;
 
+mod bcf;
+pub use bcf::BcfReader;
+pub use bcf::VariantFilter;
 
 pub mod fst;
 pub use self::fst::FSTReader;
