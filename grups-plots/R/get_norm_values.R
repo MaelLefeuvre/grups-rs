@@ -14,10 +14,10 @@ get_norm_values <- function(
 
   norm_value <- switch(norm_method,
     "Pairwise" = norm_metric_function(
-      pwd_data[which(pwd_data$Self == FALSE), ]$Norm.Avg
+      pwd_data[which(pwd_data$Self == FALSE), ]$Norm.Avg, na.rm = TRUE
     ),
     "Self"     = norm_metric_function(
-      pwd_data[which(pwd_data$Self == TRUE), ]$Norm.Avg
+      pwd_data[which(pwd_data$Self == TRUE), ]$Norm.Avg, na.rm = TRUE
     ),
     "Value"    = ifelse(norm_request, 1, norm_value)
   )

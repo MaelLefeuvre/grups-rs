@@ -11,7 +11,7 @@ app <- function(
   ui,
   server,
   data_dir     = "./grups_output",
-  sample_regex = "[A-Za-z0-9]+([-0-9]+){0,1}",
+  sample_regex = "[A-Za-z0-9]+(?:[-0-9]+){0,1}",
   threads      = 1,
   ...
 ) {
@@ -444,9 +444,12 @@ app <- function(
     shiny::observeEvent(input$dimension, {
       output$kinship_matrix <- plotly::renderPlotly(
         grups.plots::plot_kinship_matrix(
-          kinship_matrix = grups.plots::get_kinship_matrix(load_results_file()),
+          kinship_matrix = grups.plots::get_kinship_matrix(
+            load_results_file(),
+            sample_regex
+          ),
           dimensions = input$dimension,
-          order = input$kinship_matrix_ordered_labels
+          order      = input$kinship_matrix_ordered_labels
         )
       )
     })

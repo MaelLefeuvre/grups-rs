@@ -12,6 +12,10 @@ get_svmop_probs <- function(
   progressor = NULL
 ) {
   future::plan(future::multisession, workers = threads)
+
+  # Filter out samples with empty overlap ! 
+  results_file <- results_file[which(results_file$Corr.Overlap != 0), ]
+
   probs <- data.frame(
     Pair_name    = results_file$Pair_name,
     Corr.Avg.PWD = results_file$Corr.Avg.PWD
@@ -25,6 +29,7 @@ get_svmop_probs <- function(
       if (!is.null(progressor)) {
         i <<- i + 1
         msg <- sprintf("Processing [%d/%d]: %s", i, NROW(sim_files), pair_name)
+        print(msg)
         progressor(msg)
       }
       svms     <- fit_svms(sim_files[pair_name, ])
