@@ -1,4 +1,4 @@
-use std::{str, path::Path, fs::File, io::{BufRead, BufWriter}, collections::BTreeMap};
+use std::{str, path::Path, fs::File, io::{BufRead, BufWriter}, collections::BTreeMap, error::Error};
 
 use genome::coordinate::Coordinate;
 
@@ -10,11 +10,18 @@ use grups_io::read::{
 };
 
 use fst::SetBuilder;
-use log::{info, error};
+use log::{info, error, trace, debug};
 use rayon::{self}; 
 
 mod error;
 use error::GenomeFstError;
+
+
+pub enum AFStrategy {
+    ComputeFromAlleles,
+    ParseFromVcf
+}
+
 
 ///Create a new SetBuilder from a file
 fn create_set_builder(file: &str) -> Result<SetBuilder<BufWriter<File>>> {
@@ -56,11 +63,11 @@ fn create_set_builder(file: &str) -> Result<SetBuilder<BufWriter<File>>> {
 /// - `genotypes_buffer`   : Genotypes of the current VCF line
 /// - `genotypes_keys`     : Temporary buffer of the values that should be inserted into the genotypes set builder
 /// - `frequency_keys`     : Temporary buffer of the values that should be inserted into the frequency set builder
-pub struct VCFIndexer<'a>{
+pub struct VCFIndexer<'a, 'panel>{
     reader              : VCFReader<'a>,
     gen_builder         : SetBuilder<BufWriter<File>>,
     frq_builder         : SetBuilder<BufWriter<File>>,
-    samples             : BTreeMap<SampleTag, String>,
+    samples             : BTreeMap<&'panel SampleTag, Vec<&'panel str>>,
     counter             : usize,
     coordinate_buffer   : Vec<u8>,
     previous_coordinate : Vec<u8>,
@@ -69,13 +76,13 @@ pub struct VCFIndexer<'a>{
     frequency_keys      : Vec<Vec<u8>>
 }      
 
-impl<'a> VCFIndexer<'a> {
+impl<'a, 'panel> VCFIndexer<'a, 'panel> {
     /// Initialize a new `VCFIndexer`.
     /// # Arguments:
     /// - `vcf`    : path leading to the target `.vcf`|`.vcf.gz` file
     /// - `samples`: transposed input samples definition file (sorted across SampleTag.id())
     /// - `threads`: number of requested decompression threads (only relevant in the case of BGZF compressed `.vcf.gz` files)
-    pub  fn new(vcf: &'a Path, output_file: &str, samples: BTreeMap<SampleTag, String>, threads: usize) -> Result<Self> {
+    pub  fn new(vcf: &'a Path, output_file: &str, samples: BTreeMap<&'panel SampleTag, Vec<&'panel str>>, threads: usize) -> Result<Self> {
         let loc_msg = |ext| format!("While attempting to create a new VCFIndexer for {output_file}.{ext}");
         // ----------------------- Initialize Genotypes and Frequency Writers
         let gen_builder = create_set_builder(&format!("{output_file}.{FST_EXT}")).with_loc(|| loc_msg(FST_EXT))?;
@@ -102,8 +109,8 @@ impl<'a> VCFIndexer<'a> {
     /// This function is unsafe because parsing keys requires constructing &mut Vec without utf8 validation.
     /// If this constraint is violated, using the original String after dropping the &mut Vec may violate memory safety
     /// as Rust assumes that Strings are valid UTF-8
-    pub fn build_fst(&mut self) -> Result<()> {
-        use GenomeFstError::{MissingVTTag, ParseAlleleFrequency};
+    pub fn build_fst(&mut self, allele_frequency_strategy: &AFStrategy) -> Result<()> {
+        use GenomeFstError::MissingVTTag;
         let loc_msg = "While constructing FST set.";
         'line: while self.reader.has_data_left()? {
             // ---- Parse the current position 
@@ -121,10 +128,10 @@ impl<'a> VCFIndexer<'a> {
 
             // ---- Go to INFO field.
             self.skip_fields(5)?;                                      // 6 
-            let info = self.reader.next_field()?.split(';').collect::<Vec<&str>>();
+            let info = self.reader.next_field()?.split(';').map(|x| x.to_string()).collect::<Vec<String>>();
 
             // ---- Check if Bi-Allelic and skip line if not.
-            if info.iter().any(|&field| field == "MULTI_ALLELIC") {
+            if info.iter().any(|field| field == "MULTI_ALLELIC") {
                 self.clear_buffers()?;     // If so, skip this lines, and don't insert the keys of the previous line.
                 self.coordinate_buffer.clear();
                 continue 'line
@@ -132,7 +139,7 @@ impl<'a> VCFIndexer<'a> {
 
             // ---- Get the mutation type from INFO...
             let vtype = info.iter()
-                .find(|&&field| field.starts_with("VT="))
+                .find(|&field| field.starts_with("VT="))
                 .with_loc(||MissingVTTag {c:self.coordinate_buffer.clone()})?
                 .split('=')
                 .collect::<Vec<&str>>()[1];
@@ -143,35 +150,33 @@ impl<'a> VCFIndexer<'a> {
                 self.coordinate_buffer.clear();
                 continue 'line
             }
-            // ---- Extract population allele frequency.
-            let mut pop_afs = info.iter()
-                .filter(|&&field| field.contains("_AF"))
-                .map(|field| field.split("_AF=").collect())
-                .collect::<Vec<Vec<&str>>>();          
-            pop_afs.sort();
-
-            // ---- and insert the relevant entries within our frequency_set.
-            for pop_af in &pop_afs {
-                // "{chromosome(u8)}{position(u32_be)}{pop(chars)}{freq(f32_be)}"
-                let pop_tag    = pop_af[0].as_bytes();
-                let pop_af_be  = pop_af[1].parse::<f32>()
-                    .with_loc(|| ParseAlleleFrequency { c: self.coordinate_buffer.clone() })?
-                    .to_be_bytes();
-
-                let frequency_key = self.coordinate_buffer.iter()
-                    .chain(pop_tag.iter())
-                    .chain(pop_af_be.iter())
-                    .copied();
-                self.frequency_keys.push(Vec::from_iter(frequency_key));
-            }
 
 
+            // ---- fill our genotypes buffer with the sample's alleles.
             self.skip_fields(1).with_loc(|| loc_msg)?;                 // Skip INFO field
             self.fill_genotypes_buffer().with_loc(|| loc_msg)?;        
+            
+            // ---- Extract or compute population allele frequency from INFO.
+            let pop_afs = match allele_frequency_strategy {
+                AFStrategy::ComputeFromAlleles => self.compute_allele_frequencies(),
+                AFStrategy::ParseFromVcf       => self.parse_allele_frequencies(&info)?,
+            };
+            debug!("Pop_afs: {pop_afs:?}") ;
+
+           // ---- and insert the relevant entries within our frequency_set.
+            self.insert_frequency_keys(pop_afs);
+            
+            
             self.print_progress(50000).with_loc(|| loc_msg)?;              
             self.parse_keys();
+            
+            
+            
             self.genotypes_buffer.clear();
             self.coordinate_buffer.clear();
+
+
+
         }
 
         self.insert_previous_keys()?;
@@ -234,6 +239,22 @@ impl<'a> VCFIndexer<'a> {
              // If the line is different, we can then insert the keys of the previous line.
             self.insert_keys().with_loc(||InsertPreviousEntry)?;      
             Ok(false)
+        }
+    }
+
+    #[inline]
+    fn insert_frequency_keys(&mut self, pop_afs: BTreeMap<&str, f32>) {
+        // ---- and insert the relevant entries within our frequency_set.
+        for (pop_tag, pop_af) in pop_afs.iter() {
+            // ---- Parse to: "{chromosome(u7)}{position(u32_be)}{pop(chars)}{freq(f32_be)}"
+            let pop_tag    = pop_tag.as_bytes();
+            let pop_af_be  = pop_af.to_be_bytes();
+    
+            let frequency_key = self.coordinate_buffer.iter()
+                .chain(pop_tag.iter())
+                .chain(pop_af_be.iter())
+                .copied();
+            self.frequency_keys.push(Vec::from_iter(frequency_key));
         }
     }
 
@@ -320,6 +341,65 @@ impl<'a> VCFIndexer<'a> {
             self.genotype_keys.push(key);
         }
     }
+
+
+
+    //MODIFIED
+
+    #[inline]
+    fn parse_allele_frequencies<'info >(&self, info: &'info [String]) -> Result<BTreeMap<&'info str, f32>> {
+        use GenomeFstError::{ParseAlleleFrequency, DuplicatePopFreqTag};
+        let mut frequencies : BTreeMap<&str, f32> = BTreeMap::new();
+        
+        let pop_afs: Option<Vec<(&str, &str)>> = info.iter()
+            .filter(|&field| field.contains("_AF"))
+            .map(|field| field.split_once("_AF="))
+            .collect();
+
+        let pop_afs = pop_afs.with_loc(|| ParseAlleleFrequency{c:self.coordinate_buffer.clone()})?;
+        for (pop, allele_frequency) in pop_afs.iter() {
+            if frequencies.contains_key(pop) {
+                return Err(DuplicatePopFreqTag{c: self.coordinate_buffer.clone()})
+                    .loc("While attempting to parse allele frequencies from INFO field")
+
+            }
+            frequencies.insert(pop, allele_frequency.parse::<f32>().map_err(|_| GenomeFstError::DisplayPath)?);
+        } 
+
+        Ok(frequencies)
+    }
+
+    #[inline]
+    fn compute_allele_frequencies(&self) -> BTreeMap<&'panel str, f32> {
+        let mut frequencies : BTreeMap<&str, f32> = BTreeMap::new();
+        let mut allele_count: BTreeMap<&str, f32> = BTreeMap::new();
+
+        for (sample_tag, pop_tags) in self.samples.iter() {
+            for pop_tag in pop_tags {
+                let genotype_index = sample_tag.idx().expect("Missing sample tag index") * 4;
+
+                *frequencies.entry(pop_tag).or_default() += if self.genotypes_buffer[genotype_index   ] == 49 {1.0} else { 0.0 };
+                *frequencies.entry(pop_tag).or_default() += if self.genotypes_buffer[genotype_index +2] == 49 {1.0} else {0.0};
+                *allele_count.entry(pop_tag).or_default() += 2.0;
+            }
+
+        }
+
+        
+        for (pop_tag, alternative_allele_count) in frequencies.iter_mut() {
+            let observed_alleles = allele_count.get(pop_tag).expect("Missing sample tag index");
+            trace!("{pop_tag}: {alternative_allele_count} / {observed_alleles} = {:.4}", *alternative_allele_count / *observed_alleles);
+
+            *alternative_allele_count /= observed_alleles;
+
+            const FREQ_ROUND_DECIMAL: u32 = 4;
+            let round_factor = 10u32.pow(FREQ_ROUND_DECIMAL) as f32;
+            *alternative_allele_count = (round_factor * *alternative_allele_count).round() / round_factor;
+        }
+
+        frequencies
+    }
+    //END MODIFIED
 }
 
 
@@ -359,7 +439,13 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
     
     info!("output_panel_path: {output_panel_path}");
     panel.copy_from_source(Path::new(&output_panel_path))?;
-    
+
+    // --------------------- Check whether the user requested allele frequency recalculation or not.
+    let frequency_strategy = match fst_cli.compute_pop_afs {
+        true => AFStrategy::ComputeFromAlleles,
+        false => AFStrategy::ParseFromVcf,
+    };
+
     // --------------------- Setup a ThreadPool
     info!("Setting up thread pool with {} threads", fst_cli.threads);
     let pool = rayon::ThreadPoolBuilder::new()
@@ -398,7 +484,7 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
                     fst_cli.decompression_threads
                 ).unwrap();
 
-                if let Err(e) = setbuilder.build_fst() {
+                if let Err(e) = setbuilder.build_fst(&frequency_strategy) {
                     error!("{:?}", e);
                     std::process::exit(1);
                 };

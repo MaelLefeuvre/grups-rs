@@ -32,6 +32,9 @@ pub enum GenomeFstError {
     #[error("{} Failed to parse population allele frequency to f32", locate_genomic_position(c))]
     ParseAlleleFrequency{c: Vec<u8>},
 
+    #[error("{} INFO field appears to contain duplicate population allele frequency tags", locate_genomic_position(c))]
+    DuplicatePopFreqTag{c: Vec<u8>},
+
     #[error("{} Failed to parse or encode chromosome", locate_genomic_position(c))]
     EncodeChr{c: Vec<u8>},
 

@@ -426,7 +426,21 @@ pub struct VCFFst {
     /// 
     /// Parallelization is dispatched according to the number of replicates.
     #[clap(short='#', long, default_value("0"))]
-    pub decompression_threads: usize
+    pub decompression_threads: usize,
+
+    /// Recalculate allele frequencies for each (super-)population
+    /// 
+    /// Recompute population allele frequencies for each population and super-population tag that can be found within the input
+    /// panel definition file. 
+    /// 
+    /// For some publicly available datasets, such as the 1000g-phase3 adding this flag can allow for the use of smaller populations as reference
+    /// or to use customly defined populations.
+    /// 
+    /// When unspecified, the program will instead look for <POP>_AF tags within the VCF's INFO field. These tags can be generated
+    /// Using the bcftools '+fill-tags' plugin.
+    #[clap(short='F', long)]
+    pub compute_pop_afs: bool
+
 }
 
 impl PwdFromStdin {

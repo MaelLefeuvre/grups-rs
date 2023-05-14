@@ -30,16 +30,18 @@ get_svmop_probs <- function(
         i <<- i + 1
         msg <- sprintf("Processing [%d/%d]: %s", i, NROW(sim_files), pair_name)
         print(msg)
-        progressor(msg)
+        progressor(sprintf("Processing [%d/%d]: %s", i, NROW(sim_files), pair_name))
       }
       svms     <- fit_svms(sim_files[pair_name, ])
       pair_row <- which(probs$Pair_name == pair_name)
       get_within_class_probs(svms, probs[pair_row, ])
     }
   )
+
   probs <- merge(probs, t(svm_probs), by.x = "Pair_name", by.y = "row.names")
 
-  probs
+  nested_cols <- colnames(probs)[which(sapply(probs, class) == "list")]
+  tidyr::unnest(probs, cols=nested_cols)
 }
 
 fit_svms <- function(sim_file) {
