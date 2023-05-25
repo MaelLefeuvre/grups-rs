@@ -18,11 +18,23 @@ load_simfile <- function(path) {
 
   # Reorder labels according to distribution average.
   data$label <- factor(data$label)
-  data$label <- factor(
-    data$label,
-    levels = levels(data$label)[
-      order(aggregate(avg ~ label, data, FUN = mean)$avg)
-    ]
+
+  tryCatch(
+    expr = {
+      data$label <- factor(
+        data$label,
+        levels = levels(data$label)[
+          order(aggregate(avg ~ label, data, FUN = mean)$avg)
+        ]
+      )
+    },
+    error = function(cond) {
+      msg <- paste(
+        "Failed to aggregate relatedness labels according to average PWD",
+        "values in simfile '", path, "'. This might be caused by a complete",
+        "lack of overlap between the two individuals."
+      )
+    }
   )
   data
 }

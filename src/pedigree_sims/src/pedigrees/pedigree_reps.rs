@@ -107,6 +107,15 @@ impl PedigreeReps {
         Ok(ordered_rels)
     }
 
+
+    /// Apply `add_n_overlap` to every comparison of every contained pedigree.
+    #[inline]
+    pub fn add_non_informative_snps(&mut self, n: u32) {
+        for pedigree in self.inner.iter_mut() {
+            pedigree.comparisons.iter_mut().for_each(|comp| comp.add_n_overlaps(n));
+        }
+    }
+
     //// WIP: heterozygocity ratio
     //pub fn compute_average_het_ratio(&self) -> HashMap<String, f64>{
     //    let mut sum_simulated_stats = HashMap::new();

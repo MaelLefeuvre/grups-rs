@@ -5,7 +5,6 @@ use crate::read::SampleTag;
 mod vcf;
 pub use vcf::VCFReader;
 
-
 pub mod fst;
 pub use self::fst::FSTReader;
 pub use self::fst::{FST_EXT, FRQ_EXT};

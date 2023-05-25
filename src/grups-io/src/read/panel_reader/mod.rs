@@ -62,7 +62,6 @@ pub struct PanelReader {
 }
 
 
-
 impl PanelReader {
     /// Instantiate a Panel-definition from a `.panel` file
     /// # Arguments:
@@ -164,17 +163,34 @@ impl PanelReader {
     }
 
     /// Convert the `self.samples` HashMap<String, Vec<SampleTag>> into a transposed BTreeMap<SampleTag, String>.
-    pub fn into_transposed_btreemap(&self) -> BTreeMap<SampleTag, String> {
-        let mut transposed_data = BTreeMap::new();
-        for (key, values) in self.samples.iter(){
-            for value in values.iter() {
-                transposed_data.insert(value.clone(), key.clone());
+    pub fn into_transposed_btreemap(&self) -> BTreeMap<&SampleTag, Vec<&str>> {
+        let mut transposed_data: BTreeMap<&SampleTag, Vec<&str>> = BTreeMap::new();
+        for (pop, samples) in self.samples.iter(){
+            
+            for sample in samples.iter() {
+                transposed_data.entry(sample).or_default().push(pop.as_str())
+                //transposed_data.insert(value.clone(), key.clone());
             }
         }
         transposed_data
     }
 
+    #[inline]
+    pub fn flat_values(&self) -> impl Iterator<Item = (& String, & SampleTag)> {
+        self.samples.iter().flat_map(|(pop_tag, sample_tags)| {
+            sample_tags.iter().map( move |sample_tag| {
+                (pop_tag, sample_tag)
+            })
+        })
+    }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Vec<SampleTag>)> {
+        self.samples.iter()
+    }
+
     /// Return a list of unique population keys
+    #[inline]
     pub fn pop_keys(&mut self) -> impl Iterator<Item = &String>{
         self.samples.keys()
     }

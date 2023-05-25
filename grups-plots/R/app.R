@@ -11,7 +11,7 @@ app <- function(
   ui,
   server,
   data_dir     = "./grups_output",
-  sample_regex = "[A-Za-z0-9]+([-0-9]+){0,1}",
+  sample_regex = "[A-Za-z0-9]+(?:[-0-9]+){0,1}",
   threads      = 1,
   ...
 ) {
@@ -104,6 +104,7 @@ app <- function(
     )
   )
 
+  thematic::thematic_shiny()
   ui <- shiny::fluidPage(
 
   # ---- Dimensions of the current window
@@ -122,7 +123,8 @@ app <- function(
                         ')),
 
 
-    theme = bslib::bs_theme(bootswatch = "darkly", version = 4),
+    theme = bslib::bs_theme(bootswatch = "darkly", version = 5) %>% 
+      bs_add_rules(".dropdown-item { color: #000000 }"), # --- Force black text color for dropdown items.
     shiny::navbarPage("GRUPS-plots",
       # ---- 1. Render summary table.
       shiny::tabPanel("Summary",
@@ -362,11 +364,11 @@ app <- function(
     prog_msg <-  "Fitting SVM against simulations. This may take a while..."
     load_svm_probs <- shiny::reactive(
       progressr::withProgressShiny(message = prog_msg, value = 0, {
-        progress <- progressr::progressor(along = seq_along(sim_files))
+        progressor <- progressr::progressor(along = seq_along(sim_files$path))
         grups.plots::get_svmop_probs(
           load_results_file(),
           sim_files,
-          progressor = progress,
+          progressor = progressor,
           threads = threads
         )
       })
@@ -377,8 +379,30 @@ app <- function(
       DT::datatable(
         probs,
         style   = "bootstrap5",
-        options = list(ordering = TRUE, scrollX = FALSE),
-        class   = "table-condensed",
+        extensions = "Buttons", #####
+        options = list(
+          ordering = TRUE,
+          scrollX = FALSE,
+          ##################
+          autoWidth = TRUE,
+          searching = TRUE,
+          paging = TRUE,
+          dom = paste0(
+            "<'row'<'col-sm-4 col-md'l><'col-sm-8 col-md-auto'f><'col-sm-4 col-md-auto'B>>",
+            "<'row'<'col-sm-12'tr>>",
+            "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
+          ),
+          buttons = list(
+              list(extend = "copy", text = "Copy to clipboard"),
+              list(
+                extend = "collection",
+                className = 'btn-xs btn-warning dropdown-toggle text-primary',
+                buttons = list(list(extend="csv", className="btn-xs"), "excel", "pdf"),
+                text = "Download"
+              )
+          )
+        ),
+        #class   = "table-condensed",
         filter  = "top",
       ) %>% DT::formatRound(
         columns = colnames(probs)[3:length(colnames(probs))],
@@ -444,9 +468,12 @@ app <- function(
     shiny::observeEvent(input$dimension, {
       output$kinship_matrix <- plotly::renderPlotly(
         grups.plots::plot_kinship_matrix(
-          kinship_matrix = grups.plots::get_kinship_matrix(load_results_file()),
+          kinship_matrix = grups.plots::get_kinship_matrix(
+            load_results_file(),
+            sample_regex
+          ),
           dimensions = input$dimension,
-          order = input$kinship_matrix_ordered_labels
+          order      = input$kinship_matrix_ordered_labels
         )
       )
     })
@@ -625,7 +652,7 @@ app <- function(
           rownames = FALSE,
           options  = list(
               dom = "t",
-              ordering = FALSE,
+              ordering = TRUE,
               scrollX = TRUE,
               width = "100%"
             )

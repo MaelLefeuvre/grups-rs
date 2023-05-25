@@ -81,11 +81,13 @@ load_pairwise_file <- function(
 
 
   # Assign least z-score + putative relationship
-
   z_scores  <- lapply(pwd_data$Norm.Avg, FUN = function(x) {
+    if (is.na(x)) return(NA) # Deal with NaN (when overlap == 0)
     z_temps <- abs(x - unlist(norm_values))
     z_temps <- z_temps[which.min(z_temps)]
+    z_temps
   })
+
   pwd_data$Z_score <- unlist(z_scores)
 
   pwd_data$Rel <- factor(

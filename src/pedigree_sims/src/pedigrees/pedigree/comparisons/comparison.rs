@@ -45,7 +45,7 @@ impl PedComparison {
         self.overlap +=1;
     }
 
-    pub fn add_missing(&mut self, n: u32) {
+    pub fn add_n_overlaps(&mut self, n: u32) {
         self.overlap += n;
     }
     
