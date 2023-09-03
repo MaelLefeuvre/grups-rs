@@ -24,6 +24,7 @@
   anyhow         = "1.0"
   linfa          = "0.6"
   linfa-svm      = "0.6"
+  sprs           = "=0.11.0" #Temporary fix to https://github.com/rust-ml/linfa/issues/313
   ndarray        = "0.15"
   libsvm         = "0.4"
   smartcore      = {version = "0.3", features=[ "ndarray-bindings", "datasets"]}
