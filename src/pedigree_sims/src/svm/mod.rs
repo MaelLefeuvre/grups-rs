@@ -30,7 +30,7 @@ impl<'a> Default for LibSvmBuilder<'a> {
             termination_eps       : Some(0.1),
             probability_estimates : Some(false),
             shrinking             : Some(true),
-            cache_size            : Some(40)
+            cache_size            : Some(1024)
         };
         let svm_trainer = svm_initializer.build()
             .expect("Failed to initialize libsvm SVMTrainer");
