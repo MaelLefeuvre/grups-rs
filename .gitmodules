@@ -1,0 +1,3 @@
+[submodule "grups.plots"]
+	path = grups.plots
+	url = git@github.com:MaelLefeuvre/grups.plots.git
