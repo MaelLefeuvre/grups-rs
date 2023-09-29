@@ -82,7 +82,7 @@ impl PedigreeReps {
         for pedigree in self.iter() {
             for comparison in pedigree.comparisons.iter() {
                 // ---- Access summary statistics 
-                let mut summary_statistics = sum_simulated_stats.get_mut(&comparison.label)
+                let summary_statistics = sum_simulated_stats.get_mut(&comparison.label)
                     .with_loc(|| format!("While computing simulation summary statistics:\
                         Attempting to access a missing summary statistic using the comparison label {}",
                         comparison.label

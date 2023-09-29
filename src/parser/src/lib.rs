@@ -19,11 +19,11 @@ mod error;
 pub use error::ParserError;
 
 #[derive(Parser, Debug, Serialize, Deserialize)]
-#[clap(name="grups", author, version, about, long_about = None)]
+#[clap(name="grups-rs", author, version, about, long_about = None)]
 #[clap(propagate_version = true)]
 /// GRUPS-rs: Get Relatedness Using Pedigree Simulations
 pub struct Cli {
-    ///Set the verbosity level (-v -vv -vvv -vvvv)
+    ///Set the verbosity level (-v -vv -vvv)
     /// 
     /// Set the verbosity level of this program. With multiple levels
     ///    -v : Info  |  -vv : Debug  | -vvv : Trace

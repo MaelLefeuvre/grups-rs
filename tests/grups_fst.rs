@@ -20,7 +20,7 @@ fn test_grups_fst() -> Result<()> {
     eprintln!("{args}");
 
     let cli = parser::Cli::parse_from(args.split_whitespace());
-    grups::run(cli)?;
+    grups_rs::run(cli)?;
     
     // Ensure grups can correctly estimate results using the newly generated FST index.
     test_grups_run(parser::Mode::Fst, &format!("{output_dir}"));

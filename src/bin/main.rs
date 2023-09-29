@@ -22,7 +22,7 @@ fn main() -> Result<()> {
     };
     
     // ----------------------------- unpack Cli and run the appropriate modules.
-    if let Err(e) = grups::run(cli) {
+    if let Err(e) = grups_rs::run(cli) {
         error!("{:?}", e);
         process::exit(1);
     };

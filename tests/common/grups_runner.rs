@@ -87,7 +87,7 @@ pub fn test_grups_run(mode: parser::Mode, data_dir: &str) {
     println!("{args}");
 
     let cli = parser::Cli::parse_from(args.split_whitespace());
-    grups::run(cli).expect("Failed to run grups using stringified CLI Args");
+    grups_rs::run(cli).expect("Failed to run grups using stringified CLI Args");
 
     let output_pwd            = format!("{output_dir}/{FILESTEM}.pwd");
     let output_res            = format!("{output_dir}/{FILESTEM}.result");

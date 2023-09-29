@@ -1,4 +1,4 @@
-use std::{str, path::Path, fs::File, io::{BufRead, BufWriter}, collections::BTreeMap, error::Error};
+use std::{str, path::Path, fs::File, io::{BufRead, BufWriter}, collections::BTreeMap};
 
 use genome::coordinate::Coordinate;
 
