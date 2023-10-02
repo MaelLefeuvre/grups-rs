@@ -23,8 +23,9 @@ pub fn cite() {
         https://doi.org/10.1111/mec.14188 
 
 
-    B. If you plan to use the HapMap-II-b37 recombination maps described in the
-       README and examples, please cite the International HapMap consortium:
+    B. If you plan to use the HapMap-phaseII-b37 recombination maps described
+       in the README and examples, please cite the International HapMap
+       consortium paper(s):
 
        1. The International HapMap Consortium. A second generation human 
           haplotype map of over 3.1 million SNPs. Nature 449, 851–861 (2007).
@@ -62,8 +63,8 @@ pub fn run(cli: Cli) -> Result<()> {
             };
             // ----------------------------- Run PWD_from_stdin.
             let (mut comparisons, output_files) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
-            comparisons.write_pwd_results(pwd.print_blocks, &output_files)?;
-            pedigree_sims::run(common, *ped, &mut comparisons)?;
+            comparisons.write_pwd_results(!pwd.no_print_blocks, &output_files)?;
+            pedigree_sims::run(common, *ped, &requested_samples, &mut comparisons)?;
 
         },
         
@@ -79,7 +80,7 @@ pub fn run(cli: Cli) -> Result<()> {
             // ----------------------------- Run PWD_from_stdin.
             let (comparisons, output_files) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
             if ! pwd.filter_sites {
-                comparisons.write_pwd_results(pwd.print_blocks, &output_files)?;
+                comparisons.write_pwd_results(!pwd.no_print_blocks, &output_files)?;
             }
         },
 

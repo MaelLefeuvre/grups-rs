@@ -1,4 +1,4 @@
-use std::{ collections::HashMap, path::{Path}};
+use std::{ collections::HashMap, path::Path};
 
 
 use grups_io::{
@@ -161,6 +161,12 @@ impl Pedigrees {
             // ---- Instantiate a contamination `ParamRateGenerator`
             let mut contam_rate_gen = ParamRateGenerator::from_user_input(contam_rate, pair_indices);
 
+            match seq_error_rate_gen {
+                Some(ref seq_err) => debug!("  - seq-error-rate for pair {}: {seq_err}", comparison.get_pair()),
+                None              => debug!("  - seq-error-rate for pair {}: pileup", comparison.get_pair())
+            };
+            debug!("  - contam-rate    for pair {}: {contam_rate_gen}", comparison.get_pair());
+
             // ---- Iterate on each pedigree replicate, and use our two `ParamRateGenerator` to assign random and/or
             //      constant values. (depending on the user-input)
             pedigree_reps.iter_mut()
@@ -300,7 +306,7 @@ impl Pedigrees {
 
             // ---- Count missing SNPs as non-informative positions. i.e. an overlap.
             if missing_snps > 0 {
-                info!("{missing_snps} missing SNPs within the simulation dataset. Counting those as non-informative overlap.\n");
+                info!("{missing_snps} missing SNPs within the simulation dataset. Counting those as non-informative overlap.");
                 self.pedigrees.get_mut(&comparison.get_pair()).unwrap().add_non_informative_snps(missing_snps);
             }
         }
@@ -425,6 +431,8 @@ impl Pedigrees {
         let loc_msg = "While attempting to write simulation results";
 
         // --------------------- Print pedigree simulation results.
+        trace!("Printing pairwise simulation results:");
+
         for comparison in comparisons.iter() {
             let comparison_label = comparison.get_pair();
 
@@ -434,7 +442,9 @@ impl Pedigrees {
             let mut writer = GenericWriter::new(Some(output_files[&comparison_label].clone())).loc(loc_msg)?;
             writer.write_iter(vec![&pedigree_vec])?;
 
-            debug!("\n--------------------- {comparison_label}\n{}", pedigree_vec);
+            if log::log_enabled!(log::Level::Trace) {
+                println!("--------------------- {comparison_label}\n{pedigree_vec}");
+            }
         }
         Ok(())
     }
@@ -454,7 +464,11 @@ impl Pedigrees {
         let simulation_header = format!("{: <20} - {: <20} - {: <10} - {: <10} - {: <10} - {: <12} - {: <14} - {: <10} - {: <10}",
             "Pair_name", "Most_Likely_rel", "Corr.Overlap", "Corr.Sum.PWD", "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred", "Sim.Avg.PWD", "Min.Z_Score"
         );
-        debug!("\n{simulation_header}");
+        
+        if log::log_enabled!(log::Level::Debug) {
+            debug!("Output simulation results:");
+            println!("\n{simulation_header}");
+        }
         simulations_results.push(simulation_header);
 
 
@@ -503,7 +517,8 @@ impl Pedigrees {
                             .build()
                             .and_then(|svm| svm.predict(comparison.get_avg_pwd()))
                             .with_loc(loc_msg)?;
-
+                        
+                        trace!("Prediction for scenario {comparison_label} - {scenario}: {prediction}");
                         prediction == 0.0
                     }
 
@@ -550,15 +565,12 @@ impl Pedigrees {
                  {most_likely_avg_pwd: <11.6} - \
                  {min_z_score: >11.6}"
             );
-            debug!("{simulation_result}");
+
+            if log::log_enabled!(log::Level::Debug) {
+                println!("{simulation_result}");
+            }
+
             simulations_results.push(simulation_result);
-
-
-            //// WIP: heterozygocity ratio
-            //let avg_het_ratio = pedigree_vec.compute_average_het_ratio()["Unrelated"] / pedigree_vec.len() as f64;
-            //println!("Unrelated_het_ratio: {avg_het_ratio}");
-
-
         }
 
         // ---- Write simulation results to file.

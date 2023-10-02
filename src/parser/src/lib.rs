@@ -9,9 +9,9 @@ use std::{
 
 use located_error::*;
 
-use clap::{Parser, Subcommand, Args, ArgEnum};
+use clap::{Parser, Subcommand, Args, ArgEnum, ArgAction};
 use serde::{Serialize, Deserialize};
-use log::{info};
+use log::debug;
 use num::One;
 use anyhow::{anyhow, Result};
 
@@ -25,14 +25,18 @@ pub use error::ParserError;
 pub struct Cli {
     ///Set the verbosity level (-v -vv -vvv)
     /// 
-    /// Set the verbosity level of this program. With multiple levels
-    ///    -v : Info  |  -vv : Debug  | -vvv : Trace
-    /// By default, the program will still output Warnings. Use --quiet/-q to disable them
+    /// Set the verbosity level of this program. Multiple levels allowed {n} 
+    ///
+    /// -v: Info  |  -vv: Debug  | -vvv: Trace {n}
+    /// 
+    /// Note that the program will still output warnings by default, even when this flag is off.
+    /// Use The --quiet/-q to disable them
     #[clap(short='v', long, parse(from_occurrences), global=true)]
     pub verbose: u8,
+
     /// Disable warnings.
     /// 
-    /// By default, warnings are emmited and redirected to the console, even without verbose mode on.
+    /// By default, warnings are emmited and redirected to the console, even when verbose mode is off.
     /// Use this argument to disable this. Only errors will be displayed.
     #[clap(short='q', long, global=true)]
     pub quiet: bool,
@@ -60,7 +64,7 @@ impl Cli{
         let serialized = serde_yaml::to_string(&self)
             .map_err(|err| format!("Failed to serialize command line arguments. got [{err}]"))?;
         
-        info!("\n---- Command line args ----\n{}\n---", serialized);
+        debug!("\n---- Command line args ----\n{}\n---", serialized);
 
         // Fetch the appropriate output-directory and parse the name of the output file.
         let current_time = chrono::offset::Local::now().format("%Y-%m-%dT%H%M%S").to_string();
@@ -140,39 +144,52 @@ pub struct Cite;
 pub struct Common {
     /// Minimal required Base Quality (BQ) to perform comparison.
     /// 
-    /// Nucleotides whose BQ is lower than the provided treshold are filtered-out. 
-    /// Value should be expressed in scale PHRED-33.
+    /// Nucleotides whose base quality is lower than the provided treshold will be filtered-out. 
+    /// Value should be expressed in Phred-33 scale.
     #[clap(short('M'), long, default_value("30"))]
     pub min_qual: u8,
+
     /// Fasta indexed reference genome.
     /// 
+    /// By default, grups-rs will use GRCh37 as a reference genome. Use this argument if you wish to specify an alternative reference.
     /// Note that a '.fasta.fai' genome index file must be present at the same directory.
     #[clap(short, long, required(false))]
     pub genome: Option<String>,
+
     /// Provide with a list of SNP coordinates to target within the pileup.
     /// 
-    /// Pileup positions which are not found within the provided --targets file will be exluded from comparison.
-    /// Accepted file formats:
-    ///   '.snp' : EIGENSTRAT format: space-separated
-    ///   '.vcf' : Variant Call Format: tab-separated  
-    ///   '.tsv' :   tab-separated file with columns 'CHR POS REF ALT'  
-    ///   '.csv' : comma-separated file with columns 'CHR POS REF ALT'  
-    ///   '.txt' : space-separated file with columns 'CHR POS REF ALT'   
+    /// Pileup positions which are not found within the provided --targets file will be exluded from comparison.  
+    /// 
+    /// Accepted file formats:{n}
+    ///   '.snp' : EIGENSTRAT format: space-separated{n}
+    ///   '.vcf' : Variant Call Format: tab-separated{n}
+    ///   '.tsv' :   tab-separated file with columns 'CHR POS REF ALT'{n}
+    ///   '.csv' : comma-separated file with columns 'CHR POS REF ALT'{n}
+    ///   '.txt' : space-separated file with columns 'CHR POS REF ALT'{n}
+    /// 
     #[clap(short, long, required(false))]
     pub targets: Option<String>,
-    /// Input pileup file.
+
+    /// Input Pileup file.
     /// 
-    /// Note that in the absence of a '--pileup' argument, the program will except a data stream from the standard input. i.e
-    /// 'samtools mpileup -B -q30 -Q30 ./samples/* | pwd_from_stdin [...]
+    /// Note that in the absence of a '--pileup' argument, the program may accept a data stream from the standard input. i.e:{n} 
+    ///
+    ///     samtools mpileup -B -q30 -Q30 [samples.bam] | grups-rs pwd_from_stdin [...]{n}
+    /// 
     #[clap(long, required(false))]
     pub pileup: Option<String>,
+
     /// Restrict comparison to a given set of chromosomes.
     /// 
-    /// Argument may accept slices (inclusive) and/or discrete integers i.e.
-    /// '--chr 9-11 13 19-22 ' will be parsed as: [9,10,11,13,19,20,21,22]
+    /// Argument may accept slices (inclusive) such as '--chr 9-11' and/or discrete integers such as '--chr 1 4 13'.{n}
+    /// Example:{n}
+    ///   specifying          : '--chr 9-11 13 19-22 '{n}
+    ///   ...will be parsed as: [9, 10, 11, 13, 19, 20, 21, 22]
+    /// 
     #[clap(short, long, multiple_values(true))]
     pub chr: Option<Vec<String>>,
-    /// Provide with a list of sample names for printing.
+
+    /// Provide with a list of sample names for printing.{n}
     /// 
     /// By default, individuals will be referred to using their pileup index. e.g. "Ind0, Ind1, Ind2, etc."
     /// 
@@ -180,17 +197,23 @@ pub struct Common {
     /// Note that the length of --samples and --sample-names do not need to match. When such is the case,
     /// default values are used for the missing names.
     /// 
-    /// Example: '--sample 0-2 5 6 --sample-names ART04 ART16 ART20'
-    ///   - index: 0      1      2      5     6
-    ///   - name : ART04  ART16  ART20  Ind5  Ind6
+    /// Example: '--sample 0-2 5 6 --sample-names ART04 ART16 ART20'{n}
+    ///   - index  0      1      2      5     6{n}
+    ///   - name   ART04  ART16  ART20  Ind5  Ind6{n}
     #[clap(short='n', long, multiple_values(true))]
     pub sample_names: Vec<String>,
 
     /// Output directory where results will be written.
+    /// 
+    /// Note that grups-rs will create the specified leaf directory if it is not present, by does not 
+    /// allow itself from creating parent directories.
     #[clap(short, long, default_value("grups-output"), parse(try_from_os_str=valid_output_dir))]
     pub output_dir: PathBuf,
 
     /// Overwrite existing output files.
+    /// 
+    /// By default, grups-rs does not allow itself from overwriting existing results files. Use this flag
+    /// to force this behaviour.
     #[clap(short='w', long)]
     pub overwrite: bool,
 }
@@ -201,31 +224,54 @@ pub struct Common {
 pub struct PwdFromStdin {
     /// Enable self-comparison mode on individuals.
     /// 
-    /// Note that --min-depth>=2 is required when comparing individuals to themselves, since at least two
-    /// alleles are required to effectively compute pairwise differences at a given site.
+    /// Note that a minimal depth of 2 is required when comparing individuals to themselves, since at least two
+    /// alleles are required to effectively compute pairwise differences at a given site. This can be activated
+    /// by specifying a library-wise value of --min-depth>=2 for all samples.
+    /// 
+    /// Note that in cases where the specified --min-depth was set to 1 for a given individual, grups-rs will
+    /// automatically temporarily rescale the given value of --min-depth to 2 when performing self-comparisons.
+    /// 
     #[clap(short='S', long)]
     pub self_comparison: bool,
     /// Filter out tri-allelic sites when given a list of SNP-coordinates.
     /// 
-    /// Note that this arguement requires the use of --targets to provide the program with a list of coordinates.
-    /// The given coordinate file must furthermore explicitely provide with the REF/ALT alleles.
+    /// Note that this arguement requires the use of --targets to provide the program with a list of known 
+    /// coordinates. The given coordinate file must furthermore explicitely provide with REF/ALT alleles.
+    /// 
+    /// See the --targets argument for additional information regarding valid formats.
     #[clap(short='k', long)]
     pub known_variants: bool,
-    /// Do not perform comparison, but rather print out the pileup lines where a comparison could be made.
+
+    /// Do not perform comparison, but rather print out the pileup lines where a comparison could have been made.
     ///
-    /// Note that lines are printed as soon as there is a valid comparison between ANY pair of individuals.
-    /// Thus, may not prove very effective when using --self-comparison.
+    /// This is a legacy argument from the initial implementation of grups. Note that lines are printed as soon
+    /// as there is a valid comparison between ANY pair of individuals. Thus, applying sites filtration may not
+    /// prove very effective when using --self-comparison.
     #[clap(short='f', long)]
     pub filter_sites: bool,
-    /// Ignore deletions when performing comparison.
+
+    /// Consider deletions when performing comparisons.
     /// 
-    /// By default, deletions ('*' character) will count as a selectible nucleotide for comparison.
-    #[clap(short='i', long)]
-    pub ignore_dels: bool,
-    /// Print jackknife blocks for each individual
+    /// By default, deletion and missing characters ('*') are not counted as selectible nucleotide for comparison.
+    /// Using this flag will instead mark them as valid matching positions.
+    #[clap(long, action(ArgAction::SetFalse))]
+    pub consider_dels: bool,
+
+    /// Do not print jackknife blocks for each individual
+    /// 
+    /// By default, grups-rs will keep track of the pairwise mismatch rate within windows of size '--blocksize'.
+    /// This information can prove useful to investigate PMR values in sliding windows (this can be visualized
+    /// with the 'grups.plots' companion shiny interface), or to compute jackknife estimates of variance.
+    /// 
+    /// Using --no-print-block will prevent grups-rs from computing average pairiwise differences in non-overlapping
+    /// blocks
+    /// 
     #[clap(short='J', long)]
-    pub print_blocks: bool,
+    pub no_print_blocks: bool,
+
     /// Change the window size of each jackknife block.
+    /// 
+    /// Note that lower block values may drastically increase the memory footprint of grups-rs.
     #[clap(short='b', long, required(false), default_value("1000000"))]
     pub blocksize: u32,
     
@@ -234,24 +280,32 @@ pub struct PwdFromStdin {
     /// Note that the length of the provided vector does not need to be the same as the one
     /// provided for individuals. When such is the case, values of --min-depth will "wrap" 
     /// around, and start again from the beginning for the next individuals.
-    /// Example:  '--samples 0-4 --min-depth 2 3 5 ' will result in:
-    ///   - Ind  : 0 1 2 3 4
-    ///   - Depth: 2 3 5 2 3 
+    /// 
+    /// Example:  '--samples 0-4 --min-depth 2 3 5 ' will result in:{n}
+    ///   - Ind  : 0 1 2 3 4{n}
+    ///   - Depth: 2 3 5 2 3{n}
     #[clap(short='x', long, multiple_values(true), required(false), default_values(&["1","1"]))]
     pub min_depth: Vec <u16>,
 
     /// 0-based column index of the individuals that should be compared
     /// 
-    /// Argument may accept slices and/or discrete integers i.e.
-    /// '--samples 1-4 7 8' will be parsed as: [1, 2, 3, 4, 7, 8]
-    /// Note that slices are inclusive.
+    /// Argument may accept slices (inclusive), such as --samples 0-3 and/or discrete integer values
+    /// such as --samples 7 8. 
+    /// 
+    /// Example:{n}
+    /// '--samples 0-3 7 8' will be parsed as: [0, 1, 2, 3, 7, 8]{n}
+    /// 
+    /// Note that samples are specified by 0-based index value. Thus, use --samples 0-3 if you have
+    /// 4 samples within your pileup file, and wish to investigate all pairwise comparisons between 
+    /// them.
     #[clap(short='s', long, multiple_values(true), default_values(&["0", "1"]))]
     pub samples: Vec<String>,
 
     /// Exclude transitions from the input targets file.
     /// 
     /// Note that this arguement requires the use of --targets to provide the program with a list of coordinates.
-    /// The given coordinate file must furthermore explicitely provide with the REF/ALT alleles.
+    /// The given coordinate file must furthermore explicitely provide with the REF/ALT alleles. See the --targets
+    /// argument for additional information regarding valid file formats.
     #[clap(long)]
     pub exclude_transitions: bool,
 }
@@ -287,71 +341,154 @@ impl Display for RelAssignMethod {
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct PedigreeSims {
-    /// Proportion of SNPs to keep at true frequency
+    /// Proportion of SNPs to keep at true frequency (in percentage).
+    /// 
+    /// grups-rs will use the specified --af-downsampling-rate as a probability to randomly
+    /// simulate allele fixation during pedigree simulations.
+    /// 
+    /// Note that rates are specified as percentages.
+    /// 
     #[clap(short='d', long, default_value("0.0"), parse(try_from_str=percent_str_to_ratio))]
     pub af_downsampling_rate: f64,
 
-    /// Proportion of filtered SNP positions to include in the analysis
+    /// Proportion of filtered SNP positions to include in the analysis (in percentage).
+    /// 
+    /// grups-rs will use the specified --snp-downsampling-rate as a probability to randomly
+    /// ignore positions during pedigree simulations.
+    /// 
+    /// Note that rates are specified as percentages.
     #[clap(short='D', long, default_value("0.0"), parse(try_from_str=percent_str_to_ratio))]
     pub snp_downsampling_rate: f64,
 
     /// Contamination rates (or rate ranges) for each pileup individual. 
     /// 
-    /// Format: Format: <FLOAT> <FLOAT> ... or <FLOAT-FLOAT> <FLOAT-FLOAT> ... 
+    /// The provided argument(s) may accept hard set values, such as '--contam-rate 3.0', or ranges, such as '--contam-rate 0.0-5.0'.
+    /// When a contamination rate is provided in the form of a range, pedigree-specific values are picked from a uniform distribution,
+    /// within that defined range.
+    /// 
+    /// Note that contamination rates are specified as percentage, and are tied to the individuals contained within the input pileup.
+    /// Specifying a constant rate for all individuals is also possible, by defining a unique value or range.
+    /// 
+    /// Example:{n}
+    /// 
+    /// grups-rs pedigree-sims [...] --samples 0-5 --contam-rate 2.0{n}
+    /// 
+    /// ...implies that all five pileup indidivuals will be assigned a set contamination rate of 2%, during pedigree simulations.{n}
+    /// 
+    /// In general, keep in mind that contamination rate values are recycled, if the number of specified values is lower than the number of
+    /// examined pileup individuals.
+    /// 
     #[clap(short='Q', long, required(false), multiple_values(true), default_values(&["0", "0"]), parse(try_from_str=parse_pedigree_param))]
     pub contamination_rate: Vec<Vec<f64>>,
 
     /// Sequencing error rates (or rate ranges) for each pileup individual.
     /// 
-    /// Format: <FLOAT> <FLOAT> ...
-    /// Argument may accept ranges i.e. '--seq_error_rate 1.0-5.5' implies a sequencing error rate that is between 1% and 5.5%
+    /// The provided argument(s) may accept hard set values, such as '--seq-error-rate 1.0', or ranges, such as '--seq-error-rate 1.0-3.0'.
+    /// When a sequencing error rate is provided in the form of a range, pedigree-specific values are picked from a uniform distribution,
+    /// within that defined range.
+    /// 
+    /// Note that sequencing error rates are specified as percentage, and are tied to the individuals contained within the input pileup.
+    /// Specifying a constant rate for all individuals is also possible, by defining a unique value or range.
+    /// 
+    /// Example:{n}
+    /// 
+    /// grups-rs pedigree-sims [...] --samples 0-7 --seq-error-rate 1.0{n}
+    /// 
+    /// ...implies that all seven pileup indidivuals will be assigned a set sequecing error rate of 1%, during pedigree simulations.{n}
+    /// 
+    /// In general, keep in mind that sequencing error rate values are recycled if the number of specified values is lower than the number of
+    /// examined pileup individuals.
     #[clap(short='U', long, required(false), multiple_values(true), parse(try_from_str=parse_pedigree_param))]
     pub seq_error_rate : Option<Vec<Vec<f64>>>,
 
-    // /// Number of replicates to perform when randomly drawing values from specified ranges for parameters c_rate, mean_cov, q_rate.
-    // /// 
-    // /// Format: INT or INT INT INT ... 
-    // #[clap(short='r', long, required(false), multiple_values(true), default_values(&["1"]))]
-    // pub param_num_rep: Vec<u32>,
-
-    // /// Data output labels.
-    // /// 
-    // /// Format: String String String
-    // #[clap(short='l', long, required(false), multiple_values(true))]
-    // pub labels: Vec<String>,
-
-    /// Path to input VCF genomes for founder individuals (1000G)
+    /// Path to a directory containing a database of phased modern human genotypes, such as the 1000g-phase3 dataset.
+    /// 
+    /// This database may be in the form of a set of VCF files (default). In that case, grups-rs will look for, and 
+    /// load any file ending with the .vcf[.gz] file extension.
+    /// 
+    /// Alternatively, users may use a set of FSA-encoded files. To use FSA-encoded files, users must explicitly specify
+    /// the use of this type of data input, with the --mode argument. When specified, grups-rs will search for any file
+    /// ending with the .fst[.frq] file extension. 
+    /// 
+    /// See the documentation of the 'fst' module, for a more detailled explanation regarding how to generate FSA-encoded
+    /// databases.
+    /// 
     #[clap(short='F', long, parse(try_from_os_str=valid_input_directory))] // default_value(r#"./data/founders/1000G-phase3-v5a"#),
     pub data_dir: PathBuf,
 
     /// Define the expected data input type for pedigree simulations.
+    /// 
+    /// This argument is closely tied to the --data-dir, and will define which type of files should grups-rs look for, as well
+    /// as how to load them into memory. 
+    /// 
+    /// When using '--mode fst-mmap' grups-rs will search for files ending with the .fst[.frq] file extention
+    /// 
+    /// When using '--mode fst', grups-rs will search for files ending with the .fst[.frq] file extention. These files are then
+    /// sequentially loaded into RAM and queried. The 'fst' mode may be faster if you have a lot of comparisons to apply, but has
+    /// has a higher memory footprint compared to the 'fst-mmap' mode. Thus, it is only recommended if your input .fst[.frq] files
+    /// are located on an HDD drive.
+    /// 
+    /// when using '--mode vcf' (default), grups-rs will search for files ending with the .vcf[.gz] extention, and will directly
+    /// query these files. This mode is generally slower, but may yield higher performance if you have highly covered data, and
+    /// your vcf files were previously pre-filtered to only contain bi-allelic SNPs.
+    /// 
     #[clap(short='I', long, arg_enum, default_value("vcf"))]
     pub mode: Mode,
 
 
-    /// Path to recombination genetic map data.
+    /// Path to a directory containing a set of chromosome-specific genetic recombination maps, such as the HapMap-phaseII dataset.
+    /// 
+    /// Note that GRUPS-rs will search for, and attempt to load any file ending with the '.txt' file extension within that directory.
+    /// It is therefore highly recommended that this directory ONLY contains the required recombination map files, and nothing else.
+    /// 
+    /// The expected input is a headed, tab separated file with columns '<chr> <pos(bp)> <rate(cM/Mb)> <Map(cM)>'{n}
+    /// Example:
+    /// Chromosome  Position(bp)    Rate(cM/Mb)     Map(cM)
+    /// chr22       16051347        8.096992        0.000000
+    /// chr22       16052618        8.131520        0.010291
+    /// ...         ...             ...             ...
+    /// 
+    /// 
     #[clap(short='G', long, required(false), parse(try_from_os_str=valid_input_directory))] // default_value("./data/recombination/GRCh37"),
     pub recomb_dir: PathBuf,
 
-    /// Number of pedigree replicates to perform
-    #[clap(short='R', long, default_value("1"))]
+    /// Number of pedigree simulation replicates to perform for each pairwise comparisons.
+    /// 
+    /// The default provided value of 100 should be considered a bare-minimum. Value in the range 500 to 1000 replicates is 
+    /// recommended.
+    #[clap(short='R', long, default_value("100"))]
     pub reps: u32,
 
-    /// Minimum allele frequency within the pedigree superpopulation that is required to include a given SNP within the simulations.
+    /// Minimum required (super-)population allele frequency to include a given SNP during simulations.
+    /// 
+    /// Note that grups-rs will re-compute the observed average PWD after simulations, to excluding and correct for
+    /// any position previously excluded through this threshold.
     #[clap(short='m', long, default_value("0.00"))]
     pub maf: f32,
 
-    /// Superpopulation with which to perform pedigree simulations
+    /// Source population used during pedigree simulations.
+    /// 
+    /// Source (super-)population from which founder individuals are selected during pedigree simulations.
+    /// 
+    /// Note that when using '--mode vcf', grups-rs may only use populations for which a <POP>_AF annotation is present
+    /// in each INFO field of the VCF files used. To generate finer grained population allele frequencies, we recommend
+    /// either the use of the 'bcftools +fill-tags' plugin, or the use of the '--compute-pop-afs' argument when generating
+    /// FSA-encoded dataset with the 'grups-rs fst' module.
     #[clap(short='P', long, default_value("EUR"))]
     pub pedigree_pop: String,
 
-    /// Superpopulation with which to contaminate pedigree simulations.
+    /// Contaminating population used during pedigree simulations.
     /// 
-    /// Format: <POP> <POP> ...
-    #[clap(short='C', long, multiple_values(true), default_values(&["AFR"]))]
+    /// (Super-)population from which contaminating individuals are selected during pedigree simulations. 
+    /// 
+    /// Note that when using '--mode vcf', grups-rs may only use populations for which a <POP>_AF annotation is present
+    /// in each INFO field of the VCF files used. To generate finer grained population allele frequencies, we recommend
+    /// either the use of the 'bcftools +fill-tags' plugin, or the use of the '--compute-pop-afs' argument when generating
+    /// FSA-encoded dataset with the 'grups-rs fst' module.
+    #[clap(short='C', long, multiple_values(true), default_values(&["EUR"]))]
     pub contam_pop: Vec<String>,
 
-    ///Number of random individual genomes with which to contaminate pedigree simulations.
+    /// Number of random individual genomes with which to contaminate pedigree simulations.
     /// 
     /// Format: <INT> <INT> ...
     /// Default: Contaminate all pedigree individuals with a single contaminating individual.
@@ -366,15 +503,11 @@ pub struct PedigreeSims {
     #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
     pub panel: Option<PathBuf>,
 
-    // /// Number of parallel CPU processes when performing pedigree-simulations.
-    // /// 
-    // /// Parallelization is dispatched according to the number of replicates.
-    // #[clap(short='@', long, default_value("1"))]
-    // pub threads: usize,
-
     /// Number of additional parallel decompression threads.
     /// 
-    /// Can increase performance when working with BGZF compressed vcf files.
+    /// Can increase performance when working with BGZF compressed .vcf.gz files. Note that this parameter has no effect when working with
+    /// uncompressed .vcf or and .fst[.frq] files.
+    /// 
     #[clap(short='#', long, default_value("0"))]
     pub decompression_threads: usize,
 
@@ -387,8 +520,9 @@ pub struct PedigreeSims {
     /// zscore: Perform minimum zscore assignation, i.e. the distribution with the lowest z-score from the observed PWD is selected as the most likely candidate.
     /// Computationally inexpensive, but can provide with surprising results, when the different distributions carry drastically different standard deviations.
     /// 
-    /// svm: Compute treshold using Ordinally Partitionned Support Vector Machines. Binary SVMs are instantiated iteratively, from the lowest relatedness order to the lowest.
-    /// Each SVM is fitted against the hypothesis that the observed PWD belongs to a higher degree than given distribution. i.e., the question asked by the svm can be translated into: "Is this observed PWD greater than than the currently observed distribution?"
+    /// svm: Compute treshold using Ordinally Partitionned Support Vector Machines. Binary SVMs are instantiated sequentially, from the lowest relatedness order 
+    /// to the highest, in terms of average PWD. Each SVM is fitted against the hypothesis that the observed PWD belongs to a higher degree than given distribution.
+    /// i.e., the question asked by the svm can be translated into: "Is this observed PWD greater than than the currently observed distribution?"
     /// The most likely relationship is assigned as soon as an SVM answers 'no'.
     #[clap(long, arg_enum, default_value("svm"))]
     pub assign_method: RelAssignMethod
@@ -453,7 +587,7 @@ impl PwdFromStdin {
     /// - put this in `Comparison::new()` ?? -> This would allow mix-matching batch mode and self-comparison,
     ///   but could be a bit confusing for users..
     pub fn check_depth(&self) -> Result<(), ParserError> {
-        if self.self_comparison && self.min_depth.iter().any(|&x| x < 2) {        
+        if self.min_depth.iter().any(|&x| x < 1) {        
             return Err(ParserError::InsufficientDepthError)
         }
         Ok(())

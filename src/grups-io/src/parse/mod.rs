@@ -1,9 +1,9 @@
-use std::{collections::{HashMap}, fs, path::{Path, PathBuf}};
+use std::{collections::HashMap, fs, path::{Path, PathBuf}};
 
 use located_error::*;
 
-use log::{trace};
-use anyhow::{Result};
+use log::trace;
+use anyhow::Result;
 
 mod error;
 use error::ParseError;

@@ -15,33 +15,28 @@ use pwd_from_stdin::comparisons::Comparisons;
 
 
 // @TODO! MAIN
-//   +        [CRUCIAL] Add ability for multiple contaminating pop
-//   +        [CRUCIAL] Add weighted averaged contamination rates (see grups_module.pyx:585):
-//   +        [CRUCIAL] Add Missing SNP filtration mechanism. (remove &Pwd if Pwd.coordinate is not in vcf/fst file.)
-//                      - add "typed" counter in Pwd field ? -> remove if typed == 0 after all files have been used.
+//   + [FEATURE] Add ability for multiple contaminating pop
+//   + [FEATURE] Add weighted averaged contamination rates ? (see grups_module.pyx:585):
 // -------------------------------------------------------------------------------------------------------------------
-//            [  QoL  ] Add multiple candidate file extensions to GeneticMap.
+//   + [  QoL  ] Add multiple candidate file extensions to GeneticMap.
 // -------------------------------------------------------------------------------------------------------------------
 // @ TODO! CLEANUP + BUGFIX
-//   + [  BUG  ] Grups Fst bugs out when Samples Panel does not perfectly match the VCF ordering.
-//   + [  BUG  ] VcfPanelReader::copy_from_source not working when using FST pop-subset
-//   + [  BUG  ] vcfreader.rs:193:39 && fstreader.rs:144:14 panics if contaminating pop is missing from vcf/fst index.
 // -------------------------------------------------------------------------------------------------------------------
 // @ TODO! META
-//   +          [CRUCIAL] Refactor pwd_from_stdin::io and pedigree_sims::io into a self-contained library.
-//   + [ DONE  ][CRUCIAL] Document pedigree_sims::* libraries.
+// -------------------------------------------------------------------------------------------------------------------
 //
 pub fn run(
     com_cli           : parser::Common,
     ped_cli           : parser::PedigreeSims,
+    requested_samples : &[usize],
     comparisons       : &mut Comparisons,
 ) -> Result<()>
 {
-
+    info!("Running 'pedigree-sims' module...");
     // ----------------------------- Sanity checks 
-    if ped_cli.contamination_rate.len() < comparisons.len() {
-        warn!("Number of contamination rates is lower than the number of comparisons. \
-            Values of --contamination-rate will wrap around."
+    if ped_cli.contamination_rate.len() < requested_samples.len() {
+        warn!("Number of provided contamination rates is lower than that of --samples. \
+            Values will be recycled."
         );
     }
 
@@ -52,9 +47,9 @@ pub fn run(
             warn!("--seq_error_rate was unspecified. Error probabilities will be sampled directly from the pileup file" );
         },
         Some(error_rates_vec) => {
-            if error_rates_vec.len() < comparisons.len() {
-                warn!("Number of sequencing error rates is lower than the number of comparisons. \
-                    Values of --seq-error-rate will wrap around."
+            if error_rates_vec.len() < requested_samples.len() {
+                warn!("Number of provided sequencing error rates is lower than that of --samples. \
+                    Values will be recycled."
                 );
             }
         }
@@ -151,18 +146,12 @@ pub fn run(
         }
     }
 
-    //pedigrees.filter(comparisons);
-
-    // --------------------- TEST: Fit Ordinally Partitionned SVMs
-    //pedigrees.fit_svm(comparisons).expect("Failed to fit SVMOP");
-
     // --------------------- Print pedigree simulation results.
     pedigrees.write_simulations(comparisons, &output_files)?;
 
 
     // --------------------- Compute most likely relationship for each Comparison
     info!("Assigning most likely relationships using {}...", ped_cli.assign_method);
-    println!("--------------------------------------------------------------");
     pedigrees.compute_results(comparisons, &output_files["result"], ped_cli.assign_method)?;
 
     Ok(())

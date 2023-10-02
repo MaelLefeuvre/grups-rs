@@ -10,10 +10,10 @@ use crate::{
     read::{SampleTag, genotype_reader::VCFReader},
 };
 
-use log::{warn};
+use log::warn;
 
 use fastrand;
-use anyhow::{Result};
+use anyhow::Result;
 use located_error::{LocatedError, LocatedOption};
 
 mod error;

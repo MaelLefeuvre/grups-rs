@@ -1,4 +1,4 @@
-use ndarray::{Array1};
+use ndarray::Array1;
 use crate::pedigrees::PedigreeReps;
 
 use smartcore::{svm::{LinearKernel, svc::{SVC, SVCParameters}}, linalg::basic::matrix::DenseMatrix};

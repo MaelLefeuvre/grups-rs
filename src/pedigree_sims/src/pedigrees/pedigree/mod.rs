@@ -1,4 +1,4 @@
-use std::{collections::{BTreeMap}};
+use std::collections::BTreeMap;
 
 use located_error::prelude::*;
 use grups_io::read::{
@@ -144,7 +144,7 @@ impl Pedigree {
 
     ///  Wrap multiple simulations parameters within a new `PedigreeParam` struct and update `self.params` with it.
     pub fn set_params(&mut self, snp_downsampling_rate: f64, af_downsampling_rate: f64, seq_error_rate: Option<[f64; 2]>, contam_rate: [f64; 2]) {
-        //println!("error_rate: {seq_error_rate} | contam_rate: {contam_rate}");
+        //trace!("error_rate: {seq_error_rate} | contam_rate: {contam_rate}");
         self.params = Some(
             PedigreeParams::new(snp_downsampling_rate, af_downsampling_rate, seq_error_rate, contam_rate)
         );

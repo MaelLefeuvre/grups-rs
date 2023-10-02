@@ -6,18 +6,18 @@ pub use pedigree_params::PedigreeParams;
 
 
 use rand::Rng;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::ops::Range;
 use rand::distributions::uniform::SampleUniform;
 use std::cmp::PartialOrd;
 
 /// Trait defining a pedigree parameter. This struct is mainly leveraged by `super::ParamRateGenerator` to generate
 /// constant/random values, according to the user-provided rates.
-pub trait PedParam<T>: std::fmt::Debug {
+pub trait PedParam<T: Display>: Debug + Display {
     fn value(&mut self) -> T;
 }
 
-impl<T: 'static + Copy + SampleUniform + PartialOrd + Debug> dyn PedParam<T> {
+impl<T: 'static + Copy + SampleUniform + PartialOrd + Debug + Display> dyn PedParam<T> {
     /// Instantiate a new PedParam, given a vector of values.
     /// 
     /// # Arguments:
@@ -46,18 +46,24 @@ impl<T: 'static + Copy + SampleUniform + PartialOrd + Debug> dyn PedParam<T> {
 /// # Fields:
 /// - `inner` : user-provided rate.
 #[derive(Debug)]
-struct PedParamConst<T> {
+struct PedParamConst<T: Display> {
     inner: T
 }
 
-impl<T: Copy + Debug> PedParam<T> for PedParamConst<T> {
+impl<T: Copy + Debug + Display> PedParam<T> for PedParamConst<T> {
     /// Return the rate previously given by the user.
     fn value(&mut self) -> T {
         self.inner
     }
 }
 
-impl<T> PedParamConst<T> {
+impl<T: Display> Display for PedParamConst<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
+impl<T: Display> PedParamConst<T> {
     /// Instantiate a new constant PedParam. 
     pub fn new(value: T) -> Self {
         PedParamConst{inner: value}
@@ -70,19 +76,25 @@ impl<T> PedParamConst<T> {
 /// - `inner`: random number generator.
 /// - `range`: user-defined range of acceptable rates.
 #[derive(Debug)]
-struct PedParamRange<T> {
+struct PedParamRange<T: Display> {
     inner: rand::prelude::ThreadRng,
     range: Range<T>
 }
 
-impl<T: SampleUniform + PartialOrd + Copy + Debug> PedParam<T> for PedParamRange<T> {
+impl<T: Display> Display for PedParamRange<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}; {}]", self.range.start, self.range.end)
+    }
+}
+
+impl<T: SampleUniform + PartialOrd + Copy + Debug + Display> PedParam<T> for PedParamRange<T> {
     /// Return a randomly generated rate, within the user-provided range.
     fn value(&mut self) -> T {
         self.inner.gen_range(self.range.start..=self.range.end)
     }
 }
 
-impl<T> PedParamRange<T> {
+impl<T: Display> PedParamRange<T> {
     /// Instantiate a new random PedParam.
     pub fn new(start: T, end: T) -> Self {
         let inner = rand::thread_rng();

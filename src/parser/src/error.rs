@@ -9,7 +9,7 @@ pub enum ParserError{
     #[error("{0}")]
     ParseRange(&'static str),
 
-    #[error("--min-depth must be greater than 1 when performing self-comparison")]
+    #[error("--min-depth must be greater than 0")]
     InsufficientDepthError,
 
     #[error("Neither --pileup, nor the stdin buffer are being sollicited.")]

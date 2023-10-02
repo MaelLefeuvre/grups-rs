@@ -5,7 +5,7 @@ use ahash::AHashSet;
 use log::{warn, info, debug};
 use located_error::prelude::*;
 
-use genome::{Genome, coordinate::{Coordinate}};
+use genome::{Genome, coordinate::Coordinate};
 use grups_io::{parse::{self, FileKey}, read::SNPReader};
 
 pub mod pileup;
@@ -16,7 +16,7 @@ use comparisons::Comparisons;
 pub mod error;
 pub use error::PwdFromStdinError;
 
-/// Main function. Run pwd-from-stdin, using the user-provided parameters and input file.
+/// Run pwd-from-stdin, using the user-provided parameters and input file.
 /// Returns a `Comparisons` struct, containing the results.
 /// 
 /// # Errors 
@@ -28,13 +28,13 @@ pub fn run<'a>(
     requested_samples : &'a [usize],
     genome            : &'a Genome,
 ) -> Result<(Comparisons, HashMap<String, String>)> {
-
+    info!("Running 'pwd-from-stdin' module...");
     // ----------------------------- Sanity checks.
-    //pwd_cli.check_depth()?; // Ensure min_depths are > 2 when allowing self-comparisons
+    pwd_cli.check_depth()?; // Ensure min_depths are > 2 when allowing self-comparisons
     com_cli.check_input()?; // Ensure the user has either requested stdin or --pileup
 
     if pwd_cli.min_depth.len() < requested_samples.len() {
-        warn!("--min-depth length is less than that of --samples. Values of min-depth will wrap around.");
+        warn!("Number of provided --min-depth values is less than that of --samples. Values will be recycled.");
     }
 
     // ----------------------------- Parse Comparisons
@@ -98,7 +98,7 @@ pub fn run<'a>(
     for entry in pileup_reader.lines() {
         // ----------------------- Parse line.
         let entry = entry?;
-        let mut line = pileup::Line::new(&entry, pwd_cli.ignore_dels)
+        let mut line = pileup::Line::new(&entry, !pwd_cli.consider_dels)
             .loc("While attempting to parse the next pileup line.")?;
 
 
@@ -136,11 +136,6 @@ pub fn run<'a>(
 
     // Run two-pass variance estimation algorithm.
     comparisons.update_variance_unbiased();
-
-    //// WIP: heterozygocity ratio
-    //for comparison in comparisons.iter() {
-    //    println!("{} : {}", comparison.get_pair(), comparison.get_heterozygocity_ratio())
-    //}
 
     Ok((comparisons, output_files))
 }

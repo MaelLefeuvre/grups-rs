@@ -37,7 +37,6 @@ impl GeneticMap {
         match out.0.keys().len() {
             0 => Err(anyhow::anyhow!(GeneticMapError::EmptyDir)),
             _ => Ok(out)
-            // 22 => Ok(out)
         }.loc(GeneticMapError::EmptyDir)
     }
 

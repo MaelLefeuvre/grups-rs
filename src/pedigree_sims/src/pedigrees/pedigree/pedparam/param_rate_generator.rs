@@ -1,6 +1,6 @@
 use rand::distributions::uniform::SampleUniform;
 use std::cmp::PartialOrd;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use super::PedParam;
 
@@ -13,11 +13,18 @@ use super::PedParam;
 /// - if the provided data is a range (e.g.: '5-10'), `PedParam` is of type `PedParamRange`
 ///   -> `ParamRateGenerator` will return a random value for this `PedParam` (within the provided value)
 ///      when calling | gen_random_values()`
+#[derive(Debug)]
 pub struct ParamRateGenerator<T>{
     inner: [Box<dyn PedParam<T>>; 2],
 }
 
-impl<T> ParamRateGenerator<T> {
+impl<T: Display> Display for ParamRateGenerator<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} vs. {}", self.inner[0], self.inner[1])
+    }
+}
+
+impl<T: Display> ParamRateGenerator<T> {
     /// Instantiate a new generartor from a given user-input.
     /// # Arguments:
     /// - `rates`   : vector of user provided rate (e.g. contamination rate, sequencing error rate, etc.)

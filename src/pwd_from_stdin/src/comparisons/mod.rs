@@ -99,7 +99,6 @@ impl Comparisons {
     pub fn write_pwd_results(&self, print_blocks: bool, output_files: &HashMap<String, String>) -> Result<()> {
         let mut pwd_writer = GenericWriter::new(Some(output_files["pwd"].clone()))?;
         
-        info!("Printing results...");
         let header = format!(
             "{: <PAIRS_FORMAT_LEN$}{DISPL_SEP}\
              {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
@@ -108,11 +107,14 @@ impl Comparisons {
              {: <AVERG_FORMAT_LEN$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$}",
              "Pair_name", "Raw.Overlap", "Raw.Sum.PWD", "Raw.Avg.PWD", "Raw.CI.95", "Raw.Avg.Phred");
-        println!("{header}");
-        pwd_writer.write_iter(&vec![header])?; // Print PWD results to file.
+        pwd_writer.write_iter(&vec![header.clone()])?; // Print PWD results to file.
         pwd_writer.write_iter(self.iter())?;   // 
-
-        println!("{self}");                    // Print PWD results to console
+        
+        if log::log_enabled!(log::Level::Debug) {
+            info!("Raw observed pairwise differences:");
+            println!("{header}");
+            println!("{self}"); // Print PWD results to console
+        }
 
         if print_blocks {
             for comparison in self.iter() {
