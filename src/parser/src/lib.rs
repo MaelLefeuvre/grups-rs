@@ -129,15 +129,18 @@ pub enum Commands {
         fst: VCFFst
     },
 
-    /// Run GRUPS using a previously generated .yaml config file.
+    /// Run grups-rs using a previously generated .yaml configuration file.
+    /// 
+    /// This allows users to easily re-apply a grups-rs command using the exact same parameters
+    /// and arguments. 
     FromYaml {
         yaml: PathBuf,
     },
 
-    // Print all citations tied to this project
     Cite 
 }
 
+/// Print all citations tied to this project
 pub struct Cite;
 
 #[derive(Parser, Debug, Default, Serialize, Deserialize)]
@@ -218,7 +221,10 @@ pub struct Common {
     pub overwrite: bool,
 }
 
-/// Compute the average `PairWise Difference` (PWD) within a pileup file.
+/// Estimate the raw average genetic PairWise Differences between individuals
+/// 
+/// Estimate the observed average pairwise mismatch rate (or 'PairWise Differences') between individuals 
+/// within a pileup file.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct PwdFromStdin {
@@ -337,7 +343,10 @@ impl Display for RelAssignMethod {
     }
 }
 
-/// Run pwd-from-stdin and perform pedigree simulations in one go.
+/// Estimate genetic relatedness through pedigree simulations.
+/// 
+/// Perform genetic relatedness estimation between pileup individuals, by first running the pwd-from-stdin 
+/// module, and performing pedigree simulations in one go.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug, Default, Serialize, Deserialize)]
 pub struct PedigreeSims {
@@ -528,7 +537,10 @@ pub struct PedigreeSims {
     pub assign_method: RelAssignMethod
 }
 
-/// Convert VCF files into FST-indexes (Finite State Transcucer).
+/// Convert VCF files into sets of FSA-encoded indexes.
+/// 
+/// Encode large sets of phased VCF reference files in the form of Deterministic Acyclic Finite State Automata 
+/// to enable a higher query performance when performing pedigree simulations.
 #[derive(Args, Debug, Default, Serialize, Deserialize)]
 pub struct VCFFst {
     /// Path to input Panel Definition files.
