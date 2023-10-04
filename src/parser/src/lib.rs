@@ -444,7 +444,6 @@ pub struct PedigreeSims {
     #[clap(short='I', long, arg_enum, default_value("vcf"))]
     pub mode: Mode,
 
-
     /// Path to a directory containing a set of chromosome-specific genetic recombination maps, such as the HapMap-phaseII dataset.
     /// 
     /// Note that GRUPS-rs will search for, and attempt to load any file ending with the '.txt' file extension within that directory.
@@ -705,16 +704,22 @@ fn assert_filesystem_entity_is_valid(s: &OsStr, entity: &FileEntity) -> Result<(
     entity.validate(path).loc("While parsing arguments.")
 }
 
+fn expand_tilde(s: &OsStr) -> Result<PathBuf> {
+    s.to_str()
+    .ok_or_else(|| anyhow!("Some error"))
+    .and_then(|s| expanduser::expanduser(s).map_err(anyhow::Error::from))
+}
+
 fn valid_input_directory(s: &OsStr) -> Result<PathBuf> {
     assert_filesystem_entity_is_valid(s, &FileEntity::Directory)
         .loc("While checking for directory validity")?;
-    Ok(PathBuf::from(s))
+    expand_tilde(s)
 }
 
 fn valid_input_file(s: &OsStr) -> Result<PathBuf> {
     assert_filesystem_entity_is_valid(s, &FileEntity::File)
         .loc("While checking for file validity")?;
-    Ok(PathBuf::from(s))
+    expand_tilde(s)
 }
 
 fn valid_output_dir(s: &OsStr) -> Result<PathBuf> {
@@ -723,7 +728,7 @@ fn valid_output_dir(s: &OsStr) -> Result<PathBuf> {
     }
     assert_filesystem_entity_is_valid(s, &FileEntity::Directory)
         .loc("While checking for directory validity")?;
-    Ok(PathBuf::from(s))
+    expand_tilde(s)
 }
 
 /// Convert a user-defined string "range" into a vector of integers.

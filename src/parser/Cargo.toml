@@ -23,6 +23,7 @@
   fastrand      = "1.8.0"
   thiserror     = "1.0"
   anyhow        = "1.0"
+  expanduser   = "1.2.0"
 
 
 
