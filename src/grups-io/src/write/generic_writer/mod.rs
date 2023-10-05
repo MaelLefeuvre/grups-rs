@@ -24,7 +24,7 @@ impl<'a> GenericWriter<'a>{
     /// if `path` is either an invalid file, or the user does not have the proper
     /// UNIX permissions to write at this location.
     pub fn new(path: Option<impl AsRef<Path>>) -> Result<GenericWriter<'a>>{
-        use WriterError::{IOError};
+        use WriterError::IOError;
         Ok(GenericWriter{ source: match path {
             Some(path) => {
                 let file = File::create(path).map_err(IOError).loc("While creating file")?;

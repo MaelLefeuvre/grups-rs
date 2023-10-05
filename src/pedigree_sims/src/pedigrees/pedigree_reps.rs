@@ -18,7 +18,7 @@ use located_error::prelude::*;
 /// - `contaminants`: Size-two array set of contaminating SampleTags, one vector for each compared pileup individual. 
 ///                   (see pedigree::Contaminant)
 pub struct PedigreeReps{
-    inner: Vec<Pedigree>,
+    pub inner: Vec<Pedigree>,
     pub contaminants: Option<Contaminant> 
 }
 

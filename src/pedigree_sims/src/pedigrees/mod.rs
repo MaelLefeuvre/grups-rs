@@ -11,10 +11,11 @@ use grups_io::{
 use located_error::prelude::*;
 use genome::{ GeneticMap, coordinate::{Coordinate, Position }};
 use parser::RelAssignMethod;
-use pwd_from_stdin::comparisons::Comparisons as PileupComparisons;
+use pwd_from_stdin::comparisons::{Comparisons as PileupComparisons, Comparison};
 
 use fastrand;
 use ahash::AHashMap;
+use indexmap::IndexMap;
 use log::{info, trace, debug, warn};
 
 mod pedigree_reps;
@@ -449,36 +450,97 @@ impl Pedigrees {
         Ok(())
     }
 
+    fn get_most_likely_relationship_zscore(&self, observed_avg_pwd: f64, stats: &[(String, (f64, f64))]) -> (Option<String>, f64, Vec<f64>) {
+        let mut min_z_score         : f64            = f64::MAX;
+        let mut most_likely_avg_pwd : f64            = 0.0;
+        let mut most_likely_rel     : Option<String> = None;
+
+        let mut z_scores = Vec::new();
+
+        for (scenario, (avg_avg_pwd, std_dev)) in stats.iter().rev(){
+            let scenario_z_score = (avg_avg_pwd - observed_avg_pwd) / std_dev;
+            z_scores.push(scenario_z_score);
+            let is_more_likely   = scenario_z_score.abs() < min_z_score.abs();
+            if is_more_likely {
+                min_z_score         = scenario_z_score;
+                most_likely_rel     = Some(scenario.to_owned());
+                most_likely_avg_pwd = *avg_avg_pwd;
+            }
+        }
+
+        (most_likely_rel, most_likely_avg_pwd, z_scores)
+    }
+
+    fn get_most_likely_relationship_svm(&self, comparison: &Comparison, pedigree_vec: &PedigreeReps, ordered_rels: &Vec<&String>) -> Result<(Option<String>, Vec<f64>)> {
+
+        let mut svm_builder = LibSvmBuilder::default();
+        svm_builder.sims(pedigree_vec).label_order(ordered_rels).scale()?;
+
+        let mut svm_probs   = Vec::new();
+        trace!("Estimating most likely relationship through SVM classification");
+        for (i, scenario) in ordered_rels[0..ordered_rels.len() - 1].iter().enumerate() {
+            let loc_msg = || format!("While attempting to assess likelihood of comparison '{scenario}' for {}", comparison.get_pair());
+
+            let svm        = svm_builder.labels(pedigree_vec, &i).build()?;
+            let prediction = svm.predict_probs(comparison.get_avg_pwd()).with_loc(loc_msg)?;
+            let true_label = svm.true_label_idx().with_loc(loc_msg)?;
+
+            svm_probs.push(prediction[0].1[true_label]);
+            if log::log_enabled!(log::Level::Trace){
+                println!("  - {i}, P(k>{scenario}): {prediction:?} (index: {true_label})");
+            }
+        }
+
+        // ---- Compute per-class SVM probabilities
+        let mut per_class_svm_prob = Vec::with_capacity(svm_probs.len());
+
+        per_class_svm_prob.push(1.0 - svm_probs[0]);                            // k = 1
+        for i in 1..svm_probs.len() {
+            per_class_svm_prob.push(svm_probs[i-1] - svm_probs[i]);             // 1 < k < K
+        }
+        per_class_svm_prob.push(svm_probs[svm_probs.len() - 1]);                // k = K
+
+    let max_prob_index = per_class_svm_prob.iter().enumerate()
+        .max_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(index, _)| index)
+        .ok_or(anyhow!("Failed to obtain index of maximum SVM probability"))
+        .unwrap();
+
+        let most_likely_rel = ordered_rels.get(max_prob_index).map(|s| (*s).clone());
+        Ok((most_likely_rel, per_class_svm_prob))
+    }
+
     /// Recompute a corrected average-PWD of our real samples, and estimate the most likely relationship
     /// using our simulation results
     /// # Arguments
     /// - `comparisons`   : pileup Comparisons of our real samples.
     /// - `output_files`  : target output file where results are written.
     pub fn compute_results(&self, comparisons: &mut PileupComparisons, output_file: &str, assign_method: RelAssignMethod) -> Result<()> {
+
         let loc_msg = "While attempting to compute corrected summary statistics";
         // ---- Resource acquisition
-        let mut simulations_results = Vec::with_capacity(comparisons.len());
+        let mut simulations_results = Vec::with_capacity(comparisons.len() + 1);
+        let mut svm_results         = Vec::with_capacity(comparisons.len() + 1);
         let mut writer = GenericWriter::new(Some(output_file)).loc(loc_msg)?;
 
         // ---- Print header and write to output_file
         let simulation_header = format!("{: <20} - {: <20} - {: <10} - {: <10} - {: <10} - {: <12} - {: <14} - {: <10} - {: <10}",
             "Pair_name", "Most_Likely_rel", "Corr.Overlap", "Corr.Sum.PWD", "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred", "Sim.Avg.PWD", "Min.Z_Score"
         );
-        
-        if log::log_enabled!(log::Level::Debug) {
-            debug!("Output simulation results:");
-            println!("\n{simulation_header}");
-        }
+ 
         simulations_results.push(simulation_header);
-
 
         // ---- We might have removed some PWDs during simulations. We need to recompute the variance before printing out
         //      "corrected" 95% Confidence intervals.
         //      -> Run two-pass variance estimation algorithm.
         comparisons.update_variance_unbiased();
 
+        // The use of this indexer helps us ensure SVM columns always keep the same order within the .prob file
+        let mut svm_indexer         = IndexMap::with_capacity(comparisons.len());
+
         // ---- loop across our pileup comparisons and assign a most-likely relationship, using our simulations.
         for comparison in comparisons.iter() {
+            let observed_avg_pwd    = comparison.get_avg_pwd();
             let comparison_label    = comparison.get_pair();
 
             // ---- Gain access to pedigree vector.
@@ -488,74 +550,55 @@ impl Pedigrees {
             // ---- Aggregate the sum of avg. PWD for each relatedness scenario.
             let stats = pedigree_vec.compute_sum_simulated_stats()?;
 
-            let ordered_rels: Vec<&String> = stats.iter().map(|(rel, _)| rel ).collect();
+            let ordered_rels: Vec<&String> = stats.iter().rev().map(|(rel, _)| rel ).collect();
 
             // ---- Select the scenario having the least amount of Z-score with our observed avg.PWD
-            let observed_avg_pwd        : f64            = comparison.get_avg_pwd();
-            let mut min_z_score         : f64            = f64::MAX;
-            let mut most_likely_avg_pwd : f64            = 0.0;
-            let mut most_likely_rel     : Option<String> = None;
+            let (mut most_likely_rel, most_likely_avg_pwd, z_scores) = self.get_most_likely_relationship_zscore(observed_avg_pwd, &stats);
             
-            let mut svm_builder = match assign_method {
-                RelAssignMethod::Zscore => None,
-                RelAssignMethod::SVM    => Some(LibSvmBuilder::default())
-            }.map(|mut builder| {
-                builder.sims(pedigree_vec).label_order(&ordered_rels); 
-                builder
-            });
+            // ---- Get svm probabilities if this was assigned.
+            if matches!(assign_method, RelAssignMethod::SVM) {
+                let (most_likely_rel_svm, svm_probs) = self.get_most_likely_relationship_svm(comparison, pedigree_vec, &ordered_rels)?;
+                most_likely_rel = most_likely_rel_svm;
 
-            'relassign: for (i, (scenario, (avg_avg_pwd, std_dev))) in stats.iter().enumerate() {
-                let loc_msg = || format!("While attempting to assess likelihood of comparison '{scenario}' for {comparison_label}");
+                // ---- Insert label wise svm probabilities for that comparison.
+                for i in 0..ordered_rels.len() {
+                    *svm_indexer.entry(ordered_rels[i].clone()).or_insert(f64::NAN) = svm_probs[i];
+                }
 
-                let scenario_z_score = (avg_avg_pwd - observed_avg_pwd) / std_dev;
-
-                let is_more_likely = match assign_method {
-                    RelAssignMethod::Zscore => scenario_z_score.abs() < min_z_score.abs(),
-                    RelAssignMethod::SVM    => {
-                        let prediction = svm_builder.as_mut().expect("Error")
-                            .labels(pedigree_vec, &i)
-                            .build()
-                            .and_then(|svm| svm.predict(comparison.get_avg_pwd()))
-                            .with_loc(loc_msg)?;
-                        
-                        trace!("Prediction for scenario {comparison_label} - {scenario}: {prediction}");
-                        prediction == 0.0
+                // ---- Print SVM results to shell if debug mode...
+                if log::log_enabled!(log::Level::Debug) {
+                    debug!("SVM results for {comparison_label}");
+                    println!("  {:<20}{:>12}{:>20}", "Label", "Z-score", "per-class SVM prob");
+                    for i in 0..ordered_rels.len() {
+                        println!("  {:<20}{:>12.7}{:>20.7}", ordered_rels[i], z_scores[i], svm_probs[i]);
                     }
-
-                };
-                
-                if is_more_likely {
-                    min_z_score =  scenario_z_score;
-                    most_likely_rel = Some(scenario.to_owned());
-                    most_likely_avg_pwd = *avg_avg_pwd;
-                    if matches!(assign_method, RelAssignMethod::SVM) {
-                        break 'relassign
-                    }
+                    println!("Most likely relationship: {}", &most_likely_rel.as_deref().unwrap_or("None"));
                 }
             }
+        
+            let assigned_rel = most_likely_rel.unwrap_or_else( || {
+                warn!("Failed to assign a most likely relationship for {comparison}");
+                String::from("None")
+            });
 
-            let assigned_rel = match most_likely_rel {
-                Some(rel) => rel,
-                None => {
-                    warn!("Failed to assign a most likely relationship for {comparison}");
-                    "None".to_string()
-                }
-            };
-    
-            // ---- Correct with f64::NaN in case there were not enough SNPs to compute a simulated avg.pwd.
-            let min_z_score = if min_z_score == f64::MAX {f64::NAN} else {min_z_score};
-            let pair_name = comparison.get_pair();
+            // ---- Get minimum z-score, using the position of ordered_rels and the assigned_rel
+            let mut min_z_score = f64::NAN;
 
+            if let Some(min_z_score_index) = ordered_rels.iter().position(|&r| r == &assigned_rel) {
+                 min_z_score = z_scores[min_z_score_index]
+            }
+
+            
             // ---- Get the "corrected" observed pwd summary statistics. 
             let corrected_sum_pwd = comparison.get_sum_pwd();
             let corrected_overlap = comparison.get_overlap();
-            let corrected_ci = comparison.get_confidence_interval();
-            let corrected_phred = comparison.get_avg_phred();
+            let corrected_ci      = comparison.get_confidence_interval();
+            let corrected_phred   = comparison.get_avg_phred();
 
             // ---- Preformat and log result to console.
             //"Pair_name", "Most_Likely_rel", "Corr.Overlap", "Corr.Sum.PWD", "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred", "Sim.Avg.PWD", "Min.Z_Score", 
             let simulation_result = format!(
-                "{pair_name: <20} - \
+                "{comparison_label: <20} - \
                  {assigned_rel: <20} - \
                  {corrected_overlap: <12.6} - \
                  {corrected_sum_pwd: <12.6} - \
@@ -565,16 +608,37 @@ impl Pedigrees {
                  {most_likely_avg_pwd: <11.6} - \
                  {min_z_score: >11.6}"
             );
-
-            if log::log_enabled!(log::Level::Debug) {
-                println!("{simulation_result}");
-            }
-
             simulations_results.push(simulation_result);
+
+            let mut svm_row = format!("{comparison_label:<20} - {observed_avg_pwd:<12.6}");
+
+            for (_, prob) in svm_indexer.iter() {
+                svm_row.push_str(&format!(" - {prob:>12.6}"));
+            }
+            svm_results.push(svm_row);
+
         }
 
-        // ---- Write simulation results to file.
+        // ---- Print simulation results to shell if debug mode.
+        if log::log_enabled!(log::Level::Debug) {
+            debug!("Simulation results:");
+            simulations_results.iter().for_each(|row| println!("{row}"));
+        }
+
+        // ---- Write simulation results to file...
+        info!("Writing simulation results to output file...");
         writer.write_iter(simulations_results).loc(loc_msg)?;
+
+        // --- Write per-class SVM probability results to output file.
+        if matches!(assign_method, RelAssignMethod::SVM) {
+            info!("Writing per-class SVM probabilities to output file...");
+            let mut svm_results_header = format!("{:<20} - {: <10}", "Pair_name", "Corr.Avg.PWD");
+            svm_indexer.keys().for_each(|rel| svm_results_header += &format!(" - {rel: <10}") );
+
+            let svm_output_file   = output_file.strip_suffix("result").unwrap().to_owned() + "probs";
+            let mut svm_writer        = GenericWriter::new(Some(svm_output_file)).loc(loc_msg)?;
+            svm_writer.write_iter([svm_results_header].into_iter().chain(svm_results)).loc(loc_msg)?;
+        }        
 
         Ok(())
     }

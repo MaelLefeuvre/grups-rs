@@ -177,7 +177,7 @@ pub struct Common {
     /// 
     /// Note that in the absence of a '--pileup' argument, the program may accept a data stream from the standard input. i.e:{n} 
     ///
-    ///     samtools mpileup -B -q30 -Q30 [samples.bam] | grups-rs pwd_from_stdin [...]{n}
+    ///    samtools mpileup -B -q30 -Q30 [samples.bam] | grups-rs pwd_from_stdin [...]{n}
     /// 
     #[clap(long, required(false))]
     pub pileup: Option<String>,

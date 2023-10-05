@@ -211,7 +211,7 @@ impl<T> LocatedOption<T> for Option<T>
 mod tests {
     use super::*;
     use thiserror::Error;
-    use std::{fs::File};
+    use std::fs::File;
 
     #[derive(Error, Debug)]
     pub enum BubbleError {

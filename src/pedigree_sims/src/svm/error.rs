@@ -7,7 +7,10 @@ pub enum SVMError {
     PredictProbs(#[source] libsvm::Error),
 
     #[error("Failed to predict boolean class from the provided value(s)")]
-    PredictBool(#[source] libsvm::Error)
+    PredictBool(#[source] libsvm::Error),
+
+    #[error("Invalid SvmPredictor labels.")]
+    InvalidLabels,
 }
 
 #[derive(Error, Debug)]

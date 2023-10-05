@@ -45,7 +45,6 @@
   name = "grups-rs"
   path = "src/bin/main.rs"
 
-
 [dependencies]
   pwd_from_stdin    = {path = "src/pwd_from_stdin" }
   pedigree_sims     = {path = "src/pedigree_sims" }
@@ -55,24 +54,20 @@
   logger            = {path = "src/logger"}
   parser            = {path = "src/parser"}
   vcf-fst           = {path = "src/vcf-fst"}
-  located-error     = {path = "src/located-error"}
-  
-  clap           = {version = "3.2", features = ["derive"]}
-  log            = "0.4.16"
-  fastrand       = "1.8.0"
-  serde_yaml     = "0.8"
-  anyhow         = "1.0"
-  thiserror      = "1.0"
-
+  located-error     = {path = "src/located-error"}  
+  clap              = {version = "3.2", features = ["derive"]}
+  log               = "0.4.16"
+  fastrand          = "1.8.0"
+  serde_yaml        = "0.8"
+  anyhow            = "1.0"
+  thiserror         = "1.0"
 [dev-dependencies]
   tempfile       = "3.3.0"
   criterion      = "0.3"
-
   rand           = "0.8.5"
   nanorand       = "0.7.0"
   fastrand       = "1.8.0"
-
-  itertools    = "0.10.3"
+  itertools      = "0.10.3"
 
 
 [[bench]]

@@ -58,7 +58,7 @@ pub fn test_grups_run(mode: parser::Mode, data_dir: &str) {
 
     let mode_str = match mode {
         Fst | FstMmap => "fst",
-        Vcf             => "vcf",
+        Vcf           => "vcf",
     }; 
 
     const FILESTEM: &str = "parents-offspring";
@@ -82,6 +82,7 @@ pub fn test_grups_run(mode: parser::Mode, data_dir: &str) {
         --samples 0-2
         --reps {TEST_PEDIGREE_SIMS_REPS}
         --seed {TEST_PEDIGREE_SIMS_SEED}
+        --contam-pop AFR
     ",);
 
     println!("{args}");
@@ -104,7 +105,7 @@ pub fn test_grups_run(mode: parser::Mode, data_dir: &str) {
     // Note files are different because simulated pwd will differ depending on the file type,
     // even with seeding.
     let want = match mode {
-        Fst | FstMmap => include_bytes!("../expect/parents-offspring-fst.result"),
+        Fst | FstMmap   => include_bytes!("../expect/parents-offspring-fst.result"),
         Vcf             => include_bytes!("../expect/parents-offspring-vcf.result"),
     };
     let got = std::fs::read(&output_res).unwrap_or_else(|_| panic!("Failed to open {output_res}"));

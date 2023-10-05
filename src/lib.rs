@@ -53,6 +53,7 @@ pub fn run(cli: Cli) -> Result<()> {
         PedigreeSims {common, pwd, ped} => {
             // ----------------------------- Set seed (randomly assigned by parser-rs if none was provided.)
             fastrand::seed(ped.seed);
+            //unsafe { libc::srand(ped.seed as u32) };
             // ----------------------------- Parse Requested_samples
             let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
             // ----------------------------- Initialize genome.
