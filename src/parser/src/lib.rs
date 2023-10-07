@@ -148,7 +148,7 @@ pub struct Common {
     /// Minimal required Base Quality (BQ) to perform comparison.
     /// 
     /// Nucleotides whose base quality is lower than the provided treshold will be filtered-out. 
-    /// Value should be expressed in Phred-33 scale.
+    /// Value should be expressed in the Phred+33 scale.
     #[clap(short('M'), long, default_value("30"))]
     pub min_qual: u8,
 
@@ -173,7 +173,7 @@ pub struct Common {
     #[clap(short, long, required(false))]
     pub targets: Option<String>,
 
-    /// Input Pileup file.
+    /// Input pileup file containing samples to investigate.
     /// 
     /// Note that in the absence of a '--pileup' argument, the program may accept a data stream from the standard input. i.e:{n} 
     ///
@@ -208,7 +208,7 @@ pub struct Common {
 
     /// Output directory where results will be written.
     /// 
-    /// Note that grups-rs will create the specified leaf directory if it is not present, by does not 
+    /// Note that grups-rs will create the specified leaf directory if it is not present. However, grups-rs does not 
     /// allow itself from creating parent directories.
     #[clap(short, long, default_value("grups-output"), parse(try_from_os_str=valid_output_dir))]
     pub output_dir: PathBuf,
@@ -263,14 +263,14 @@ pub struct PwdFromStdin {
     #[clap(long, action(ArgAction::SetFalse))]
     pub consider_dels: bool,
 
-    /// Do not print jackknife blocks for each individual
+    /// Do not print jackknife blocks between each pair of individuals
     /// 
     /// By default, grups-rs will keep track of the pairwise mismatch rate within windows of size '--blocksize'.
     /// This information can prove useful to investigate PMR values in sliding windows (this can be visualized
     /// with the 'grups.plots' companion shiny interface), or to compute jackknife estimates of variance.
     /// 
-    /// Using --no-print-block will prevent grups-rs from computing average pairiwise differences in non-overlapping
-    /// blocks
+    /// Using --no-print-block will prevent grups-rs from computing average pairwise differences in non-overlapping
+    /// blocks, and will prevent it from outputting any `.blk` files.
     /// 
     #[clap(short='J', long)]
     pub no_print_blocks: bool,
@@ -293,7 +293,7 @@ pub struct PwdFromStdin {
     #[clap(short='x', long, multiple_values(true), required(false), default_values(&["1","1"]))]
     pub min_depth: Vec <u16>,
 
-    /// 0-based column index of the individuals that should be compared
+    /// 0-based column index of the individuals that should be compared within the input pileup file (specified with --pileup)
     /// 
     /// Argument may accept slices (inclusive), such as --samples 0-3 and/or discrete integer values
     /// such as --samples 7 8. 
@@ -309,7 +309,7 @@ pub struct PwdFromStdin {
 
     /// Exclude transitions from the input targets file.
     /// 
-    /// Note that this arguement requires the use of --targets to provide the program with a list of coordinates.
+    /// Note that this argument requires the use of --targets to provide the program with a list of coordinates.
     /// The given coordinate file must furthermore explicitely provide with the REF/ALT alleles. See the --targets
     /// argument for additional information regarding valid file formats.
     #[clap(long)]
@@ -430,11 +430,12 @@ pub struct PedigreeSims {
     /// This argument is closely tied to the --data-dir, and will define which type of files should grups-rs look for, as well
     /// as how to load them into memory. 
     /// 
-    /// When using '--mode fst-mmap' grups-rs will search for files ending with the .fst[.frq] file extention
+    /// When using '--mode fst-mmap' grups-rs will search for files ending with the .fst[.frq] file extention This mode is highly
+    /// recommended, especially when the directory targeted with '--data-dir' is located within an SSD drive.
     /// 
     /// When using '--mode fst', grups-rs will search for files ending with the .fst[.frq] file extention. These files are then
     /// sequentially loaded into RAM and queried. The 'fst' mode may be faster if you have a lot of comparisons to apply, but has
-    /// has a higher memory footprint compared to the 'fst-mmap' mode. Thus, it is only recommended if your input .fst[.frq] files
+    /// a higher memory footprint compared to the 'fst-mmap' mode. Thus, it is only recommended if your input .fst[.frq] files
     /// are located on an HDD drive.
     /// 
     /// when using '--mode vcf' (default), grups-rs will search for files ending with the .vcf[.gz] extention, and will directly
@@ -462,7 +463,7 @@ pub struct PedigreeSims {
 
     /// Number of pedigree simulation replicates to perform for each pairwise comparisons.
     /// 
-    /// The default provided value of 100 should be considered a bare-minimum. Value in the range 500 to 1000 replicates is 
+    /// The default provided value of 100 should be considered a bare-minimum, for quick screening. Values in the range of 500 to 1000 replicates is 
     /// recommended.
     #[clap(short='R', long, default_value("100"))]
     pub reps: u32,
@@ -498,25 +499,29 @@ pub struct PedigreeSims {
 
     /// Number of random individual genomes with which to contaminate pedigree simulations.
     /// 
-    /// Format: <INT> <INT> ...
-    /// Default: Contaminate all pedigree individuals with a single contaminating individual.
+    /// Note that the number of contaminating individuals, are tied to the samples contained within the input pileup, and
+    /// that the specified values will be recycled if their length is lower than the number of examined pileup samples.
     #[clap(short='N', long, multiple_values(true), default_values(&["1"]))]
     pub contam_num_ind: Vec<usize>,
 
     /// Path to input pedigree definition file.
-    #[clap(short='T', long, required(false), parse(try_from_os_str=valid_input_file))] // default_value(r#"./data/pedigrees/default.ped"#),
+    #[clap(short='T', long, required(false), parse(try_from_os_str=valid_input_file))]
     pub pedigree: PathBuf,
     
-    // Path to input Panel Definition files.
+    /// Path to an input reference panel definition file.
+    /// 
+    /// By default, grups-rs will automatically search for a file ending with the `.panel` extension within the directory
+    /// targeted by '--data-dir'. Use the '--panel' argument to override this behaviour, and specify a definition file
+    /// located somewhere else.
     #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
     pub panel: Option<PathBuf>,
 
     /// Number of additional parallel decompression threads.
     /// 
     /// Can increase performance when working with BGZF compressed .vcf.gz files. Note that this parameter has no effect when working with
-    /// uncompressed .vcf or and .fst[.frq] files.
+    /// uncompressed .vcf or .fst[.frq] files.
     /// 
-    #[clap(short='#', long, default_value("0"))]
+    #[clap(long, default_value("0"))]
     pub decompression_threads: usize,
 
     /// Provide the RNG with a set seed.
@@ -525,13 +530,13 @@ pub struct PedigreeSims {
 
     /// Select the method for most likely relationship assignment
     /// 
-    /// zscore: Perform minimum zscore assignation, i.e. the distribution with the lowest z-score from the observed PWD is selected as the most likely candidate.
-    /// Computationally inexpensive, but can provide with surprising results, when the different distributions carry drastically different standard deviations.
-    /// 
     /// svm: Compute treshold using Ordinally Partitionned Support Vector Machines. Binary SVMs are instantiated sequentially, from the lowest relatedness order 
-    /// to the highest, in terms of average PWD. Each SVM is fitted against the hypothesis that the observed PWD belongs to a higher degree than given distribution.
-    /// i.e., the question asked by the svm can be translated into: "Is this observed PWD greater than than the currently observed distribution?"
-    /// The most likely relationship is assigned as soon as an SVM answers 'no'.
+    /// to the highest, in terms of average PWD. Each SVM is fitted against the hypothesis that the observed PWD belongs to a higher degree than the given distribution.
+    /// These SVMs are then used to generate per-class probabilities of belonging to a given class of relationship. The most likely relationship is assigned by 
+    /// selected the relationship class with the highest per-class probability.
+    /// 
+    /// zscore: Perform minimum zscore assignation, i.e. the distribution with the lowest z-score from the observed PWD is selected as the most likely candidate.
+    /// Computationally inexpensive, but may provide with spurious results, when the different distributions carry drastically different standard deviations. 
     #[clap(long, arg_enum, default_value("svm"))]
     pub assign_method: RelAssignMethod
 }
@@ -542,35 +547,51 @@ pub struct PedigreeSims {
 /// to enable a higher query performance when performing pedigree simulations.
 #[derive(Args, Debug, Default, Serialize, Deserialize)]
 pub struct VCFFst {
-    /// Path to input Panel Definition files.
+    /// Path to an input reference panel definition file.
+    /// 
+    /// By default, grups-rs will automatically search for a file ending with the `.panel` extension within the directory
+    /// targeted by '--data-dir'. Use the '--panel' argument to override this behaviour, and specify a definition file
+    /// located somewhere else.
+    /// 
     #[clap(short='p', long, parse(try_from_os_str=valid_input_file))]
     pub panel: Option<PathBuf>,
 
     /// Population Subset
     /// 
     /// Subset the index by a given number of (super)-population. (e.g. EUR, AFR). Note that at least one pedigree population and one contaminating population
-    /// are required to obtain valid index files.
+    /// are required to obtain valid index files (Although, the source and contaminating population may be the same.).
     #[clap(short='P', long, multiple_values(true))]
     pub pop_subset: Option<Vec<String>>,
 
     /// Output directory
+    /// 
+    /// Output directory where the generated FSA-encoded files (ending with the '.fst[.frq]' extension) should be writted to.
     #[clap(short='o', long, parse(try_from_os_str=valid_output_dir))]
     pub output_dir: PathBuf,
 
-    /// Path to input VCF genomes for founder individuals (1000G)
-    #[clap(short='d', long, parse(try_from_os_str=valid_input_directory))] // default_value(r#"./data/founders/1000G-phase3-v5a"#),
+    /// Directory containing input VCF genomes for founder individuals (1000G)
+    /// 
+    /// Path leading to the directory containing the set of VCF files to encode.
+    #[clap(short='d', long, parse(try_from_os_str=valid_input_directory))]
     pub vcf_dir: PathBuf,
 
     /// Number of parallel CPU processes when performing FST-Indexation
     /// 
-    /// Parallelization is dispatched according to the number of separate vcf(.gz) files.
+    /// Parallelization is dispatched according to the number of separate vcf[.gz] files. Thus, there is no point in 
+    /// invoking more threads than there are reference VCF files to encode.
+    /// 
     #[clap(short='@', long, default_value("1"))]
     pub threads: usize,
 
-    ///Number of additional parallel decompression threads when decompressing (BGZF compressed files only).
+    /// Number of additional parallel decompression threads when decompressing (BGZF compressed files only).
     /// 
-    /// Parallelization is dispatched according to the number of replicates.
-    #[clap(short='#', long, default_value("0"))]
+    /// Can increase performance when working with BGZF compressed `.vcf.gz` files. Note that this parameter
+    /// has no effect when working with uncompressed `.vcf` files.
+    /// 
+    /// Also note that decompression threads have a multiplicative effect when combined with '--threads'. Thus,
+    /// setting --decompression-threads 2 and --threads 22, will in fact consume up to 44 worker threads.
+
+    #[clap(long, default_value("0"))]
     pub decompression_threads: usize,
 
     /// Recalculate allele frequencies for each (super-)population
@@ -582,7 +603,7 @@ pub struct VCFFst {
     /// or to use customly defined populations.
     /// 
     /// When unspecified, the program will instead look for <POP>_AF tags within the VCF's INFO field. These tags can be generated
-    /// Using the bcftools '+fill-tags' plugin.
+    /// using the bcftools '+fill-tags' plugin.
     #[clap(short='F', long)]
     pub compute_pop_afs: bool
 
