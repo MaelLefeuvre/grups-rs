@@ -3,7 +3,7 @@
 [![Ubuntu](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/Ubuntu.yml/badge.svg)](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/Ubuntu.yml) [![MacOS](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/MacOS.yml/badge.svg)](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/MacOS.yml)
 ## Introduction
 
-GRUPS-rs (_**G**et **R**elatedness **U**sing **P**edigree **S**imulations_) is an ancient-DNA genetic relatedness estimation software relying on pedigree simulations using from existing genotype callsets - typically, the [1000G-phase3 dataset](https://www.internationalgenome.org/category/phase-3/). This software is a pure rust implementation and update of the "GRUPS" method, initially developed in [Martin, et al. (2017)](https://doi.org/10.1111/mec.14188).
+GRUPS-rs (_**G**et **R**elatedness **U**sing **P**edigree **S**imulations_) is an ancient-DNA genetic relatedness estimation software relying on pedigree simulations using existing genotype callsets - typically, the [1000G-phase3 dataset](https://www.internationalgenome.org/category/phase-3/). This software is a pure rust implementation and update of the "GRUPS" method, initially developed in [Martin, et al. (2017)](https://doi.org/10.1111/mec.14188).
 
 GRUPS-rs currently supports the simulation of user-defined pedigree in thousand of replicates, to compute the expected genetic distances of two individuals under various relatedness scenarios (See section: [Defining custom pedigrees](#Defining-custom-pedigrees)), including complex inbreeding scenarios such as double first-cousins, three-quarters siblings, sesqui first-cousins, etc.
 
