@@ -26,7 +26,7 @@
   linfa-svm      = "0.6"
   sprs           = "=0.11.0" #Temporary fix to https://github.com/rust-ml/linfa/issues/313
   ndarray        = "0.15"
-  libsvm         = {version = "0.4.1", git = "https://github.com/MaelLefeuvre/libsvm-rust.git" }
+  libsvm         = {version = "0.4.1", git = "https://github.com/MaelLefeuvre/libsvm-rust.git", features=["codegen", "link"]}
   smartcore      = {version = "0.3", features=[ "ndarray-bindings", "datasets"]}
   indexmap       = "2.0.2"
 [dev-dependencies]
