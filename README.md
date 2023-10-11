@@ -23,7 +23,7 @@ This project is written in [Rust](https://www.rust-lang.org/), and thus requires
 
 To install the latest version of cargo:
 ```Bash
-user@desktop:~$ curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
+curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
 ```
 
 See `Cargo.toml` for a complete list of crate dependencies (these are automatically downloaded by cargo when setting up compilation)
@@ -31,9 +31,15 @@ See `Cargo.toml` for a complete list of crate dependencies (these are automatica
 #### 2. libsvm
 
 Rust uses ordinally partitionned Sequence Vector Machines (SVMOPs) to find the best separation between expected distributions of relatedness and thus requires the [libsvm](https://www.csie.ntu.edu.tw/~cjlin/libsvm/) library to be installed on your workspace. (a version `>=2.34` is recommended.)
-```Bash
-user@desktop:~$ sudo apt-get install libsvm-dev
-```
+
+- **On Ubuntu**:
+   ```Bash
+   sudo apt-get install libsvm-dev
+   ```
+- **On Mac OS**:
+   ```bash
+   brew install libsvm
+   ```
 
 The original publication of libsvm can be found [here](https://doi.org/10.1145/1961189.1961199). More specifically, see [this paper](https://doi.org/10.1007/3-540-44795-4_13) for a more detailled explanation regarding SVMOPs.
 
@@ -46,18 +52,23 @@ The original publication of libsvm can be found [here](https://doi.org/10.1145/1
    git clone --recursive https://github.com/MaelLefeuvre/grups-rs.git
    cd grups-rs
    ```
-
-2. (Optional) Run the test-suite from the project's root
+2. (**MacOS only**) Manually target the `include` and `lib` directory of libsvm, by exporting the `LIBSVM_INCLUDE` and `LIBSVM_LIBRARY` environment variables
+   ```bash
+   export LIBSVM_INCLUDE="$(brew --prefix libsvm)/include"
+   export LIBSVM_LIBRARY="$(brew --prefix libsvm)/lib"
+   ```
+   
+3. (Optional) Run the test-suite from the project's root
     ```Bash
     cargo test --workspace
     ```
 
-3. Compile and install 
+4. Compile and install 
    ```Bash
    RUSTFLAGS="-Ctarget-cpu=native" cargo install --path .
    ```
 
-4. `grups-rs` should be located within `~/.cargo/bin/` and included in your PATH
+5. `grups-rs` should be located within `~/.cargo/bin/` and included in your PATH
     ```bash
     grups-rs
     ```
@@ -85,6 +96,8 @@ The original publication of libsvm can be found [here](https://doi.org/10.1145/1
     
     </pre>
 
+---
+
 ### Installing the `grups.plots` companion interface
 
 Installing `grups.plots` can be installed using a single command, provided you already have `R` and the `devtools` library preinstalled.
@@ -101,8 +114,19 @@ Installing `grups.plots` can be installed using a single command, provided you a
 
 See the [documentation of `grups.plot`](./grups.plots/README.md) to learn how to launch this companion package
 
-## Data Dependencies:
+---
 
+## Getting help
+
+There are multiple ways to obtain information about the different submodules of `grups-rs`
+- Typing `grups-rs [submodule] -h` will display a *short* description of every available command line argument for a given command 
+- Typing `grups-rs [submodule] --help` or `grups-rs [submodule] help` will display a *verbose* description of every available command line argument.
+
+See the section [Parameter List](#parameter-list), for a detailled description of every module's command line interface.
+
+---
+
+## Data Dependencies:
 `grups-rs` requires 4 types of additional input files and datasets to function:
 1. A reference dataset of phased, modern human genotypes, such as the [1000g-phase3 dataset](https://doi.org/10.1038/nature15393) (See subsection [SNP callset](#1-snp-callset)).
 2. An input panel definition file, specifying the name, population, and super-population of each sample found within the reference dataset (See subsection [Input panel definition file](#2-input-panel-definition-file)). 
@@ -110,24 +134,20 @@ See the [documentation of `grups.plot`](./grups.plots/README.md) to learn how to
 4. A user-defined pedigree definition file. A set of pre-defined files can be found in the `resources/pedigrees` directory of this repository. See section [Defining custom pedigrees](#defining-custom-pedigrees), for a detailled explanation on how to create custom template pedigrees.
 
 ### 1. SNP Callset
-
 GRUPS requires an SNP-callset in the form of `.vcf` or `.vcf.gz` files to perform pedigree simulations. For most intents and purposes, the [1000g-phase3 dataset](https://www.internationalgenome.org/category/phase-3/) may provide with a good start, but any dataset of input VCF files will work, provided they carry phased diploid genotypes, and contain the appropriate required tags within the `INFO` field  - see [Caveats](#Caveats-(when-using-an-alternative-callset)).
 
 The 1000g-phase3 dataset can be downloaded [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/).
 
 ### 2. Input panel definition file
-
 GRUPS will require an input panel definition file to distinguish (super-)populations and define samples within your SNP Callset. If you plan to use the `1000G-phase3` callset, a predefined panel can be previewed and downloaded [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel)
 
 This file must be unheaded, tab-separated, and should at least contain the following columns:
 > <SAMPLE-ID>    <POP-ID>    <SUPER-POP-ID>
 
 ### 3. Recombination Maps
-
 GRUPS requires a genetic recombination map to simulate meiosis. For main intents and purposes, and when using the `1000g-phase3` callset, we recommend the HapMap-II-b37 map, which can be downloaded [here](https://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/)
 
 ### Caveats (when using an alternative SNP-callset)
-
 If you plan to use an alternative SNP Callset, here are a few caveats you should keep in mind when preparing your input:
 
 1. GRUPS will require an input panel definition file to your SNP Callset. See the [Input panel definition file](#2-input-panel-definition-file) section for the appropriate format, and/or check the 1000G-phase3 `.panel` file as a template [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel).
@@ -141,6 +161,7 @@ If you plan to use an alternative SNP Callset, here are a few caveats you should
 4. By default, GRUPS will consider the provided SNP callset as being called on the `GRCh37` reference genome. If your callset has been generated using another reference genome, we recommend to provide the software with a fasta index file (`.fa.fai`) of your reference, using the [`--genome`](#g--genome) argument (See the [pwd-from-stdin parameter list](#pwd-from-stdin) section for more information).
 
 ---
+
 ## Usage
 
 The following section provides an quick explanation of each module of `grups-rs`, skip to section [Quick Start](#quick-start) if you wish to jump in straight ahead with a more pragmatic example.
@@ -167,6 +188,8 @@ The following section provides an quick explanation of each module of `grups-rs`
   
   See the section [Output Files](#output-files) for a detailled explanation of each output files.
 
+---
+
 ### The `pwd-from-sdin` module
 
 This module is available if you simply wish to quickly examine the pairwise mismatch rate between samples *without* performing any pedigree simulations.
@@ -186,54 +209,7 @@ This should create a single output directory called `grups-output`. More specifi
 
 See the section [Output Files](#output-files) for a detailled explanation of each input files.
 
-### Defining custom pedigrees
-
-Defining pedigrees within grups is performed through simple definition files. See the example pedigree [here](resources/pedigrees/example_pedigree.txt)  
-
-In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, each one tied to a keyword within the definition file:
-
-1. `INDIVIDUALS`: Define the individuals within the pedigree.
-    - Individuals are then defined by a unique, line-separated id or name.
-    - Ids must not contain any whitespace
-    - Dashes, underscores, and other special characters are allowed, but we recommend that users stick to using alphanumeric characters.
-
-    - Example:
-      ```
-      # Define individuals within the pedigree
-      INDIVIDUALS
-      father
-      mother
-      child
-      ```
-
-2. `RELATIONSHIPS`: Define the parents for each offspring.
-    - Relationships are parsed by targeting the `=repro()` regular expression, through this nomenclature:
-      ```
-      <offspring-id>=repro(<parent1-id>, <parent2-id>)
-      ```
-    - Example:
-      ```
-      # Define offspring relationships
-      RELATIONSHIPS
-      child=repro(father,mother)
-      ```
-
-3. `COMPARISONS` Define which pairwise comparisons should grups investigate to compute genetic distances.
-    - Each comparison is defined by a unique, line-separated id or name (e.g. 'parents', 'siblings').
-    - comparison ids can contain whitespaces, and various special characters (though we recommend sticking to alphanumeric characters and underscores).
-    - Comparisons are then parsed by targeting the `=compare()` regular expression, through this nomenclature:
-      ```
-      <relationship-id>=compare(<individual1-id>, individual2-id>)
-      ```
-    - Example:
-      ```
-      # Define pairwise comparisons
-      COMPARISONS
-      unrelated=compare(father,mother)
-      1st_degree=compare(child, mother)
-      ```
-
-Note that comment lines are allowed within the definition file: any line starting with a `#` character is ignored during parsing.
+---
 
 ### The `fst` module: Encoding VCF files as a set of deterministic Finite State Acceptors
 
@@ -322,6 +298,8 @@ Note that the [`--quiet`](#q--quiet) and [`--verbose`](#v--verbose) arguments fo
 grups-rs from-yaml ./grups-output/2022-06-13T162822-pedigree-sims.yaml --verbose
 ```
 
+---
+
 ### Quick start
 
 In this example, our objective is to apply `grups-rs` on a set of three individuals found buried within a collective grave from Mentesh-Tepe (`MT23` `MT26` and `MT7`). Two of these samples - `MT23` and `MT26` - were previously determined to be siblings [(Garino-Vignon et al. 2023)](https://doi.org/10.1038/s42003-023-04681-w). 
@@ -332,24 +310,24 @@ In this example, we'll be starting from scratch, and assume that you don't have 
 3. Index the 1000g-phase3 dataset into a set of FSA-encoded files, using the `fst` module of `grups-rs`.
 4. Perform kinship analysis, by applying the `pedigree-sims` module on the input pileup file, and visualize results using `grups.plots`
 
+---
+
 #### Downloading the required datasets for `grups-rs`
 
 1. Download the 1000g-phase3 dataset (chromosomes 1-22), along with its input panel definition file:
-
-```bash
-mkdir -p data/1000g-phase3/
-URL="ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
-wget -nd -r -P data/1000g-phase3/ ${URL}/ALL.chr*.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz*
-wget -nd -P data/1000g-phase3/ ${URL}/integrated_call_samples_v3.20130502.ALL.panel
-```
+   ```bash
+   mkdir -p data/1000g-phase3/
+   URL="ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
+   wget -nd -r -P data/1000g-phase3/ ${URL}/ALL.chr*.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz*
+   wget -nd -P data/1000g-phase3/ ${URL}/integrated_call_samples_v3.20130502.ALL.panel
+   ```
 
 2. Download the HapMapII recombination map (chromosomes 1-22).
-
-```bash
-mkdir -p data/hapmap-phase2-b37/
-TARBALL="http://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz"
-wget -qO- ${TARBALL} | tar -xvzf- -C data/hapmap-phase2-b37/ --wildcards 'genetic_map_GRCh37_chr[0-9]*.txt'
-```
+   ```bash
+   mkdir -p data/hapmap-phase2-b37/
+   TARBALL="http://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz"
+   wget -qO- ${TARBALL} | tar -xvzf- -C data/hapmap-phase2-b37/ --wildcards 'genetic_map_GRCh37_chr[0-9]*.txt'
+   ```
 
 3. Download a predefined pedigree definition file.
    ```bash
@@ -357,6 +335,8 @@ wget -qO- ${TARBALL} | tar -xvzf- -C data/hapmap-phase2-b37/ --wildcards 'geneti
    PED_URL="https://gist.githubusercontent.com/MaelLefeuvre/b6f3baff1964defea432ebd2c6dca6dc/raw/465ab9478724dba1575d20e45fb88f06055ac55f/simple-pedigree.txt"
    wget -P data/pedigrees ${PED_URL}
    ```
+
+---
 
 #### Generating an input pileup file
 
@@ -377,19 +357,21 @@ wget -qO- ${TARBALL} | tar -xvzf- -C data/hapmap-phase2-b37/ --wildcards 'geneti
 
 3. Download samples from ENA and pileup these using samtools
    1. Fetch the ENA URL of `MT23`, `MT26` and `MT7` ; Store these in `ena-bam-urls.tsv`
-   ```bash
-   ENA_TSV="https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJEB54894&result=read_run&fields=submitted_ftp&format=tsv&download=true&limit=0"
-   wget -qO- ${ENA_TSV} | grep -oP "ftp.*/MT[0-9]{1,2}.fastq.*.bam(?=;)" | sed 's/^/ftp:\/\//' > ena-bam-urls.tsv
-   ```
+      ```bash
+      ENA_TSV="https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJEB54894&result=read_run&fields=submitted_ftp&format=tsv&download=true&limit=0"
+      wget -qO- ${ENA_TSV} | grep -oP "ftp.*/MT[0-9]{1,2}.fastq.*.bam(?=;)" | sed 's/^/ftp:\/\//' > ena-bam-urls.tsv
+      ```
    2. run `samtools mpileup` 
-   ```bash
-   samtools mpileup \
-   -RBqQ25 \
-   -l data/targets/v52.2_1240K_public.bed \
-   -f data/reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa \
-   -b ena-bam-urls.tsv \
-   > mentesh-tepe.garino-vignon-commsbio-2023.RBqQ25.1240k.GRCh37.mpileup
-   ```
+      ```bash
+      samtools mpileup \
+      -RBqQ25 \
+      -l data/targets/v52.2_1240K_public.bed \
+      -f data/reference/Homo_sapiens.GRCh37.dna.primary_assembly.fa \
+      -b ena-bam-urls.tsv \
+      > mentesh-tepe.garino-vignon-commsbio-2023.RBqQ25.1240k.GRCh37.mpileup
+      ```
+
+---
 
 #### Encoding the 1000g-phase3 dataset into the `.fst[.frq]` format
 
@@ -397,6 +379,8 @@ wget -qO- ${TARBALL} | tar -xvzf- -C data/hapmap-phase2-b37/ --wildcards 'geneti
 mkdir -p data/fst/
 grups-rs fst --threads 22 --vcf-dir data/1000g-phase3/ --output-dir data/fst/EUR --pop-subset EUR --verbose
 ```
+
+---
 
 #### Running pedigree simulations with the `pedigree sims` modules
 
@@ -423,15 +407,68 @@ grups-rs fst --threads 22 --vcf-dir data/1000g-phase3/ --output-dir data/fst/EUR
    ```bash
    R --slave -e 'grups.plots::app(data_dir="grups-rs-output-mentesh-tepe")'
    ```
-   ...Or from an interactive R session.
+   ...or from an interactive R session.
    ```R
    library(grups.plots)
    grups.plots::app(data_dir="grups-rs-output-mentesh-tepe")
    ```
 
-### Output Files
+---
 
-#### `.pwd` file
+## Defining custom pedigrees
+
+Defining pedigrees within grups is performed through simple definition files. See the example pedigree [here](resources/pedigrees/example_pedigree.txt)  
+
+In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, each one tied to a keyword within the definition file:
+
+1. `INDIVIDUALS`: Define the individuals within the pedigree.
+    - Individuals are then defined by a unique, line-separated id or name.
+    - Ids must not contain any whitespace
+    - Dashes, underscores, and other special characters are allowed, but we recommend that users stick to using alphanumeric characters.
+
+    - Example:
+      ```
+      # Define individuals within the pedigree
+      INDIVIDUALS
+      father
+      mother
+      child
+      ```
+
+2. `RELATIONSHIPS`: Define the parents for each offspring.
+    - Relationships are parsed by targeting the `=repro()` regular expression, through this nomenclature:
+      ```
+      <offspring-id>=repro(<parent1-id>, <parent2-id>)
+      ```
+    - Example:
+      ```
+      # Define offspring relationships
+      RELATIONSHIPS
+      child=repro(father,mother)
+      ```
+
+3. `COMPARISONS` Define which pairwise comparisons should grups investigate to compute genetic distances.
+    - Each comparison is defined by a unique, line-separated id or name (e.g. 'parents', 'siblings').
+    - comparison ids can contain whitespaces, and various special characters (though we recommend sticking to alphanumeric characters and underscores).
+    - Comparisons are then parsed by targeting the `=compare()` regular expression, through this nomenclature:
+      ```
+      <relationship-id>=compare(<individual1-id>, individual2-id>)
+      ```
+    - Example:
+      ```
+      # Define pairwise comparisons
+      COMPARISONS
+      unrelated=compare(father,mother)
+      1st_degree=compare(child, mother)
+      ```
+
+Note that comment lines are allowed within the definition file: any line starting with a `#` character is ignored during parsing.
+
+---
+
+## Output Files
+
+### `.pwd` file
 
 `.pwd` output files contain summary statistics and results regarding all pairwise raw $\widehat{PWD}^{obs}$. This file is generated by the `pwd-from-stdin` module, are tab-separated and headed. 
 
@@ -444,7 +481,7 @@ grups-rs fst --threads 22 --vcf-dir data/1000g-phase3/ --output-dir data/fst/EUR
 | `Raw.CI.95`     | float   | Raw 95% Confidence interval for `Raw.Avg.PWD`                                                                  |
 | `Raw.Avg.Phred` | float   | Average Phred score for all overlapping positions (Scale: PHRED-33)                                            |
 
-#### `.result` file
+### `.result` file
 
 `.result` files contain summary statistics and results regarding pedigree simulations results. This most notably contains information regarding the most likely estimated relationship, given pedigree simulations results, as well as all pairwise corrected $\widehat{PWD}^{obs}. This file emanates from the `pedigree-sims` module, are tab-separated and headed.
 
@@ -460,7 +497,7 @@ grups-rs fst --threads 22 --vcf-dir data/1000g-phase3/ --output-dir data/fst/EUR
 | `Sim.Avg.PWD`     | float   | Average $\widehat{PWD}^{sim}$ for the most likely relationship (`Most_Likely_rel`) distribution.                                                            |
 | `Min.Z_Score`     | float   | Z-score between `Corr.Avg.PWD` and the distribution of the most_likely relationship (`Most_Likely_rel`)                                                     |
 
-#### `.sims` files
+### `.sims` files
 
 `.sims` files contain pairwise-specific raw simulation results. In other terms, this file contains information, and most notably the $\widehat{PWD}^{sim}$ of each investigated kinship tie, within every pedigree replicate. These files are generated from the `pedigree-sims` module, are tab-separated and unheaded, and are located within the `simulations` subdirectory.
 
@@ -476,7 +513,7 @@ grups-rs fst --threads 22 --vcf-dir data/1000g-phase3/ --output-dir data/fst/EUR
 | 7            | integer | Sum of simulated overlap for this comparison                                                                                                            |
 | 8            | float   | Average simulated pairwise mismatch rate, or $\widehat{PWD}^{sim} for this comparison                                                                   |
 
-#### `.blk` files
+### `.blk` files
 
 `.blk` files contain pairwise-specific raw observed pairwise mismatch rates within non-overlapping windows. These files are generated from the `pwd-from-stdin` module, are tab-separated and unheaded, and located within the `blocks` subdirectory.
 
@@ -488,7 +525,11 @@ grups-rs fst --threads 22 --vcf-dir data/1000g-phase3/ --output-dir data/fst/EUR
 | 3            | integer | Block-specific number of observed overlapping SNPs, which met the provided treshold of [`--min-depth`](#x--min-depth) |
 | 4            | float   | Block-specific Sum of long-term average pairwise mismatch rates for all overlapping positions                         |
 
-#### `.yaml` file
+### `.probs` file
+
+The `.probs` file is an optional output file of the `pedigree-sims` module, which is only emitted when [`--assign-method`](#--assign-method) is set to `svm`. This file will contain per-class SVM probabilities for every investigated relationship during simulations, and for every pairwise comparison.
+
+### `.yaml` file
 
 `.yaml` contain the serialized output of the `grups-rs` command line interface. These files may be generated by any submodule of `grups-rs`, strictly follow the [YAML format specification v1.2](https://yaml.org/spec/1.2.2/). The objective of these yaml files is mainly to ensure reproducibility, by keeping a record of all parameters used during a `grups-rs` command. These yaml files may also be used to re-run a `grups-rs` command using the exact same configuration, using the `from-yaml` submodule (See [the `from-yaml` module](#the-from-yaml-module-re-running-grups-rs-using-yaml-configuration-files) section, for a more detailled explanation as to how to use this submodule). 
 
@@ -500,6 +541,7 @@ If you plan to use GRUPS-rs, pleace include the original publication from [Marti
 Detailled citation instructions can be found by running the `grups-rs cite` module.
 
 ---
+
 ## Parameter List 
 ### Common flags
 ###### `-h`|`--help`
@@ -731,7 +773,7 @@ In general, keep in mind that sequencing error rate values are recycled if the n
 ###### `-I`|`--mode`
 Define the expected data input type for pedigree simulations.
 
-This argument is closely tied to the [`--data-dir`](#f--data-dir), and will define which type of files should grups-rs look for, as well as how to load them into memory. 
+This argument is closely tied to the [`--data-dir`](#f--data-dir) argument, and will define which type of files should grups-rs look for, as well as how to load them into memory. 
 
 (**tl;dr:** `--mode fst-mmap` is recommended for most applications. Use `--mode fst` when runtime performance is critical, but memory usage is not an issue.)
 
