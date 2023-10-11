@@ -8,7 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-
+  LIBSVM_PATH: /usr/local/
+  
 jobs:
   Build:
     runs-on: macos-latest
