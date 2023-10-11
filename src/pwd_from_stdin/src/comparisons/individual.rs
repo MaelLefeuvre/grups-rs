@@ -1,7 +1,8 @@
 
 use crate::pileup::Pileup;
 
-use super::UNDEFINED_LABEL_PREFIX;
+
+use super::{UNDEFINED_LABEL_PREFIX, error::ComparisonError};
 
 /// Represents a requested individual Within the pileup.
 ///  - `name`      : Name of the individual. Either given through user-input, or constructed as `Ind{index}` by default
@@ -29,9 +30,10 @@ impl Individual {
     }
 
     /// Ensure the current pileup depth is greater than the requested minimum depth at this line.
-    #[must_use]
-    pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
-        pileups[self.index].depth >= self.min_depth
+    pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> Result<bool, ComparisonError> {
+        pileups.get(self.index)
+            .map(|pileup| pileup.depth >= self.min_depth)
+            .ok_or(ComparisonError::InvalidPileupIndex(self.index, self.name.to_owned()))
     }
 }
 
@@ -63,15 +65,15 @@ mod tests {
 
         // ind.min_depth < pileup.depth   -> true
         let ind = Individual::new(None, 0, 1);
-        assert!(ind.satisfiable_depth(&pileup));
+        assert!(ind.satisfiable_depth(&pileup)?);
 
         // ind.min_depth == pileup.depth -> true
         let ind = Individual::new(None, 0, 4);
-        assert!(ind.satisfiable_depth(&pileup));
+        assert!(ind.satisfiable_depth(&pileup)?);
 
         // ind.min_depth > pileup.depth  -> false
         let ind = Individual::new(None, 0, 8);
-        assert!(!ind.satisfiable_depth(&pileup));
+        assert!(!ind.satisfiable_depth(&pileup)?);
         Ok(())
     }
 }

@@ -104,8 +104,10 @@ impl Comparison {
     }
 
     /// Check if the sequencing depth of a given overlap is over the minimum required sequencing depth for each individual.
-    pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> bool {
-        self.pair[0].satisfiable_depth(pileups) && self.pair[1].satisfiable_depth(pileups)
+    pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> Result<bool, ComparisonError> {
+        let left_ok  = self.pair[0].satisfiable_depth(pileups)?;
+        let right_ok = self.pair[1].satisfiable_depth(pileups)?;
+        Ok(left_ok && right_ok)
     }
 
     /// Compare our two individuals at the given SNP position ; increment the appropriate counters after the comparison 
@@ -222,7 +224,7 @@ mod tests {
         // If both individual has depth >= pileup.depth ==> return false. 
         let comparison = common::mock_comparison(false);
         let pileups = common::mock_pileups(&[2,2], 30, false)?;
-        assert!(comparison.satisfiable_depth(&pileups[..]));
+        assert!(comparison.satisfiable_depth(&pileups[..])?);
         Ok(())
     }
 
@@ -231,10 +233,10 @@ mod tests {
         // If one or the other individual has depth < pileup.depth ==> return false. 
         let comparison = common::mock_comparison(false);
         let pileups = common::mock_pileups(&[3,1], 30, false)?;
-        assert!( !comparison.satisfiable_depth(&pileups[..]));
+        assert!( !comparison.satisfiable_depth(&pileups[..])?);
 
         let pileups = common::mock_pileups(&[1,3], 30, false)?;
-        assert!( !comparison.satisfiable_depth(&pileups[..]));
+        assert!( !comparison.satisfiable_depth(&pileups[..])?);
         Ok(())
     }
 
@@ -243,7 +245,7 @@ mod tests {
         // If both individual has depth < pileup.depth ==> return false. 
         let comparison = common::mock_comparison(false);
         let pileups = common::mock_pileups(&[1,1], 30, false)?;
-        assert!( !comparison.satisfiable_depth(&pileups[..]));
+        assert!( !comparison.satisfiable_depth(&pileups[..])?);
         Ok(())
     }
 

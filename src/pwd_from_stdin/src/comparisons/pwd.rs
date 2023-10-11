@@ -1,5 +1,5 @@
 use crate::pileup::Line;
-use genome::{Nucleotide};
+use genome::Nucleotide;
 
 use super::Individual;
 

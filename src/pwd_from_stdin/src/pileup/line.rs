@@ -1,5 +1,5 @@
 use genome::{Nucleotide, SNPCoord, coordinate::{ChrIdx, Position, Coordinate, derive::Coord}, snp::Allele};
-use crate::{comparisons::Individual};
+use crate::comparisons::Individual;
 use rand::seq::SliceRandom;
 
 use located_error::prelude::*;
@@ -99,7 +99,7 @@ impl Line {
 mod tests {
     use anyhow::Result;
 
-    use crate::{pileup};
+    use crate::pileup;
     use genome::SNPCoord;
 
     #[test]

@@ -124,7 +124,12 @@ pub fn run<'a>(
 
         // ----------------------- Compute PWD (or simply print the line if there's an existing overlap)        
         for comparison in comparisons.iter_mut() {
-            if comparison.satisfiable_depth(&line.individuals) {
+            
+            let satisfactory_depth = comparison.satisfiable_depth(&line.individuals)
+                .with_context(|| loc_msg(&line.coordinate))
+                .with_loc(|| format!("While comparing pair {}", comparison.get_pair()))?;
+
+            if satisfactory_depth {
                 if pwd_cli.filter_sites {
                     println!("{}", &entry);
                 } else {
