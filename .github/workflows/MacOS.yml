@@ -8,7 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  LIBSVM_PATH: /usr/local/
   
 jobs:
   Build:
@@ -16,8 +15,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install libsvm
-      run: brew install libsvm && brew link libsvm
+      run: brew install libsvm
     - name: Build
-      run: cargo build
+      run: LIBSVM_INCLUDE="$(brew --prefix libsvm)/include" LIBSVM_LIBRARY="$(brew --prefix libsvm)/lib" cargo build
     - name: Run tests
       run: cargo test --verbose
