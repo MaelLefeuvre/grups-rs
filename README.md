@@ -100,6 +100,8 @@ Installing `grups.plots` can be installed using a single command, provided you a
    R --slave -e 'devtools::install("./grups.plots")'
    ```
 
+See the [documentation of `grups.plot`](./grups.plots/README.md) to learn how to launch this companion package
+
 ## Data Dependencies:
 
 `grups-rs` requires 4 types of additional input files and datasets to function:
