@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install libsvm
-      run: brew install -y libsvm
+      run: brew install libsvm
     - name: Build
       run: cargo build
     - name: Run tests
