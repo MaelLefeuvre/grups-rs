@@ -12,7 +12,7 @@ Modern human contamination, sequencing errors and allele-fixation rate parameter
 ## Installation
 ### Software Dependencies
 
-If you plan to install GRUPS-rs from source, you'll need:
+If you plan to install  from source, you'll need:
 1. The cargo compiler [cargo](https://crates.io/). (version `>=1.66`).
 2. The [libsvm](https://www.csie.ntu.edu.tw/~cjlin/libsvm/) library (a version `>=3.24` is recommended)
 
@@ -134,31 +134,30 @@ See the section [Parameter List](#parameter-list), for a detailled description o
 4. A user-defined pedigree definition file. A set of pre-defined files can be found in the `resources/pedigrees` directory of this repository. See section [Defining custom pedigrees](#defining-custom-pedigrees), for a detailled explanation on how to create custom template pedigrees.
 
 ### 1. SNP Callset
-GRUPS requires an SNP-callset in the form of `.vcf` or `.vcf.gz` files to perform pedigree simulations. For most intents and purposes, the [1000g-phase3 dataset](https://www.internationalgenome.org/category/phase-3/) may provide with a good start, but any dataset of input VCF files will work, provided they carry phased diploid genotypes, and contain the appropriate required tags within the `INFO` field  - see [Caveats](#Caveats-(when-using-an-alternative-callset)).
+GRUPS-rs requires an SNP-callset in the form of `.vcf` or `.vcf.gz` files to perform pedigree simulations. For most intents and purposes, the [1000g-phase3 dataset](https://www.internationalgenome.org/category/phase-3/) may provide with a good start, but any dataset of input VCF files will work, provided they carry phased diploid genotypes, and contain the appropriate required tags within the `INFO` field  - see [Caveats](#Caveats-(when-using-an-alternative-callset)).
 
 The 1000g-phase3 dataset can be downloaded [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/).
 
 ### 2. Input panel definition file
-GRUPS will require an input panel definition file to distinguish (super-)populations and define samples within your SNP Callset. If you plan to use the `1000G-phase3` callset, a predefined panel can be previewed and downloaded [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel)
+GRUPS-rs will require an input panel definition file to distinguish (super-)populations and define samples within your SNP Callset. If you plan to use the `1000G-phase3` callset, a predefined panel can be previewed and downloaded [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel)
 
-This file must be unheaded, tab-separated, and should at least contain the following columns:
-> <SAMPLE-ID>    <POP-ID>    <SUPER-POP-ID>
+This file must be unheaded, tab-separated, and should at least contain the following columns: `<SAMPLE-ID>    <POP-ID>    <SUPER-POP-ID>`
 
 ### 3. Recombination Maps
-GRUPS requires a genetic recombination map to simulate meiosis. For main intents and purposes, and when using the `1000g-phase3` callset, we recommend the HapMap-II-b37 map, which can be downloaded [here](https://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/)
+GRUPS-rs requires a genetic recombination map to simulate meiosis. For main intents and purposes, and when using the `1000g-phase3` callset, we recommend the HapMap-II-b37 map, which can be downloaded [here](https://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/)
 
 ### Caveats (when using an alternative SNP-callset)
 If you plan to use an alternative SNP Callset, here are a few caveats you should keep in mind when preparing your input:
 
-1. GRUPS will require an input panel definition file to your SNP Callset. See the [Input panel definition file](#2-input-panel-definition-file) section for the appropriate format, and/or check the 1000G-phase3 `.panel` file as a template [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel).
+1. GRUPS-rs will require an input panel definition file to your SNP Callset. See the [Input panel definition file](#2-input-panel-definition-file) section for the appropriate format, and/or check the 1000G-phase3 `.panel` file as a template [here](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_male_samples_v3.20130502.ALL.panel).
 
-2. As of now, GRUPS does not calculate population allele frequencies by default, and will rather look through the `INFO` field (column 7) of your callset for the appropriate tag. Thus, if you plan to simulate genomes using the `EUR` population, each entry within your VCF files should carry a `EUR_AF` info tag, specifying the alternative allele frequency for that population. The [bcftools +fill-tags](https://samtools.github.io/bcftools/howtos/plugin.fill-tags.html) plugin documentation to may be of help, should you wish annotate population-specific allele frequencies on your dataset.
+2. As of now, GRUPS-rs does not calculate population allele frequencies by default, and will rather look through the `INFO` field (column 7) of your callset for the appropriate tag. Thus, if you plan to simulate genomes using the `EUR` population, each entry within your VCF files should carry a `EUR_AF` info tag, specifying the alternative allele frequency for that population. The [bcftools +fill-tags](https://samtools.github.io/bcftools/howtos/plugin.fill-tags.html) plugin documentation to may be of help, should you wish annotate population-specific allele frequencies on your dataset.
 
-3. As of now, GRUPS distinguishes relevant SNP coordinates within the callset using various `INFO` field annotations. If you plan to use a different SNP-callset, either ensure your `.vcf` files are correctly annotated with the following tags, or make sure to filter all position that are not bi-allelic SNPs have been thoroughly filtered-out from your dataset before using GRUPS:
+3. As of now, GRUPS-rs distinguishes relevant SNP coordinates within the callset using various `INFO` field annotations. If you plan to use a different SNP-callset, either ensure your `.vcf` files are correctly annotated with the following tags, or make sure to filter all position that are not bi-allelic SNPs have been thoroughly filtered-out from your dataset before using GRUPS-rs:
     - Poly-allelic sequence variations are distinguished (and ignored) by searching for the `MULTI_ALLELIC` tag.
     - SNPs are distinguished from other types of mutation by searching for the `VT=SNP` tag.
 
-4. By default, GRUPS will consider the provided SNP callset as being called on the `GRCh37` reference genome. If your callset has been generated using another reference genome, we recommend to provide the software with a fasta index file (`.fa.fai`) of your reference, using the [`--genome`](#g--genome) argument (See the [pwd-from-stdin parameter list](#pwd-from-stdin) section for more information).
+4. By default, GRUPS-rs will consider the provided SNP callset as being called on the `GRCh37` reference genome. If your callset has been generated using another reference genome, we recommend to provide the software with a fasta index file (`.fa.fai`) of your reference, using the [`--genome`](#g--genome) argument (See the [pwd-from-stdin parameter list](#pwd-from-stdin) section for more information).
 
 ---
 
@@ -196,7 +195,7 @@ This module is available if you simply wish to quickly examine the pairwise mism
 
 **A basic example, using provided dummy test files:**
 ```Bash
-grups pwd-from-stdin --pileup  ./tests/test-data/pileup/parents-offspring.pileup \
+grups-rs pwd-from-stdin --pileup  ./tests/test-data/pileup/parents-offspring.pileup \
                      --samples 0 2                                               \
                      --sample-names MDH1 MDH3                                    \
                      --min-depth 2 2                                             \
@@ -226,7 +225,7 @@ On top of this, FST-indexation has the added benefit of performing prefiltration
 Furthermore, the `fst` module can also be useful to filter out individuals from unwanted population entries, as well as (re-)computing population allele frequencies (see section [Performing population subsets with the `fst` module](#performing-population-subsets-with-the-fst-module)).
 
 ```
-grups fst --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
+grups-rs fst --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
 ```
 
 In this example, `grups-rs` index any `.vcf[.gz]` file found within the provided `binary-2FIN-1ACB-virtual` input directory, and output its contents within the `test-fst-index`. The expected output is a set of two finite state automaton (`.fst` and `.fst.frq`), one for each discovered input `.vcf[.gz]` file:
@@ -238,7 +237,7 @@ In this example, `grups-rs` index any `.vcf[.gz]` file found within the provided
 Altough it remains a one-time operation, FSA-indexation can be quite long and resource intensive (e.g.: around 40 minutes is required to encode the `ALL.chr1.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz` file of the 1000g-phase database).  Thus, the use of multithreading across `.vcf.gz` files is highly recommended, provided your computer is equipped with multiple cores.
 
 ```
-grups fst --threads 22 --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
+grups-rs fst --threads 22 --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/ --output-dir ./test-fst-index
 ```
 
 Note that multithreading is performed across the number of discovered input `.vcf[.gz]` files. Thus, if the directory specified by [`--vcf-dir`](#d--vcf-dir) contains 22 files, there is no point in recruiting more than 22 threads.
@@ -247,7 +246,7 @@ Note that multithreading is performed across the number of discovered input `.vc
 If the user expects to use only a single pedigree and contaminating population, FSA indexation can be used to filter-out unused samples from the original VCF file. Furthermore, the use of the optional [`--compute-pop-afs`](#f--compute-pop-afs) flag can be useful to (re-)compute population allele frequencies.
 
 ```bash
-grups fst \
+grups-rs fst \
 --vcf-dir ./tests/test-data/vcf/binary-2FIN-1ACB-virtual/  \
 --output-dir ./test-fst-index                              \
 --pop-subset FIN AFR                                       \
@@ -261,7 +260,7 @@ grups fst \
 Once the indexation is completed, `.fst` and `.fst.frq` files can be used seamlessly when performing pedigree simulations. The user merely has to specify the input type using the [`--mode`](#i--mode) argument. Specifying a target directory is performed in the same way, using [`--data-dir`](#f--data-dir).
 
 ```Bash
-grups pedigree-sims --pileup ./tests/test-data/pileup/parents-offspring.pileup \
+grups-rs pedigree-sims --pileup ./tests/test-data/pileup/parents-offspring.pileup \
                     --data-dir ./test-fst-index                                \
                     --recomb-dir ./tests/test-data/recombination-map/          \
                     --pedigree ./tests/test-data/pedigree/tiny_pedigree.txt    \
@@ -283,11 +282,11 @@ FSA-encoded files can be used in one of two ways:
 
 ### The `from-yaml` module: Re-running `grups-rs` using `.yaml` configuration files
 
-When executing the `pedigree-sims` or `pwd-from-stdin` modules, GRUPS will automatically serialize your command line arguments and generate a timestamped [`.yaml`](#yaml-file) configuration file containing every provided argument for the given run.
+When executing the `pedigree-sims` or `pwd-from-stdin` modules, GRUPS-rs will automatically serialize your command line arguments and generate a timestamped [`.yaml`](#yaml-file) configuration file containing every provided argument for the given run.
 
 This file will be located at the root of your output directory (which can be specified using [`--output-dir`](#o--output-dir)).
 
-To relaunch grups using the exact same configuration, simply run grups using the `from-yaml` module, and provide the path to the desired [`.yaml`](#yaml-file) file
+To relaunch `grups-rs` using the exact same configuration, simply run `grups-rs` using the `from-yaml` module, and provide the path to the desired [`.yaml`](#yaml-file) file
 
 ```bash
 grups-rs from-yaml ./grups-output/2022-06-13T162822-pedigree-sims.yaml
@@ -417,9 +416,9 @@ grups-rs fst --threads 22 --vcf-dir data/1000g-phase3/ --output-dir data/fst/EUR
 
 ## Defining custom pedigrees
 
-Defining pedigrees within grups is performed through simple definition files. See the example pedigree [here](resources/pedigrees/example_pedigree.txt)  
+Defining pedigrees within GRUPS-rs is performed through simple definition files. See the example pedigree [here](resources/pedigrees/example_pedigree.txt)  
 
-In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, each one tied to a keyword within the definition file:
+In essence, a pedigree in GRUPS-rs is defined and parsed in three distinct steps, each one tied to a keyword within the definition file:
 
 1. `INDIVIDUALS`: Define the individuals within the pedigree.
     - Individuals are then defined by a unique, line-separated id or name.
@@ -447,7 +446,7 @@ In essence, a pedigree in GRUPS is defined and parsed in three distinct steps, e
       child=repro(father,mother)
       ```
 
-3. `COMPARISONS` Define which pairwise comparisons should grups investigate to compute genetic distances.
+3. `COMPARISONS` Define which pairwise comparisons should GRUPS-rs investigate to compute genetic distances.
     - Each comparison is defined by a unique, line-separated id or name (e.g. 'parents', 'siblings').
     - comparison ids can contain whitespaces, and various special characters (though we recommend sticking to alphanumeric characters and underscores).
     - Comparisons are then parsed by targeting the `=compare()` regular expression, through this nomenclature:
@@ -773,7 +772,7 @@ In general, keep in mind that sequencing error rate values are recycled if the n
 ###### `-I`|`--mode`
 Define the expected data input type for pedigree simulations.
 
-This argument is closely tied to the [`--data-dir`](#f--data-dir) argument, and will define which type of files should grups-rs look for, as well as how to load them into memory. 
+This argument is closely tied to the [`--data-dir`](#f--data-dir) argument, and will define which type of files should `grups-rs` look for, as well as how to load them into memory. 
 
 (**tl;dr:** `--mode fst-mmap` is recommended for most applications. Use `--mode fst` when runtime performance is critical, but memory usage is not an issue.)
 
