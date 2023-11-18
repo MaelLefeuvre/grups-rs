@@ -19,17 +19,12 @@
   rand           = "0.8.5"
   memmap2        = "0.5.10"
   fastrand       = "1.8.0"
-  ahash          = "0.7.6"
+  ahash          = "0.8.5"
   thiserror      = "1.0"
   anyhow         = "1.0"
-  linfa          = "0.6"
-  linfa-svm      = "0.6"
-  sprs           = "=0.11.0" #Temporary fix to https://github.com/rust-ml/linfa/issues/313
-  ndarray        = "0.15"
-  libsvm         = {version = "0.4.1", git = "https://github.com/MaelLefeuvre/libsvm-rust.git", features=["link"]}
-  smartcore      = {version = "0.3", features=[ "ndarray-bindings", "datasets"]}
+  libsvm         = {version = "0.4.2", git = "https://github.com/MaelLefeuvre/libsvm-rust.git", features=["link"]}
   indexmap       = "2.0.2"
 [dev-dependencies]
   mockall        = "0.11.0"
-  itertools      = "0.10.3"
+  itertools      = "0.12.0"
 

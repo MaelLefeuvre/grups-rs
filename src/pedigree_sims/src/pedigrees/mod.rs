@@ -1,4 +1,4 @@
-use std::{ collections::HashMap, path::Path};
+use std::{ collections::HashMap, path::Path, mem::ManuallyDrop};
 
 
 use grups_io::{
@@ -472,23 +472,29 @@ impl Pedigrees {
 
     fn get_most_likely_relationship_svm(&self, comparison: &Comparison, pedigree_vec: &PedigreeReps, ordered_rels: &Vec<&String>) -> Result<(Option<String>, Vec<f64>)> {
 
+
         let mut svm_builder = LibSvmBuilder::default();
         svm_builder.sims(pedigree_vec).label_order(ordered_rels).scale()?;
+        
+        let mut predictors = Vec::with_capacity(ordered_rels.len());
 
         let mut svm_probs   = Vec::new();
-        trace!("Estimating most likely relationship through SVM classification");
+        debug!("Estimating most likely relationship through SVM classification");
         for (i, scenario) in ordered_rels[0..ordered_rels.len() - 1].iter().enumerate() {
             let loc_msg = || format!("While attempting to assess likelihood of comparison '{scenario}' for {}", comparison.get_pair());
 
-            let svm        = svm_builder.labels(pedigree_vec, &i).build()?;
-            let prediction = svm.predict_probs(comparison.get_avg_pwd()).with_loc(loc_msg)?;
-            let true_label = svm.true_label_idx().with_loc(loc_msg)?;
-
+            predictors.push(ManuallyDrop::new(svm_builder.labels(pedigree_vec, &i).build()?));
+            let prediction = predictors[i].predict_probs(comparison.get_avg_pwd()).with_loc(loc_msg)?;
+            let true_label = predictors[i].true_label_idx().with_loc(loc_msg)?;
+            
             svm_probs.push(prediction[0].1[true_label]);
-            if log::log_enabled!(log::Level::Trace){
+            if log::log_enabled!(log::Level::Debug){
                 println!("  - {i}, P(k>{scenario}): {prediction:?} (index: {true_label})");
             }
         }
+
+        unsafe { predictors.iter_mut().for_each(|svm| ManuallyDrop::drop(svm)) };
+        drop(svm_builder);
 
         // ---- Compute per-class SVM probabilities
         let mut per_class_svm_prob = Vec::with_capacity(svm_probs.len());

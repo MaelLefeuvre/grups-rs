@@ -6,6 +6,14 @@ extern crate log;
 
 use anyhow::Result;
 
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
+
 /// Parse command line arguments and run `pwd_from_stdin::run()`
 fn main() -> Result<()> {
     // ----------------------------- Run CLI Parser 

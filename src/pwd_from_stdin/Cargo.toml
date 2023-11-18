@@ -12,9 +12,9 @@
   genome        = {path ="../genome"}
   grups-io      = {path ="../grups-io"}
   located-error = {path = "../located-error" }
-  itertools     = "0.10.3"
+  itertools     = "0.12.0"
   rand          = "0.8.5"
   log           = "0.4.16"
   thiserror     = "1.0"
   anyhow        = "1.0"
-  ahash         = "0.7.6"
+  ahash         = "0.8.5"

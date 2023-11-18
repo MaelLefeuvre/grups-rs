@@ -2,7 +2,7 @@
 
 use located_error::LocatedError;
 use anyhow::Result;
-use log::warn;
+use log::{warn, trace};
 use crate::pedigrees::PedigreeReps;
 
 use libsvm::{SvmInit, SvmTrainer, KernelInit, ModelInit};
@@ -10,17 +10,13 @@ use libsvm::{SvmInit, SvmTrainer, KernelInit, ModelInit};
 mod error;
 use error::{SVMError, SvmBuilderError};
 
-mod linfa_svm;
-mod smartcore_svm;
-
-
 pub struct LibSvmBuilder<'a> {
-    inner   : SvmTrainer,
-    features: Option<Vec<Vec<f64>>>,
-    labels  : Option<Vec<f64>>,
-    label_order: Option<&'a Vec<&'a String>>,
-    mu: f64,
-    sigma: f64,
+    inner      : SvmTrainer,
+    features   : Option<Vec<[f64; 1]>>,
+    labels     : Option<Vec<f64>>,
+    label_order: Option<&'a [&'a String]>,
+    mu         : f64,
+    sigma      : f64,
 }
 
 impl<'a> Default for LibSvmBuilder<'a> {
@@ -43,25 +39,25 @@ impl<'a> Default for LibSvmBuilder<'a> {
 
 impl<'a> LibSvmBuilder<'a> {
     pub fn sims(&mut self, pedigrees: &PedigreeReps) -> &mut Self {
-        let mut data: Vec<Vec<f64>> = Vec::with_capacity(pedigrees.len());
+        let mut data: Vec<[f64; 1]> = Vec::with_capacity(pedigrees.len());
         data.extend(
             pedigrees.iter()
             .flat_map(|ped| ped.comparisons.iter()
-                .map(|cmp| vec![cmp.get_avg_pwd()])
+                .map(|cmp| [cmp.get_avg_pwd(); 1])
             )
         );
         self.features = Some(data);
         self
     }
 
-    pub fn label_order(&mut self, label_order: &'a Vec<&String>) -> &mut Self {
+    pub fn label_order(&mut self, label_order: &'a [&String]) -> &mut Self {
         self.label_order = Some(label_order);
         self
     }
 
     pub fn labels(&mut self, pedigrees: &PedigreeReps, label_treshold: &usize) -> &mut Self {
         let Some(label_order) = self.label_order else {
-            panic!()
+            panic!("No underflying label order found.")
         };
         let mut targets: Vec<f64> = Vec::with_capacity(pedigrees.len());
         targets.extend(
@@ -89,6 +85,7 @@ impl<'a> LibSvmBuilder<'a> {
         let mu    = features.iter().map(|v| v[0]).sum::<f64>() / len ;
         let sigma = (features.iter().map(|v| (v[0] - mu).powf(2.0)).sum::<f64>() / len).sqrt();
 
+        trace!("Scaled SVM features with:  mu={mu} and sigma={sigma}");
         if sigma > 0.0 {
             features.iter_mut().for_each(|v| v[0] = (v[0] - mu)/sigma);
             (self.mu, self.sigma) = (mu, sigma);
@@ -109,6 +106,7 @@ impl<'a> LibSvmBuilder<'a> {
             return Err(SvmBuilderError::MissingFeatures).loc(loc_msg)
         };
 
+        trace!("Fitting SVMPredictor...");
         let svm = self.inner.fit(&features[..], &labels[..])
             .map_err(SvmBuilderError::FitSvm)
             .loc(loc_msg)?;
@@ -125,8 +123,8 @@ pub struct LibSvm {
 impl LibSvm {
     /// Directly create an SVM from a pedigree vector.
     #[allow(unused)]
-    pub fn from_comparisons(pedigrees: &PedigreeReps, label_treshold: &usize, label_order: &Vec<&String>) -> Result<Self> {
-    
+    pub fn from_comparisons(pedigrees: &PedigreeReps, label_treshold: &usize, label_order: &[&String]) -> Result<Self> {
+
         let svm = LibSvmBuilder::default()
             .sims(pedigrees)
             .label_order(label_order)
@@ -138,8 +136,8 @@ impl LibSvm {
     }
 
 
-    pub fn predict_probs(&self, avg: f64) -> Result<Vec<(f64, Vec<f64>)>> {
-        let x: [f64; 1 ] = [(avg- self.mu) / self.sigma];
+    pub fn predict_probs(&mut self, avg: f64) -> Result<Vec<(f64, Vec<f64>)>> {
+        let x: [f64; 1] = [(avg - self.mu) / self.sigma];
         let x: &[f64] = x.as_ref();
 
         self.inner.predict_with_probability(x)
