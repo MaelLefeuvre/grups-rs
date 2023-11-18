@@ -142,7 +142,7 @@ mod tests {
     fn hash_block() -> Result<()> {
         let mut rng = rand::thread_rng();
 
-        let nucleotides = vec!['A', 'C', 'G', 'T'];
+        let nucleotides = ['A', 'C', 'G', 'T'];
         let mut test_hashset = std::collections::HashSet::new();
         for chromosome in 1..22 {
             for position in (1..N_ITERS).step_by(1000) {

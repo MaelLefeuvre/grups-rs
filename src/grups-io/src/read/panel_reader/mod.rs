@@ -13,7 +13,7 @@ use crate::{
 use log::warn;
 
 use fastrand;
-use anyhow::Result;
+use anyhow::{Result, bail};
 use located_error::{LocatedError, LocatedOption};
 
 mod error;
@@ -150,6 +150,9 @@ impl PanelReader {
             .filter(|sample| !exclude.unwrap_or(&vec![]).contains(sample))
             .collect::<Vec<&SampleTag>>();
 
+        // ---- Error out if there are no candidates left.
+        if candidate.is_empty() { bail!(PanelReaderError::ExhaustedPanel) }
+        
         // ---- Return a random sample
         let rng = fastrand::Rng::new();   
         Ok(candidate.get(rng.usize(0..candidate.len())).copied())

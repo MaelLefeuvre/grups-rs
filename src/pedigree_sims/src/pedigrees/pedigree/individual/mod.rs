@@ -10,7 +10,7 @@ use grups_io::read::SampleTag;
 use fastrand;
 
 use located_error::prelude::*;
-use log::{trace};
+use log::trace;
 
 mod parents;
 use parents::Parents;
@@ -274,8 +274,8 @@ mod tests {
 
     fn run_all_allele_assignment_cases(recombination_prob: f64) -> Result<()> {
         let mut offspring = common::mock_offspring("offspring", None);
-        let valid_alleles = vec![[0,0], [0,1], [1,0], [1,1]];
-        let mut valid_strands = vec![[0,0], [0,1], [1,0], [1,1]];
+        let valid_alleles = [[0,0], [0,1], [1,0], [1,1]];
+        let mut valid_strands = [[0,0], [0,1], [1,0], [1,1]];
 
         for parent_0_alleles in valid_alleles.iter(){
             for parent_1_alleles in valid_alleles.iter() {
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn strand_setter_offspring() -> Result<()> {
-        let valid_strands = vec![[0,0], [0,1], [1,0], [1,1]];
+        let valid_strands = [[0,0], [0,1], [1,0], [1,1]];
         let mut ind = common::mock_offspring("offspring", None);
 
         for _ in 0..1000 {

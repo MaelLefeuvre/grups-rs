@@ -296,7 +296,7 @@ impl Pedigrees {
                 let pop_af = fst_reader.get_pop_allele_frequency(&self.pedigree_pop)?;
                 if pop_af < maf || pop_af > (1.0-maf) { 
                     trace!("skip allele at {coordinate}: pop_af: {pop_af:<8.5} --maf: {maf}");
-                    positions_to_delete.entry(key.to_owned()).or_insert_with(Vec::new).push(pairwise_diff.coordinate);
+                    positions_to_delete.entry(key.to_owned()).or_default().push(pairwise_diff.coordinate);
                     continue 'coordinate
                 }
                 
@@ -361,7 +361,6 @@ impl Pedigrees {
             // --------------------- Get current chromosome and position.
             let coordinate = vcf_reader.parse_coordinate().with_loc(loc_file)?;
 
-
             // --------------------- Print progress in increments of 50 000 lines.
             if i % 50_000 == 0 { info!(" {i: >9}: {coordinate}");}
             i+=1;
@@ -394,7 +393,7 @@ impl Pedigrees {
                             //              ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
                             if pop_af < maf || pop_af > (1.0-maf) {
                                     trace!("Skip allele at {coordinate}: pop_af: {pop_af:<8.5} --maf: {maf}");
-                                    positions_to_delete.entry(key.to_owned()).or_insert_with(Vec::new).push(pairwise_diff.coordinate);
+                                    positions_to_delete.entry(key.to_owned()).or_default().push(pairwise_diff.coordinate);
                                     vcf_reader.next_line().with_loc(|| loc_coord(&coordinate))?;
                                     continue 'line
                             }

@@ -145,9 +145,9 @@ impl DerefMut for PedigreeReps {
 
 impl std::fmt::Display for PedigreeReps {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.inner.iter().enumerate().fold(Ok(()), |_, (idx, pedigree)| {
-            pedigree.comparisons.iter().fold(Ok(()), |result, comparison| {
-                result.and_then(|_| writeln!(f, "{idx} - {comparison}"))
+        self.inner.iter().enumerate().try_fold((), |_, (idx, pedigree)| {
+            pedigree.comparisons.iter().try_fold((), |_, comparison| {
+                writeln!(f, "{idx} - {comparison}")
             })
         })
     }

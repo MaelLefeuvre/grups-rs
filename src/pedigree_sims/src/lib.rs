@@ -73,7 +73,7 @@ pub fn run(
             FileKey::Suffix,
             &comparisons.get_pairs(),
             &["sims"]
-        )?.into_iter());
+        )?);
 
     debug!("Output files: {:#?}", output_files);
 

@@ -30,7 +30,7 @@ pub mod common{
     fn mock_pileup_strings(depth: u16, min_qual: u8) -> Result<(String, String)> {
         let mut rng = rand::thread_rng();
     
-        let nucleotides = vec!['A', 'C', 'G', 'T'];
+        let nucleotides = ['A', 'C', 'G', 'T'];
         let quals: Vec<char> = std::str::from_utf8( &(min_qual+33..33+33).collect::<Vec<u8>>())?.chars().collect();
     
         let mut bases = String::new();

@@ -42,7 +42,7 @@ impl LinfaSVM {
     }
 
     pub fn new(data: Array2<f64>, targets: Array1<usize>, label_treshold: &usize) -> Self {
-        let feature_names = vec!["avg", "label"];
+        let feature_names = ["avg", "label"];
         let (train, _) = Dataset::new(data, targets)
             //.with_feature_names(feature_names)
             .map_targets(|label| label > label_treshold)

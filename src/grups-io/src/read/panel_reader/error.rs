@@ -18,4 +18,7 @@ pub enum PanelReaderError {
     #[error("Could not fetch random sample using population tag: '{0}'")]
     MissingSample(String),
 
+    #[error("Exhausted the number of available samples to populate the pedigree")]
+    ExhaustedPanel
+
 }

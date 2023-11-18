@@ -40,8 +40,8 @@ pub struct Comparisons (Vec<Comparison>);
 
 impl Display for Comparisons {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        self.0.iter().fold(Ok(()), |result, comparison| {
-            result.and_then(|_| writeln!(f, "{comparison}"))
+        self.0.iter().try_fold((), |_, comparison| {
+            writeln!(f, "{comparison}")
         })
     }
 }
@@ -168,7 +168,7 @@ mod tests {
     }
     fn permutations_sample(n: u32) -> u32 {
         match n {
-            0|1|2 => factorial(n) - 1,
+            0..=2 => factorial(n) - 1,
             3..   => factorial(n)/(factorial(n-2)*2),
         }
     }

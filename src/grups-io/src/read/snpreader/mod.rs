@@ -2,7 +2,7 @@ use std::{fs::File, io::{self, Read, BufRead, BufReader}};
 use genome::{SNPCoord, snp::Allele};
 use located_error::*;
 use anyhow::Result;
-use log::{info};
+use log::info;
 
 use ahash::AHashSet;
 
@@ -129,7 +129,7 @@ impl<'a> SNPReader<'a> {
         }
 
         use genome::snp::Allele::*;
-        let transitions = vec![[A, G], [G, A], [C, T], [T, C]];
+        let transitions = [[A, G], [G, A], [C, T], [T, C]];
         if exclude_transitions {
             info!("Filtering transitions from targets file.");
             let before = target_positions.len();

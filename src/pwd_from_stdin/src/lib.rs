@@ -59,7 +59,7 @@ pub fn run<'a>(
             FileKey::Suffix,
             &comparisons.get_pairs(),
             &["blk"]
-        )?.into_iter());
+        )?);
 
     debug!("Output files: {:#?}", output_files);
 
