@@ -9,7 +9,7 @@ use std::{
 
 use located_error::*;
 
-use clap::{Parser, Subcommand, Args, ArgEnum, ArgAction};
+use clap::{Parser, Subcommand, Args, ArgEnum};
 use serde::{Serialize, Deserialize};
 use log::debug;
 use num::One;
@@ -260,7 +260,7 @@ pub struct PwdFromStdin {
     /// 
     /// By default, deletion and missing characters ('*') are not counted as selectible nucleotide for comparison.
     /// Using this flag will instead mark them as valid matching positions.
-    #[clap(long, action(ArgAction::SetFalse))]
+    #[clap(long)]
     pub consider_dels: bool,
 
     /// Do not print jackknife blocks between each pair of individuals
@@ -538,7 +538,7 @@ pub struct PedigreeSims {
     /// zscore: Perform minimum zscore assignation, i.e. the distribution with the lowest z-score from the observed PWD is selected as the most likely candidate.
     /// Computationally inexpensive, but may provide with spurious results, when the different distributions carry drastically different standard deviations. 
     #[clap(long, arg_enum, default_value("svm"))]
-    pub assign_method: RelAssignMethod
+    pub assign_method: RelAssignMethod,
 }
 
 /// Convert VCF files into sets of FSA-encoded indexes.
