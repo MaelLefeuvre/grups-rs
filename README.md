@@ -416,7 +416,7 @@ grups-rs fst --threads 22 --vcf-dir data/1000g-phase3/ --output-dir data/fst/EUR
 
 ## Defining custom pedigrees
 
-Defining pedigrees within GRUPS-rs is performed through simple definition files. See the example pedigree [here](resources/pedigrees/example_pedigree.txt)  
+Defining pedigrees within GRUPS-rs is performed through simple definition files. See the example main template pedigree definition file [here](resources/pedigrees/example_pedigree.txt). Other examples may be found in the [resources/pedigrees](/resources/pedigrees) subdirectory of this repository.
 
 In essence, a pedigree in GRUPS-rs is defined and parsed in three distinct steps, each one tied to a keyword within the definition file:
 
@@ -462,6 +462,59 @@ In essence, a pedigree in GRUPS-rs is defined and parsed in three distinct steps
       ```
 
 Note that comment lines are allowed within the definition file: any line starting with a `#` character is ignored during parsing.
+
+### A more complete example
+
+Below is a more complete definition file, where the intent would be to investigate the following six kinship ties:
+
+| label           | description                                                                     |
+| --------------- | ------------------------------------------------------------------------------- | 
+| `inbred-self`   | compares an inbred individual to itself                                         | 
+| `self`          | compares an outbred individual to itself (r=1)                                  | 
+| `first`         | compares two first-degree relatives (r=0.5)                                     |
+| `second`        | compares two outbred second-degree relatives (r=0.25)                           |
+| `inbred-second` | compare two three-quarter siblings relatives due to inbreeding (r=0.25+0.125).  | 
+| `unrelated`     | compares two unrelated individuals (r=0)                                        | 
+
+Thus, an appropriate family tree topology could be as follows:  
+  
+<p align="center">
+   <img src="https://github.com/MaelLefeuvre/grups-rs/assets/70585821/52616848-44e0-4005-a42f-03e2e7562438" />
+
+</p>
+
+Were founder and simulated individuals are colored in teal and lavander, respectively. Green arrows represents the comparisons that GRUPS-rs is requested to perform.  
+
+Here, a template family tree such as this one can be defined as the following:
+
+```python
+INDIVIDUALS
+Ind1
+Ind2
+Ind3
+Ind4
+Ind5
+Ind6
+Ind7
+
+RELATIONSHIPS
+Ind3=repro(Ind1,Ind2)             # Ind3 is defined as the child of Ind1 and Ind2.
+Ind4=repro(Ind1,Ind2)             # Ind4, as the child of Ind1 and Ind2.
+Ind5=repro(Ind3,Ind4)             # Ind5, as the child of Ind3 and Ind4. (Ind5 is thus an inbred individual, since Ind3 and Ind4 are siblings)
+Ind7=repro(Ind4,Ind6)             # Ind7, as the child of Ind4 and Ind6.
+
+COMPARISONS
+inbred-self=compare(Ind5,Ind5)    # Compare inbred individual Ind5 to itself.  label this relationship as 'inbred-self'
+self=compare(Ind3,Ind3)           # Compare outbred individual Ind3 to itself. label this relationship as 'self'
+first=compare(Ind2,Ind4)          # Compare Ind2 and Ind4. label this relationship as 'first'
+second=compare(Ind2,Ind7)         # Compare Ind2 and Ind7. label this relationship as 'second'
+inbred-second=compare(Ind5,Ind7)  # Compare Ind5 and Ind7. label this relationship as 'inbred-second'
+unrelated=compare(Ind1,Ind2)      # Compare Ind1 and Ind2. label this relationship as 'unrelated'
+```
+
+Note that founder individuels (i.e. `Ind1`, `Ind2` and `Ind6`) are only defined in the `INDIVIDUALS` section and do *not* require to be defined in the `RELATIONSHIPS` section.  
+
+Other example pedigree definition files may be found in the [resources/pedigrees](/resources/pedigrees) subdirectory of this repository.
 
 ---
 
