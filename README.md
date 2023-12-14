@@ -469,12 +469,12 @@ Below is a more complete definition file, where the intent would be to investiga
 
 | label           | description                                                                     |
 | --------------- | ------------------------------------------------------------------------------- | 
-| `inbred-self`   | compares an inbred individual to itself                                         | 
-| `self`          | compares an outbred individual to itself (r=1)                                  | 
-| `first`         | compares two first-degree relatives (r=0.5)                                     |
-| `second`        | compares two outbred second-degree relatives (r=0.25)                           |
+| `inbred-self`   | compare an inbred individual to itself                                          | 
+| `self`          | compare an outbred individual to itself (r=1)                                   | 
+| `first`         | compare two first-degree relatives (r=0.5)                                      |
+| `second`        | compare two outbred second-degree relatives (r=0.25)                            |
 | `inbred-second` | compare two three-quarter siblings relatives due to inbreeding (r=0.25+0.125).  | 
-| `unrelated`     | compares two unrelated individuals (r=0)                                        | 
+| `unrelated`     | compare two unrelated individuals (r=0)                                         | 
 
 Thus, an appropriate family tree topology could be as follows:  
   
