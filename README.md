@@ -1,6 +1,6 @@
 # GRUPS-rs : A high-performance rust port and update of [grups](https://github.com/sameoldmike/grups).  
 
-[![Ubuntu](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/Ubuntu.yml/badge.svg)](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/Ubuntu.yml) [![MacOS](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/MacOS.yml/badge.svg)](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/MacOS.yml)
+[![Ubuntu](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/Ubuntu.yml/badge.svg)](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/Ubuntu.yml) [![MacOS](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/MacOS.yml/badge.svg)](https://github.com/MaelLefeuvre/grups-rs/actions/workflows/MacOS.yml) [![DOI](https://zenodo.org/badge/477140542.svg)](https://zenodo.org/doi/10.5281/zenodo.10389506)
 ## Introduction
 
 GRUPS-rs (_**G**et **R**elatedness **U**sing **P**edigree **S**imulations_) is an ancient-DNA genetic relatedness estimation software relying on pedigree simulations using existing genotype callsets - typically, the [1000G-phase3 dataset](https://www.internationalgenome.org/category/phase-3/). This software is a pure rust implementation and update of the "GRUPS" method, initially developed in [Martin, et al. (2017)](https://doi.org/10.1111/mec.14188).
