@@ -416,9 +416,47 @@ grups-rs fst --threads 22 --vcf-dir data/1000g-phase3/ --output-dir data/fst/EUR
 
 ## Defining custom pedigrees
 
-Defining pedigrees within GRUPS-rs is performed through simple definition files. See the example main template pedigree definition file [here](resources/pedigrees/example_pedigree.txt). Other examples may be found in the [resources/pedigrees](/resources/pedigrees) subdirectory of this repository.
+Defining pedigrees within GRUPS-rs is performed through simple definition files. See the main example template pedigree definition file [here](resources/pedigrees/example_pedigree.ped). Other examples may be found in the [resources/pedigrees](/resources/pedigrees) subdirectory of this repository. GRUPS-rs currently supports two alternative formats, which are described below.
 
-In essence, a pedigree in GRUPS-rs is defined and parsed in three distinct steps, each one tied to a keyword within the definition file:
+### Standard format (`GRUPS-rs`)
+
+The standard pedigree definition format of `grups-rs` can be subdivided into two sections:
+
+1. The first section takes charge of defining the individuals found within the family tree, and its topology. Here, this particular section extensively, mirrors the commonly found [`.ped`](https://csg.sph.umich.edu/abecasis/Pedstats/tour/input.html) file format of the `PEDSTATS/QTDT` software, or PLINK's [`.fam`](https://www.cog-genomics.org/plink/1.9/formats#fam) files. 
+   - Here, merely three columns are required from these previously mentionned file formats. Here, the `iid` column specifies the within-family id of the individual, while `fid` and `mid` both specify the ids of the individuals parents (See below):
+     ```python
+     # First section: define the pedigree's topology
+     iid    fid   mid
+     Ind1   0     0       # Ind1 and Ind2 are defined as founder individuals
+     Ind2   0     0
+     Ind3   Ind1  Ind2    # Ind3 is defined as the offspring of Ind1 and Ind2
+     ```
+
+2. The second section of the file takes charge of specifying which pairwise comparisons should `GRUPS-rs` specifically investigate within the template family tree. Here, every line beginning with the `COMPARE` keyword is considered as a "comparison definition" entry by `GRUPS-rs`, and is expected to adhere to the following scheme:
+   ```
+   COMPARE  <label> <iid-1> <iid-2>
+   ```
+   Where,
+   - `<label>` is the user-defined name for the given comparison (e.g. 'first-degree', 'cousins', 'unrelated', etc.)
+   - `<iid-1>` is the individual id of the first sample being compared
+   - `<iid-2>` is the individual id of the second sample being compared
+
+   Example:
+   ```
+   COMPARE Unrelated Ind1 Ind2
+   COMPARE First     Ind1 Ind3
+   COMPARE Self      Ind3 Ind3
+   ```
+
+Note that, while requiring only three columns, `GRUPS-rs` is able to directly parse the previously mentionned `.fam` and `.ped` formats, provided that users manually annotate the required second section at the bottom of these files. Hence, an quick and intuitive way to design custom pedigree files for GRUPS-rs is to:
+1. *Visually* generate the first section of the file, using the interactive [`QuickPed`](https://magnusdv.github.io/pedsuite/articles/web_only/quickped.html) online software [(Vigeland M.D. 2022)](https://doi.org/10.1186/s12859-022-04759-y).
+2. Export and save the output of QuickPed as a `.ped` file
+3. Manually append the desired 'COMPARE' entries at the bottom of this file.
+### Legacy format (`GRUPS`)
+
+On top of the current standard format, `GRUPS-rs` remains entirely backwards compatible with the previous file format of `GRUPS``.
+
+In essence, the legacy pedigree definition file of GRUPS is defined and parsed in three distinct steps, each one tied to a keyword within the definition file:
 
 1. `INDIVIDUALS`: Define the individuals within the pedigree.
     - Individuals are then defined by a unique, line-separated id or name.
@@ -483,11 +521,34 @@ Thus, an appropriate family tree topology could be as follows:
 
 </p>
 
-Were founder and simulated individuals are colored in teal and lavander, respectively. Green arrows represents the comparisons that GRUPS-rs is requested to perform.  
+Where founder and simulated individuals are colored in teal and lavander, respectively. Green arrows represents the comparisons that GRUPS-rs is requested to perform.  
 
 Here, a template family tree such as this one can be defined as the following:
 
+**Standard format**
 ```python
+# standard format
+Ind1  0     0
+Ind2  0     0
+Ind3  Ind1  Ind2                    # Ind3 and Ind4 are defined as the childreb of Ind1 and Ind2
+Ind4  Ind1  Ind2
+Ind5  Ind3  Ind4                    # Ind5 is defined as an inbred individual, since Ind3 and Ind4 are siblings.
+Ind6  0     0
+Ind7  Ind4  Ind6
+
+COMPARE inbred-self    Ind5  Ind5
+COMPARE self           Ind3  Ind3
+COMPARE first          Ind2  Ind4
+COMPARE inbred-second  Ind5  Ind7
+COMPARE second         Ind2  Ind7
+COMPARE Unrelated      Ind1  Ind2
+```
+
+**Legacy format**:
+
+Alternatively, one could also define this family tree using the legacy format of `GRUPS` in such a manner
+```python
+# legacy format
 INDIVIDUALS
 Ind1
 Ind2
@@ -507,8 +568,8 @@ COMPARISONS
 inbred-self=compare(Ind5,Ind5)    # Compare inbred individual Ind5 to itself.  label this relationship as 'inbred-self'
 self=compare(Ind3,Ind3)           # Compare outbred individual Ind3 to itself. label this relationship as 'self'
 first=compare(Ind2,Ind4)          # Compare Ind2 and Ind4. label this relationship as 'first'
-second=compare(Ind2,Ind7)         # Compare Ind2 and Ind7. label this relationship as 'second'
 inbred-second=compare(Ind5,Ind7)  # Compare Ind5 and Ind7. label this relationship as 'inbred-second'
+second=compare(Ind2,Ind7)         # Compare Ind2 and Ind7. label this relationship as 'second'
 unrelated=compare(Ind1,Ind2)      # Compare Ind1 and Ind2. label this relationship as 'unrelated'
 ```
 

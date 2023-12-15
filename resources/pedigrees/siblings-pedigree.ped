@@ -1,0 +1,44 @@
+# example pedigree definition input file
+# The first section defines the individuals in the pedigree, and mirrors that 
+# of a standard '.pedigree' file or that of a PLINK '.fam' file.
+# Note that:
+# - only three columns are required by grups-rs, but the format is also
+#   compatible with the standard 4- and 6-field version of these files (in that
+#   case, the 'famid', 'sex', and 'aff' columns are ignored). 
+# - The header line is optional, but can help GRUPS-rs in finding the
+#   appropriate column index, should its location be non-standard.
+# - Empty lines and comments (inline of full-length) are ignored by the program
+#
+# The second section defines which pedigree comparisons should GRUPS-rs target 
+# Note that:
+# - any line starting with the 'COMPARE' keyword is considered a comparison
+#   definition line.
+# - A comparison definition line is expected to adhere to the following scheme:
+#
+#       COMPARE <label> <iid-1> <iid-2>
+#
+#   Where,
+#   - <label> is the user-defined name for that kinship tie
+#   - <iid-1> is the individual id of the first sample being compared
+#   - <iid-2> is the individual id of the second sample involved in the comparison
+
+# First section: define the pedigree's topology
+iid         fid     mid
+father      0       0
+mother	    0       0
+stepfather  0       0
+stepson     mother  stepfather
+child1      father  mother
+child2      father  mother
+wife        0       0
+gchild      child1  wife
+cousin      child2  husband
+husband     0       0
+
+# Second section: target specific comparisons within the pedigree
+COMPARE	Self           father father
+COMPARE Siblings       child1 child2 
+COMPARE Half-siblings  child1 stepson
+COMPARE Cousins        cousin gchild
+COMPARE Unrelated      father mother
+

@@ -1,5 +1,5 @@
+use super::pedigree::parser::PedigreeBuilder;
 use super::{Contaminant, Pedigree};
-use super::pedigree;
 
 use std::{
     collections::HashMap,
@@ -57,8 +57,10 @@ impl PedigreeReps {
     /// - returns `std::io::result::InvalidData` if an error occurs while parsing the pedigree definition file.
     pub fn populate(&mut self, pedigree_path: &Path, pop: &String, panel: &PanelReader) -> Result<()> {
         let loc_msg = |ctxt: &str, i: usize| format!("While attempting to {ctxt} pedigree n°{i}");
+        let pedigree_builder = PedigreeBuilder::new(pedigree_path)
+            .with_loc(|| format!("While attempting to read the pedigree definition file {}", pedigree_path.display()))?;
         for i in 0..self.inner.capacity() {
-            let mut pedigree = pedigree::parser::pedigree_parser(pedigree_path).with_loc(||loc_msg("parse", i))?;
+            let mut pedigree = pedigree_builder.build().with_loc(||loc_msg("parse", i))?;
             pedigree.set_tags(panel, pop, self.contaminants.as_ref()).with_loc(||loc_msg("set population tags of", i))?;
             pedigree.assign_offspring_strands().with_loc(||loc_msg("assign offspring strands of", i))?;
             self.inner.push(pedigree);

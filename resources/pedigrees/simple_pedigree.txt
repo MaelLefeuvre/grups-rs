@@ -25,7 +25,7 @@ cousin=repro(child2,husband)
 COMPARISONS
 Twins_or_self=compare(father,father)      # IDENTICAL RELATIONSHIP
 First_degree=compare(father,child1)       # PARENT-CHILD RELATIONSHIP
-Second_degree=compare(mother,cousin)               # GRANDPARENT-GRANDCHILD RELATIONSHIP
-Third_degree=compare(cousin,gchild)            # COUSIN RELATIONSHIP
+Second_degree=compare(mother,cousin)      # GRANDPARENT-GRANDCHILD RELATIONSHIP
+Third_degree=compare(cousin,gchild)       # COUSIN RELATIONSHIP
 Unrelated=compare(father,mother)          # UNRELATED RELATIONSHIP
 

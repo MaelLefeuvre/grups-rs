@@ -19,7 +19,6 @@ mod individual;
 use individual::Individual;
 
 pub mod parser;
-pub use self::parser::pedigree_parser;
 
 mod contaminant;
 pub use contaminant::Contaminant;
@@ -172,10 +171,10 @@ impl Pedigree {
     /// - `label`  : name of the individual (e.g. "child")
     /// - `parents`: Optional name of the parents (e.g. ("mother", "father")). 
     ///              This should be set to `None` if the individual is a founder.
-    /// 
+    ///
     /// # Errors: 
     /// - returns `std::io::result::InvalidInput` If any of the parents cannot be found within `self.individuals`
-    pub fn add_individual(&mut self, label: &str, parents: Option<(&String, &String)>) -> std::io::Result<()>{
+    pub fn add_individual(&mut self, label: &str, parents: Option<(&str, &str)>) -> std::io::Result<()>{
         use std::io::ErrorKind::InvalidInput;
         let parents = match parents {
             None => None,
@@ -199,7 +198,7 @@ impl Pedigree {
     /// # Errors
     /// - returns `std::io::result::InvalidInput` If any individual used for the comparison can't 
     ///   be found within `self.individuals`
-    pub fn add_comparison(&mut self, label: &str, pair: (&String, &String)) -> std::io::Result<()> {
+    pub fn add_comparison(&mut self, label: &str, pair: (&str, &str)) -> std::io::Result<()> {
         use std::io::ErrorKind::InvalidInput;
         let pair0 = self.individuals.get(pair.0).ok_or(InvalidInput)?;
         let pair1 = self.individuals.get(pair.1).ok_or(InvalidInput)?;
@@ -215,7 +214,7 @@ impl Pedigree {
     /// # Errors 
     /// - returns `std::io::result::InvalidInput` If the target individual, or any of the parents cannot be found 
     ///   within `self.individuals`
-    pub fn set_relationship(&mut self, ind: &String, parents: (&String, &String)) -> std::io::Result<()>{
+    pub fn set_relationship(&mut self, ind: &str, parents: (&str, &str)) -> std::io::Result<()>{
         use std::io::ErrorKind::InvalidInput;
         let parent0 = &self.individuals.get(parents.0).ok_or(InvalidInput)?.clone();
         let parent1 = &self.individuals.get(parents.1).ok_or(InvalidInput)?.clone();
@@ -314,7 +313,7 @@ mod test {
         let mut pedigree = Pedigree::new();
         pedigree.add_individual("father", None)?;
         pedigree.add_individual("mother", None)?;
-        pedigree.add_individual("offspr", Some((&"father".to_string(), &"mother".to_string())))?;
+        pedigree.add_individual("offspr", Some((&"father", &"mother")))?;
 
         let mut father = pedigree.get_mutind(&"father".to_string()).expect("Cannot extract father");
         father.set_alleles([0, 1]);

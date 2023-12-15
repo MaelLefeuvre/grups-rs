@@ -1,0 +1,33 @@
+iid   fid   mid
+0.0F  0     0
+0.1M  0     0
+1.0F  0.0F  0.1M
+1.1M  0     0
+1.2F  0.0F  0.1M
+2.0M  1.0F  1.1M
+2.1M  1.1M  1.2F
+2.2M  1.1M  1.2F
+2.3F  0     0
+3.0M  2.2M  2.3F
+
+# Expected pedigree:
+#  0.0F -------+------- 0.1M
+#              |
+#   +----------+----------+
+#   |                     |
+#  1.0F --+-- 1.1M --+-- 1.2F
+#         |          |
+#         |      +---+---+
+#         |      |       |
+#        2.0M   2.1M    2.2M --+-- 2.3F
+#                              |
+#                             3.0M
+#
+
+COMPARE Self            3.0M  3.0M   # E(r)=1.0
+COMPARE 1st-degree      2.1M  2.2M   # E(r)=0.5 
+COMPARE 2nd+3rd-degree  2.0M  2.1M   # E(r)=0.375  (0.25 + 0.125)
+COMPARE 2nd-degree      2.1M  3.0M   # E(r)=0.25
+COMPARE 3rd+4th-degree  2.0M  3.0M   # E(r)=0.1875 (0.125 + 0.0625)
+COMPARE 3rd-degree      1.0F  3.0M   # E(r)=0.125
+COMPARE Unrelated       2.0M  2.3F   # E(r)=0.0
