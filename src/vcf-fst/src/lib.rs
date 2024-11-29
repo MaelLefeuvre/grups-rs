@@ -288,7 +288,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
     /// Clone and keep track of the current coordinate into `self.previous_coordinate`
     #[inline]
     fn save_previous_line(&mut self) {
-        self.previous_coordinate = self.coordinate_buffer.clone();
+        self.previous_coordinate.clone_from(&self.coordinate_buffer);
     }
 
     /// Skip a defined number of column fields within the VCF.

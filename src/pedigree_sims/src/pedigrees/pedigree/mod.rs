@@ -313,7 +313,7 @@ mod test {
         let mut pedigree = Pedigree::new();
         pedigree.add_individual("father", None)?;
         pedigree.add_individual("mother", None)?;
-        pedigree.add_individual("offspr", Some((&"father", &"mother")))?;
+        pedigree.add_individual("offspr", Some(("father", "mother")))?;
 
         let mut father = pedigree.get_mutind(&"father".to_string()).expect("Cannot extract father");
         father.set_alleles([0, 1]);

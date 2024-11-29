@@ -1,5 +1,5 @@
 use coordinate_derive::{Coord, CoordBorrow, CoordEq, CoordOrd, CoordHash};
-use genome::coordinate::{Coordinate};
+use genome::coordinate::Coordinate;
 use genome::coordinate::{ChrIdx, Position};
 
 #[derive(Debug, Coord, CoordEq, CoordHash, CoordBorrow, CoordOrd)]
@@ -15,8 +15,7 @@ impl TestMacro {
 fn create_derive() {
     #[derive(Coord, CoordEq, CoordOrd, CoordHash, CoordBorrow)]
     struct TestMacro{coordinate: Coordinate}
-
-    
+    let _ = TestMacro{coordinate: Coordinate{chromosome: ChrIdx(5), position: Position(10_000)}};
 }
 
 #[test]
