@@ -648,7 +648,10 @@ The `.probs` file is an optional output file of the `pedigree-sims` module, whic
 
 ## Citing GRUPS-rs
 
-If you plan to use GRUPS-rs, pleace include the original publication from [Martin D. et al (2017)](https://doi.org/10.1111/mec.14188) as a citation:
+If you plan to use GRUPS-rs, please cite [(Lefeuvre M. et al 2024)](https://doi.org/10.47248/hpgg2404010001), as well as the the original publication of GRUPS [(Martin D. et al 2017)](https://doi.org/10.1111/mec.14188):
+
+> Lefeuvre M, Martin M, Jay F, Marsolier M, Bon C. GRUPS-rs, a high-performance ancient DNA genetic relatedness estimation software relying on pedigree simulations. Hum Popul Genet Genom 2024; 4(1):0001. https://doi.org/10.47248/hpgg2404010001
+
 > Martin MD, Jay F, Castellano S, Slatkin M. Determination of genetic relatedness from low-coverage human genome sequences using pedigree simulations. Mol Ecol. 2017;26(16):4145-4157. doi:10.1111/mec.14188 
 
 Detailled citation instructions can be found by running the `grups-rs cite` module.

@@ -14,10 +14,15 @@ use anyhow::{anyhow, Result};
 pub fn cite() {
     // If this ever becomes bloated, consider using the 'indoc' crate.
     const CITATIONS: &str = r###"
-    A. If you plan to use GRUPS-rs in your work, please cite the original
-       publication of GRUPS:
+    A. If you plan to use GRUPS-rs in your work, please cite the corresponding 
+       paper of GRUPS-rs (1), as well as the original publication of GRUPS (2):
 
-        1. Martin, MD, Jay, F, Castellano, S, Slatkin, M. Determination of
+        1. Lefeuvre M, Martin M, Jay F, Marsolier M, Bon C. GRUPS-rs, a
+        high-performance ancient DNA genetic relatedness estimation software
+        relying on pedigree simulations. Hum Popul Genet Genom 2024;4(1):0001.
+        https://doi.org/10.47248/hpgg2404010001 
+
+        2. Martin MD, Jay F, Castellano S, Slatkin M. Determination of
         genetic relatedness from low-coverage human genome sequences using
         pedigree simulations. Mol Ecol. 2017; 26: 4145– 4157.
         https://doi.org/10.1111/mec.14188 
