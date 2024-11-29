@@ -195,10 +195,10 @@ impl fmt::Display for Comparison {
              {: <AVERG_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$}",
             self.get_pair(),
             self.positions.len(),
-            self.get_sum_pwd(),
-            self.get_avg_pwd(),
-            self.get_confidence_interval(),
-            self.get_avg_phred()
+            self.get_sum_pwd() + 0.0,
+            self.get_avg_pwd() + 0.0,
+            self.get_confidence_interval() + 0.0,
+            self.get_avg_phred() +0.0
         )
     }
 }

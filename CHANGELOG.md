@@ -1,3 +1,15 @@
+# 0.3.3
+## Documentation
+- Update citing information in `README.md` and `grups-rs cite` module.
+
+## Minor changes
+- Update Cargo.lock
+- Remove unneeded `atty` dependency (Not this change bumps the MSRV to `cargo>=1.70.0`)
+
+## Bugfixes
+- Prevent the program from displaying signed zeroes (i.e.: `-0.0`) on `x32`bit architectures
+- Fix grups.plots submodule URL format (set it back to http)
+
 # 0.3.2
 ## Features
 - Implement a simpler pedigree definition file format, that is based upon the [`.ped`](https://csg.sph.umich.edu/abecasis/QTDT/docs/pedigree.html) and/or [`.fam`](https://www.cog-genomics.org/plink/1.9/formats#fam) file formats.

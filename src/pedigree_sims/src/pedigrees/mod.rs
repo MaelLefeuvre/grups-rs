@@ -470,7 +470,7 @@ impl Pedigrees {
         (most_likely_rel, most_likely_avg_pwd, z_scores)
     }
 
-    fn get_most_likely_relationship_svm(&self, comparison: &Comparison, pedigree_vec: &PedigreeReps, ordered_rels: &Vec<&String>) -> Result<(Option<String>, Vec<f64>)> {
+    fn get_most_likely_relationship_svm(&self, comparison: &Comparison, pedigree_vec: &PedigreeReps, ordered_rels: &[&String]) -> Result<(Option<String>, Vec<f64>)> {
 
 
         let mut svm_builder = LibSvmBuilder::default();

@@ -488,7 +488,7 @@ mod tests {
         for i in 0..n_iters {
             let  new_ind = common::mock_founder(&i.to_string());
             assert!(ind_set.insert(new_ind.clone()));
-            assert!(ind_set.get(&new_ind).is_some());
+            assert!(ind_set.contains(&new_ind));
         }
     }
 

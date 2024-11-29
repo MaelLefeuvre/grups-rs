@@ -104,7 +104,7 @@ impl PedigreeReps {
         }
 
         // Sort according to decreasing values of Avg(pwd)
-        let mut ordered_rels: Vec<_> = sum_simulated_stats.into_iter().map(|(rel, stats)| (rel, stats)).collect();
+        let mut ordered_rels: Vec<_> = sum_simulated_stats.into_iter().collect();
         ordered_rels.sort_by(|a, b| f64::total_cmp(&b.1.0, &a.1.0) );
         Ok(ordered_rels)
     }

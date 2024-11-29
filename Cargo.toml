@@ -1,5 +1,5 @@
 [workspace.package]
-  version           = "0.3.2"
+  version           = "0.3.3"
   authors           = ["Maël Lefeuvre <mael.lefeuvre@mnhn.fr>"]
   description       = "GRUPS-rs: Get Relatedness Using Pedigree Simulations"
   edition           = "2021"
@@ -12,6 +12,8 @@
   version.workspace = true
   authors.workspace = true
   publish.workspace = true
+  rust-version      = "1.70.0"  # io::IsTerminal trait.
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

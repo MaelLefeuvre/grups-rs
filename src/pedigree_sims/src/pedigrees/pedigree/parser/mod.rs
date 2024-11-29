@@ -1,7 +1,7 @@
 use std::{
     path::Path,
     io::{BufRead, BufReader},
-    fs::File, str::Split, fmt::{Display, self}, iter::Filter,
+    fs::File, fmt::{Display, self},
 };
 
 use located_error::prelude::*;
