@@ -1,5 +1,6 @@
 [package]
   name              = "parser"
+  rust-version      = "1.70.0"  # io::IsTerminal trait.
   version.workspace = true
   authors.workspace = true
   publish.workspace = true
@@ -15,7 +16,6 @@
   located-error = {path = "../located-error"}
   clap          = {version = "3.2", features = ["derive"]}
   serde         = {version = "1.0",   features = ["derive"]} 
-  atty          = "0.2" 
   serde_yaml    = "0.8"
   chrono        = "0.4"
   log           = "0.4.16"
@@ -24,6 +24,4 @@
   thiserror     = "1.0"
   anyhow        = "1.0"
   expanduser   = "1.2.0"
-
-
 

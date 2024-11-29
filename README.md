@@ -13,7 +13,7 @@ Modern human contamination, sequencing errors and allele-fixation rate parameter
 ### Software Dependencies
 
 If you plan to install  from source, you'll need:
-1. The cargo compiler [cargo](https://crates.io/). (version `>=1.66`).
+1. The cargo compiler [cargo](https://crates.io/). (version `>=1.70`).
 2. The [libsvm](https://www.csie.ntu.edu.tw/~cjlin/libsvm/) library (a version `>=3.24` is recommended)
 
 If you plan to use the [`grups.plots`](https://github.com/MaelLefeuvre/grups.plots) companion shiny dashboard, you'll need to have [R](https://www.r-project.org/), along with the [`devtools`](https://github.com/r-lib/devtools) library. A version of `R` that is `>=4.1.2` is recommended. 

@@ -1,10 +1,5 @@
 use std::{
-    error::Error,
-    fs::File,
-    path::{Path, PathBuf},
-    str::FromStr,
-    ops::{Add, Range},
-    fmt::{self, Display, Formatter}, ffi::OsStr
+    error::Error, ffi::OsStr, fmt::{self, Display, Formatter}, fs::File, io::IsTerminal, ops::{Add, Range}, path::{Path, PathBuf}, str::FromStr
 };
 
 use located_error::*;
@@ -638,7 +633,7 @@ impl Common {
     /// # Errors
     /// - if the user did not provide an input file, neither from stdin, nor through the `--pileup` argument.
     pub fn check_input(&self) -> Result<(), ParserError> {
-        if atty::is(atty::Stream::Stdin) && self.pileup.is_none() {
+        if self.pileup.is_none() && std::io::stdin().is_terminal() {
             return Err(ParserError::MissingPileupInput)
         }
         Ok(())
