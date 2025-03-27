@@ -1,5 +1,5 @@
 use std::{fs::File, io::{self, Read, BufRead, BufReader}};
-use genome::{SNPCoord, snp::Allele};
+use genome::{coordinate::ChrIdx, snp::Allele, SNPCoord};
 use located_error::*;
 use anyhow::Result;
 use log::info;
@@ -114,7 +114,7 @@ impl<'a> SNPReader<'a> {
             let line = line?;
             if &line[..1] == "#" {continue} // Skip comment
             let split_line: Vec<&str> = line.split(self.sep).filter(|x| x!=&"").collect();
-            let chromosome: u8        = split_line[self.columns[0]].parse().with_loc(context)?;
+            let chromosome: ChrIdx    = split_line[self.columns[0]].parse().with_loc(context)?;
             let position  : u32       = split_line[self.columns[1]].parse().with_loc(context)?;
             let reference : Allele    = split_line[self.columns[2]].parse().with_loc(context)?;
             let alternate : Allele    = split_line[self.columns[3]].parse().with_loc(context)?;

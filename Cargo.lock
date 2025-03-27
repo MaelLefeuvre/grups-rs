@@ -530,6 +530,7 @@ dependencies = [
  "ahash",
  "anyhow",
  "coordinate-derive",
+ "fastrand 1.9.0",
  "float-cmp",
  "itertools 0.12.1",
  "located-error",

@@ -1,4 +1,4 @@
-use std::{str, path::Path, fs::File, io::{BufRead, BufWriter}, collections::BTreeMap};
+use std::{collections::BTreeMap, fs::File, io::{BufRead, BufWriter}, path::Path};
 
 use genome::coordinate::Coordinate;
 
@@ -158,25 +158,20 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
             
             // ---- Extract or compute population allele frequency from INFO.
             let pop_afs = match allele_frequency_strategy {
-                AFStrategy::ComputeFromAlleles => self.compute_allele_frequencies(),
+                AFStrategy::ComputeFromAlleles => self.compute_allele_frequencies()?,
                 AFStrategy::ParseFromVcf       => self.parse_allele_frequencies(&info)?,
             };
-            debug!("Pop_afs: {pop_afs:?}") ;
+            
+            debug!("{} | Pop_afs: {pop_afs:?}", Coordinate::try_from(&self.coordinate_buffer[0..5])?);
 
            // ---- and insert the relevant entries within our frequency_set.
             self.insert_frequency_keys(pop_afs);
             
-            
             self.print_progress(50000).with_loc(|| loc_msg)?;              
-            self.parse_keys();
-            
-            
+            self.parse_keys().with_loc(|| loc_msg)?;
             
             self.genotypes_buffer.clear();
             self.coordinate_buffer.clear();
-
-
-
         }
 
         self.insert_previous_keys()?;
@@ -206,8 +201,25 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
         self.reader.source.read_until(b'\t', &mut pos_buffer).with_loc(||ReadField { c: self.coordinate_buffer.clone() })?;
         pos_buffer.pop();
 
-        let chr: u8  = std::str::from_utf8(&chr_buffer).ok().and_then(|c| c.parse::<u8>().ok())
-            .with_loc(||EncodeChr { c: self.coordinate_buffer.clone() })?;
+        //let chr: u8  = std::str::from_utf8(&chr_buffer).ok().and_then(|c| c.parse::<u8>().ok())
+        //    .with_loc(||EncodeChr { c: self.coordinate_buffer.clone() })?;
+        //let chr: u8 = std::str::from_utf8(&chr_buffer).ok().and_then(|c| if c == "X" {
+        //    Some(88)
+        //} else {
+        //    c.parse::<u8>().ok()}).with_loc(|| EncodeChr { c:self.coordinate_buffer.clone()  })?;
+        //}
+        let chr: u8 = std::str::from_utf8(&chr_buffer).ok()
+            .and_then(|c| {
+                match c.parse::<u8>() {
+                    Ok(b) => Some(b),
+                    Err(_) => {
+                        match c == "X" || c == "chrX" {
+                            true =>   Some(b'X'),
+                            false =>  None
+                        }
+                    }
+                }
+            }).with_loc(||EncodeChr {c: self.coordinate_buffer.clone() })?;
 
         let pos: [u8; 4] = std::str::from_utf8(&pos_buffer).ok().and_then(|c| c.parse::<u32>().ok()).map(|p| p.to_be_bytes())
             .with_loc(||EncodePos { c: self.coordinate_buffer.clone() })?;
@@ -313,11 +325,17 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
             .with_loc(||FillGenotypes{ c: self.coordinate_buffer.clone() })
     }
 
+    /// Attempt to parse the current coordinate buffer as a valid coordinate
+    #[inline]
+    fn current_coordinate(&self) -> Result<Coordinate> {
+        Ok(Coordinate::try_from(&self.coordinate_buffer[0..5]).map_err(GenomeFstError::InvalidCoordinate)?)
+    }
+
     /// Log this Indexer's progress into the console, if `self.counter` is a multiple of `every_n`
     #[inline]
     fn print_progress(&mut self, every_n: usize) -> Result<()> {
         if self.counter % every_n == 0 {
-            let coord = Coordinate::try_from(&self.coordinate_buffer[0..5])?;
+            let coord = self.current_coordinate().loc("While attempting to print progress")?;
             info!("{: >9} {coord}", self.counter);
         }
         self.counter+= 1;
@@ -326,25 +344,40 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
 
     /// Parse the genotypes of all the requested `SampleTags` (`self.samples.keys()`) and index them within `self.genotype_keys`
     #[inline]
-    fn parse_keys(&mut self) {
+    fn parse_keys(&mut self) -> Result<()>{
+
+        let sample_genotypes: Vec<&[u8]> = self.genotypes_buffer.split(|c| *c == b'\t' || *c == b'\n').collect();
         for sample_tag in self.samples.keys() {            
 
             // ---- Complete value to insert.
             let mut key = self.coordinate_buffer.clone(); // @TODO: That clone can be removed?
             unsafe { key.append(sample_tag.id().clone().as_mut_vec()) };  // UNSAFE: add sampleID
 
-            // ---- Extract genotype info for thesample and add it to the key.
-            let geno_idx = sample_tag.idx().expect("Missing sample tag index") * 4;                // x4, since each field+separator is four characters long. (e.g.: '0|0 ')
-            key.push(self.genotypes_buffer[geno_idx  ]); // haplo1
-            key.push(self.genotypes_buffer[geno_idx+2]); // haplo2
+            // ---- Extract genotype info for the sample and add it to the key.
+            let geno_idx = sample_tag.idx().expect("Missing sample tag index"); 
+            let sample_genotype = sample_genotypes.get(geno_idx)
+                .with_loc(|| GenomeFstError::InvalidGenotypeIndex { 
+                    c: self.coordinate_buffer[0..5].to_vec(), s: (sample_tag.id()).clone(), i: geno_idx
+                })?;
+
+            trace!("  - {} | {}:{}",
+                self.current_coordinate().loc("While parsing keys")?,
+                sample_tag.id(),
+                std::str::from_utf8(sample_genotype).loc("While parsing keys")?
+            );
+
+            let (left, right) = match sample_genotype.len() {
+                3 => Ok((sample_genotype[0], sample_genotype[2])), // Autosomal or Pseudo-autosomal region
+                1 => Ok((sample_genotype[0], sample_genotype[0])), // X-chromosome (for male samples)
+                o => Err(GenomeFstError::InvalidGenotypeKey{c: self.coordinate_buffer[0..5].to_vec(), s: (sample_tag.id()).clone(), l: o})
+            }?;
+
+            key.extend_from_slice(&[left, right]); // haplo1
 
             self.genotype_keys.push(key);
         }
+        Ok(())
     }
-
-
-
-    //MODIFIED
 
     #[inline]
     fn parse_allele_frequencies<'info >(&self, info: &'info [String]) -> Result<BTreeMap<&'info str, f32>> {
@@ -370,22 +403,40 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
     }
 
     #[inline]
-    fn compute_allele_frequencies(&self) -> BTreeMap<&'panel str, f32> {
+    fn compute_allele_frequencies(&self) -> Result<BTreeMap<&'panel str, f32>> {
         let mut frequencies : BTreeMap<&str, f32> = BTreeMap::new();
         let mut allele_count: BTreeMap<&str, f32> = BTreeMap::new();
 
-        for (sample_tag, pop_tags) in self.samples.iter() {
-            for pop_tag in pop_tags {
-                let genotype_index = sample_tag.idx().expect("Missing sample tag index") * 4;
+        let sample_genotypes: Vec<&[u8]> = self.genotypes_buffer.split(|c| *c == b'\t' || *c == b'\n').collect();
 
-                *frequencies.entry(pop_tag).or_default() += if self.genotypes_buffer[genotype_index   ] == 49 {1.0} else { 0.0 };
-                *frequencies.entry(pop_tag).or_default() += if self.genotypes_buffer[genotype_index +2] == 49 {1.0} else {0.0};
-                *allele_count.entry(pop_tag).or_default() += 2.0;
+        for (sample_tag, pop_tags) in self.samples.iter() {
+            let genotype_index = sample_tag.idx().expect("Missing sample tag index");
+            let sample_genotype = sample_genotypes.get(genotype_index)
+                .with_loc(|| GenomeFstError::InvalidGenotypeIndex { 
+                    c: self.coordinate_buffer[0..5].to_vec(), s: (sample_tag.id()).clone(), i: genotype_index
+                })?;
+            
+            let (left, right) = match sample_genotype.len() {
+                3  => Ok((sample_genotype[0], sample_genotype[2])), // Autosomal or Pseudo-autosomal region
+                1  => Ok((sample_genotype[0], sample_genotype[0])), // X-chromosome (for male samples)
+                o  => Err(GenomeFstError::InvalidGenotypeKey{c: self.coordinate_buffer[0..5].to_vec(), s: (sample_tag.id()).clone(), l: o})
+            }?;
+
+            if sample_genotypes.len() > 1 {
+                for pop_tag in pop_tags { // Autosome, Pseudo-autosomal region, or female X-chromosome
+                    *frequencies.entry(pop_tag).or_default()  += if left == 49 {1.0} else {0.0};
+                    *frequencies.entry(pop_tag).or_default()  += if right == 49 {1.0} else {0.0};
+                    *allele_count.entry(pop_tag).or_default() += 2.0;
+                }
+            } else {
+                for pop_tag in pop_tags { // Male X-chromosome
+                    *frequencies.entry(pop_tag).or_default()  += if left == 49 {1.0} else {0.0};
+                    *allele_count.entry(pop_tag).or_default() += 1.0;
+                }
             }
 
         }
 
-        
         for (pop_tag, alternative_allele_count) in frequencies.iter_mut() {
             let observed_alleles = allele_count.get(pop_tag).expect("Missing sample tag index");
             trace!("{pop_tag}: {alternative_allele_count} / {observed_alleles} = {:.4}", *alternative_allele_count / *observed_alleles);
@@ -397,9 +448,8 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
             *alternative_allele_count = (round_factor * *alternative_allele_count).round() / round_factor;
         }
 
-        frequencies
+        Ok(frequencies)
     }
-    //END MODIFIED
 }
 
 
@@ -437,7 +487,7 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
     };
     let output_panel_path = format!("{output_dir}/{source_file}");
     
-    info!("output_panel_path: {output_panel_path}");
+    info!("Output_panel_path: {output_panel_path}");
     panel.copy_from_source(Path::new(&output_panel_path))?;
 
     // --------------------- Check whether the user requested allele frequency recalculation or not.
@@ -453,7 +503,6 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
         .build()
         .map_err(GenomeFstError::BuildThreadPool)
         .loc(loc_msg)?;
-
 
     pool.scope(|scope|{
         for vcf in &input_vcf_paths{

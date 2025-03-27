@@ -18,4 +18,5 @@ pub use crate::genome::Genome;
 mod chromosome;
 pub use chromosome::Chromosome;
 
-
+mod sex;
+pub use sex::Sex;

@@ -1,8 +1,5 @@
 use std::{
-    collections::{HashMap, BTreeMap},
-    io::{BufRead, BufReader, BufWriter, Write},
-    path::{Path, PathBuf},
-    fs::File
+    collections::{BTreeMap, HashMap}, fs::File, io::{BufRead, BufReader, BufWriter, Write}, path::{Path, PathBuf}, str::FromStr
 };
 
 use crate::{
@@ -10,6 +7,7 @@ use crate::{
     read::{SampleTag, genotype_reader::VCFReader},
 };
 
+use genome::Sex;
 use log::warn;
 
 use fastrand;
@@ -124,7 +122,7 @@ impl PanelReader {
             // ---- Randomly sample n sampletags
             // ---- @TODO: This type of error handling is performed multiple times. stay DRY.
             for _ in 0..*num {
-                let contam_sample_tag = self.random_sample(contam_pop, None)?
+                let contam_sample_tag = self.random_sample(contam_pop, None, None)?
                     .with_loc(|| PanelReaderError::MissingContaminant(contam_pop.to_string()))?
                     .clone();
 
@@ -140,14 +138,14 @@ impl PanelReader {
     /// - `pop`: (super-)Population-id string
     /// - `exclude`: Optional vector of sample tags to exclude from our sampling batch.
     ///    Thus, any provided sample tag cannot become a return value.
-    pub fn random_sample(&self, pop: &str, exclude: Option<&Vec<&SampleTag>>) -> Result<Option<&SampleTag>> {
+    pub fn random_sample(&self, pop: &str, exclude: Option<&Vec<&SampleTag>>, sex_filter: Option<Sex>) -> Result<Option<&SampleTag>> {
         // Extract the vector of candidate SampleTags using the provided population-id.
         // Bailout if `pop` does not match anything.
         let candidates = self.samples.get(pop).with_loc(|| PanelReaderError::MissingSample(pop.to_string()))?;
-
         // If there are sample tags to exclude, pre-filter out these SampleTags from `self.samples` before random sampling.
         let candidate = candidates.iter()
             .filter(|sample| !exclude.unwrap_or(&vec![]).contains(sample))
+            .filter(|sample| sample.sex() == sex_filter || sex_filter.is_none())
             .collect::<Vec<&SampleTag>>();
 
         // ---- Error out if there are no candidates left.
@@ -207,11 +205,12 @@ impl PanelReader {
     pub fn parse(source: BufReader<File>) -> std::io::Result<HashMap<String, Vec<SampleTag>>> {
         let mut output: HashMap<String, Vec<SampleTag>> = HashMap::new();
         for line in source.lines(){
-            let line = line?;
-            let line: Vec<&str> = line.split('\t').collect();
+            let line       = line?;
+            let line       = line.split('\t').collect::<Vec<&str>>();
             let sample_idx = None;
-            output.entry(line[1].into()).or_default().push(SampleTag::new(line[0], sample_idx)); // Key == Super-pop
-            output.entry(line[2].into()).or_default().push(SampleTag::new(line[0], sample_idx)); // Key == Pop
+            let sex        = line.get(3).and_then(|s| Sex::from_str(s).ok());
+            output.entry(line[1].into()).or_default().push(SampleTag::new(line[0], sample_idx, sex)); // Key == Super-pop
+            output.entry(line[2].into()).or_default().push(SampleTag::new(line[0], sample_idx, sex)); // Key == Pop
         }
         Ok(output)
     }
@@ -258,13 +257,13 @@ mod tests {
         let mut samples = HashMap::new();
         let pop = String::from("EUR");
         samples.insert(pop.to_owned(), vec![
-            SampleTag::new("HG00096", Some(0)),
-            SampleTag::new("NA06984", Some(1)),
+            SampleTag::new("HG00096", Some(0), None),
+            SampleTag::new("NA06984", Some(1), None),
         ]);
         let exclude = vec![
-            SampleTag::new("NA06984", Some(1)),
-            SampleTag::new("HO0000", Some(2)),
-            SampleTag::new("HO0001", Some(3))
+            SampleTag::new("NA06984", Some(1), None),
+            SampleTag::new("HO0000", Some(2), None),
+            SampleTag::new("HO0001", Some(3), None)
         ];
         samples.insert(String::from("HO"), exclude.clone());
 
@@ -273,7 +272,7 @@ mod tests {
 
         // Since "NA06984" is part of the excluded inds, it's expected he'll never be sampled.
         for _ in 0..1000 {
-            let random = panel.random_sample(&pop, Some(&exclude.iter().collect()))
+            let random = panel.random_sample(&pop, Some(&exclude.iter().collect()), None)
                 .expect("Failed to obtain random sample")
                 .expect("Missing random sample");
             assert_eq!(random.id(), "HG00096");

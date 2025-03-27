@@ -1,0 +1,36 @@
+# example pedigree definition input file
+# suggestion: pairwise comparisons labels and individual IDs should be simple and not contain spaces or special characters)
+
+# first define individuals in pedigree (each with unique ID)
+INDIVIDUALS
+father      male
+mother      female
+son1        male
+son2        male
+daughter1   female
+daughter2   female
+
+# next define offspring relationships
+RELATIONSHIPS
+son1=repro(father,mother)
+son2=repro(father,mother)
+daughter1=repro(father,mother)
+daughter2=repro(father,mother)
+
+
+# finally, define pairwise comparisons for which to calculate/output genetic distances and later perform plotting
+COMPARISONS
+Father-Son=compare(father,son1)
+Father-Son=compare(father,son2)
+Mother-Daughter=compare(mother,daughter1)
+Mother-Daughter=compare(mother,daughter2)
+Mother-Son=compare(mother,son1)
+Mother-Son=compare(mother,son2)
+Father-Daughter=compare(father,daughter1)
+Father-Daughter=compare(father,daughter2)
+Brother-Sister=compare(son1,daughter1)
+Brother-Sister=compare(son1,daughter2)
+Brother-Sister=compare(son2,daughter1)
+Brother-Sister=compare(son2,daughter2)
+Sisters=compare(daughter1,daughter2)
+Brothers=compare(son1,son2)

@@ -151,16 +151,21 @@ impl PedComparison {
 
 impl std::fmt::Display for PedComparison {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let default_tag=SampleTag::new("None", None);
-        write!(f, "{: <20} - {: <8} - {: <8} - {: <8} - {: <8} - {: >9} - {: >9} - {: <12.6}",
+        let default_tag=SampleTag::new("None", None, None);
+        // <Comparison-Label> <Ind1-label> <Ind2-label> <Ind1-reference> <Ind2-reference> <Sum.PWD> <Overlap> <Avg.PWD>
+        let ind1 = self.pair[0].borrow();
+        let ind2 = self.pair[1].borrow();
+        write!(f, "{: <20} - {: <8} - {: <8} - {: <8} - {: <8} - {: >9} - {: >9} - {: <12.6} - {: <8} - {: <8}",
             self.label,
-            self.pair[0].borrow().label,
-            self.pair[1].borrow().label,
-            self.pair[0].borrow().tag.as_ref().unwrap_or(&default_tag).id(),
-            self.pair[1].borrow().tag.as_ref().unwrap_or(&default_tag).id(),
+            ind1.label,
+            ind2.label,
+            ind1.tag.as_ref().unwrap_or(&default_tag).id(),
+            ind2.tag.as_ref().unwrap_or(&default_tag).id(),
             self.pwd,
             self.overlap,
-            self.get_avg_pwd()
+            self.get_avg_pwd(),
+            ind1.sex.map(|s| s.to_string()).unwrap_or("None".to_string()),
+            ind2.sex.map(|s| s.to_string()).unwrap_or("None".to_string())
         )
     }
 }

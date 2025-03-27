@@ -1,4 +1,4 @@
-use std::{ collections::HashMap, path::Path, mem::ManuallyDrop};
+use std::{collections::HashMap, path::Path, mem::ManuallyDrop};
 
 
 use grups_io::{
@@ -9,7 +9,7 @@ use grups_io::{
 };
 
 use located_error::prelude::*;
-use genome::{ GeneticMap, coordinate::{Coordinate, Position }};
+use genome::{coordinate::{Coordinate, Position}, GeneticMap};
 use parser::RelAssignMethod;
 use pwd_from_stdin::comparisons::{Comparisons as PileupComparisons, Comparison};
 
@@ -64,7 +64,7 @@ impl Pedigrees {
     /// 
     /// # Errors:
     /// - returns an error upon failing to parse `self.genetic_map`
-    pub fn initialize(pedigree_pop: String, comparisons: &PileupComparisons, recomb_dir: impl AsRef<Path>) -> Result<Self> {
+    pub fn initialize(pedigree_pop: &str, comparisons: &PileupComparisons, recomb_dir: impl AsRef<Path>) -> Result<Self> {
         // Generate pedigree replicates for each pwd_from_stdin::Comparison.
         let pedigrees = HashMap::new();
 
@@ -81,8 +81,23 @@ impl Pedigrees {
         }
         // --------------------- Initialize RNG
         let rng = fastrand::Rng::new();
-
+        let pedigree_pop = pedigree_pop.to_string();
         Ok(Pedigrees{pedigrees, pedigree_pop, previous_positions, genetic_map, rng})
+    }
+
+    pub fn set_founder_tags(&mut self, panel: &PanelReader) -> Result<()> {
+        self.pedigrees.iter_mut().try_for_each(|(label, ped_rep)|{
+            ped_rep.set_founder_tags(panel, &self.pedigree_pop)
+                .with_loc(||format!("While attempting to set founder tags in pedigree vector of comparison '{label}'"))
+        })
+    }
+
+    pub fn assign_offspring_strands(&mut self) -> Result<()> {
+        self.pedigrees.iter_mut().try_for_each(|(label, ped_rep)|{
+            ped_rep.assign_offspring_strands()
+                .with_loc(||format!("While attempting to randomly assign offspring strands in pedigree vector of comparison '{label}'"))
+
+        })
     }
 
     /// Iterate upon the pileup Comparisons of our real samples, and initialize `n` pedigree simulation replicates for them.
@@ -118,12 +133,22 @@ impl Pedigrees {
             );
 
             // ---- Initialize pedigree replicates.
-            pedigree_reps.populate(pedigree_path, &self.pedigree_pop, panel)
+            pedigree_reps.populate(pedigree_path)
                 .map_err(PedigreeError::PopulateError)
                 .with_loc(|| format!("While attempting to populate a vector of pedigrees for {}", comparison.get_pair()))?;
             self.pedigrees.insert(comparison_label.to_owned(), pedigree_reps);
         }
         Ok(())
+    }
+
+    pub fn all_sex_assigned(&self) -> bool {
+        self.pedigrees.values().all(|ped_rep| ped_rep.all_sex_assigned())
+    }
+
+    pub fn assign_random_sex(&mut self) -> Result<()> {
+        self.pedigrees.iter_mut().try_for_each(|(label, ped_rep)| {
+            ped_rep.assign_random_sex().with_loc(|| format!("While assigning sexes in pedigree replicate vector of comparison {label}"))
+        })
     }
 
     /// Iterate upon the pileup comparisons of our real samples and define simulation parameters for each pedigree 
@@ -211,6 +236,7 @@ impl Pedigrees {
         // -------------------- Get the contaminating population allele frequency
         let cont_af = pedigree_vec.contaminants.as_ref().with_loc(||MissingContaminant)?.compute_local_cont_af(reader)?;
 
+        let xchr_mode = coordinate.chromosome.0 == b'X';
         'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
             // --------------------- Perform SNP downsampling if necessary
             if self.rng.f64() < pedigree.get_params()?.snp_downsampling_rate {continue 'pedigree}
@@ -219,7 +245,7 @@ impl Pedigrees {
             pedigree.update_founder_alleles(reader, &mut self.rng)?;
 
             // --------------------- Compute offspring genomes
-            pedigree.compute_offspring_alleles(interval_prob_recomb, i, &self.rng)?;
+            pedigree.compute_offspring_alleles(interval_prob_recomb, i, &self.rng, xchr_mode)?;
 
             // --------------------- Compare genomes.
             pedigree.compare_alleles(cont_af, pileup_error_probs, &mut self.rng)?;
@@ -478,7 +504,7 @@ impl Pedigrees {
         
         let mut predictors = Vec::with_capacity(ordered_rels.len());
 
-        let mut svm_probs   = Vec::new();
+        let mut svm_probs  = Vec::new();
         debug!("Estimating most likely relationship through SVM classification");
         for (i, scenario) in ordered_rels[0..ordered_rels.len() - 1].iter().enumerate() {
             let loc_msg = || format!("While attempting to assess likelihood of comparison '{scenario}' for {}", comparison.get_pair());

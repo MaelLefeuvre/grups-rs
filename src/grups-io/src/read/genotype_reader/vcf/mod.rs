@@ -13,7 +13,7 @@ use crate::{
     read::genotype_reader::{GenotypeReader, GenotypeReaderError},
 };
 
-use gzp::{deflate::Bgzf, par::decompress::{ParDecompressBuilder}};
+use gzp::{deflate::Bgzf, par::decompress::ParDecompressBuilder};
 use anyhow::Result;
 use log::debug;
 
@@ -30,12 +30,33 @@ impl<'a> GenotypeReader for VCFReader<'a> {
     // Return the alleles for a given SampleTag. Search is performed using `sample_tag.idx()`;
     fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2]> {
         use GenotypeReaderError::{MissingAlleles, InvalidSampleIndex};
-        let geno_idx = 4 * sample_tag.idx().as_ref().ok_or(InvalidSampleIndex)
-            .with_loc(|| format!("While retrieving alleles of {}", sample_tag.id()))?;
-            
+
+        let sample_genotypes: Vec<&[u8]> = self.buf.split(|c| *c == b'\t' || *c == b'\n').collect();
+
+        let geno_idx = sample_tag.idx().expect("Missing sample tag index"); 
+        let sample_genotype = sample_genotypes.get(geno_idx).ok_or(InvalidSampleIndex)?;
+
+        //trace!("  - {} | {}:{}", Coordinate::try_from(&self.coordinate_buffer[0..5])?, sample_tag.id(), std::str::from_utf8(sample_genotype)?);
+
         let retrieve_err = || format!("Failed to retrieve the alleles of sample {} within the current VCF.", sample_tag.id());
-        let haplo1 = self.buf.get(geno_idx  ).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
-        let haplo2 = self.buf.get(geno_idx+2).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
+        let (haplo1, haplo2) = match sample_genotype.len() {
+            3 => Ok(( // Autosomal, Pseudo-autosomal region or female X-chromosome
+                sample_genotype.first().ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?,
+                sample_genotype.get(2).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?
+            )),
+
+            1 => { // Male X-chromosome
+                let haplo = sample_genotype.first().ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
+                Ok((haplo, haplo))
+            }
+            _ => Err(MissingAlleles)
+        }?;
+
+        //let geno_idx = 4 * sample_tag.idx().as_ref().ok_or(InvalidSampleIndex)
+        //    .with_loc(|| format!("While retrieving alleles of {}", sample_tag.id()))?;
+            
+        //let haplo1 = left //self.buf.get(geno_idx  ).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
+        //let haplo2 = right //self.buf.get(geno_idx+2).ok_or(MissingAlleles).map(|all| all - 48).with_loc(retrieve_err)?;
         Ok([haplo1, haplo2])
     }
     

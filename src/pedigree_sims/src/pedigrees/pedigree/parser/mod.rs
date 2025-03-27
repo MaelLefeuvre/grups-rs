@@ -5,13 +5,14 @@ use std::{
 };
 
 use located_error::prelude::*;
-use log::debug;
+use log::{debug, warn};
 
 mod error;
 use error::PedigreeBuilderError;
 
-
 use crate::pedigrees::Pedigree;
+
+use genome::Sex;
 
 /// Simple enum differenciating between the available
 /// pedigree definition file formats
@@ -322,7 +323,13 @@ impl PedigreeBuilder {
             let iid = line.get_field(PedFormatField::Iid, &field_order).with_loc(||
                 loc_msg("Failed to retrieve value of Individual id", i)
             )?;
-            pedigree.add_individual(iid, None).with_loc(||
+            let sex: Option<Sex> = line.get_field(PedFormatField::Sex, &field_order).map_or(None, |s| s.parse().ok());
+            // If None: No specified sex field => Continue on.
+            // If Some(Sex::Unknown) emit a warning.
+            if sex.is_some_and(|s| s == Sex::Unknown) {
+                warn!("Unknown sex for individual {iid}: '{}'", line.get_field(PedFormatField::Sex, &field_order)?)
+            }
+            pedigree.add_individual(iid, None, sex).with_loc(||
                 PedigreeBuilderError::AddIndividual(iid.to_string(), i)
             )?;
         }
@@ -379,7 +386,17 @@ impl PedigreeBuilder {
             //      run the appropriate parsing method, according to the current ParseMode
             match current_parse_mode {
                 PedigreeSection::Individual => {
-                    pedigree.add_individual(contents, None)
+                    let split = contents.split_ascii_whitespace().collect::<Vec<&str>>();
+                    let iid = split.first().ok_or(anyhow!(std::io::ErrorKind::InvalidData))?;
+                    let sex: Option<Sex> = split.get(1).and_then(|s| s.parse().ok());
+                    // If None: No specified sex field => Continue on.
+                    // If Some(Sex::Unknown) emit a warning.
+                    if sex.is_some_and(|s| s == Sex::Unknown) {
+                        warn!("Unknown sex for individual {iid}: '{}'",
+                            split.get(1).ok_or(anyhow!(std::io::ErrorKind::InvalidData))?
+                        )
+                    }
+                    pedigree.add_individual(iid, None, sex)
                         .with_loc(|| PedigreeBuilderError::AddIndividual(contents.to_string(), i))?;
                 },
                 PedigreeSection::Relationship => {

@@ -1,12 +1,12 @@
 use std::{
-    hash::{Hash, Hasher},
     cell::RefCell,
-    rc::Rc,
     cmp::{Ord, Ordering, PartialOrd},
+    hash::{Hash, Hasher},
+    rc::Rc,
 };
 
 use grups_io::read::SampleTag;
-
+use genome::Sex;
 use fastrand;
 
 use located_error::prelude::*;
@@ -50,6 +50,7 @@ pub struct Individual {
     pub strands              : Option<[usize; 2]>,
     pub currently_recombining: [bool; 2],
     pub alleles              : Option<[u8; 2]>,
+    pub sex                  : Option<Sex>,
 }
 
 impl std::fmt::Display for Individual {
@@ -105,9 +106,9 @@ impl Individual {
     /// # Arguments
     /// - `label`  : User-defined name of the individual (e.g. "father", "mother", "child", etc.)
     /// - `parents`: Size-two array of `&Rc<RefCell<Individual>>`, representing the individual's parents. 
-    pub fn new(label: &str, parents: Option<ParentsRef>) -> Individual {
+    pub fn new(label: &str, parents: Option<ParentsRef>, sex: Option<Sex> ) -> Individual {
         let parents = parents.map(Self::format_parents);
-        Individual {tag: None, label: label.to_string(), parents, strands: None, currently_recombining: [false, false], alleles: None}
+        Individual {tag: None, label: label.to_string(), parents, strands: None, currently_recombining: [false, false], alleles: None, sex}
     }
 
     /// Manually set the alleles for this individual. Used during tests only, to bypass some methods and create mock Individuals.
@@ -220,7 +221,7 @@ impl Individual {
     /// # @ TODO
     /// - Instantiating a new Rng for each individual might not be very efficient...
     ///   Passing a &ThreadRng reference around might be better.
-    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize, rng: &fastrand::Rng) -> Result<bool> {
+    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize, rng: &fastrand::Rng, xchr_mode: bool) -> Result<bool> {
         use IndividualError::{InvalidAlleleAssignment, MissingParents, MissingStrands};
         // ---- Ensure this method call is non-redundant.
         if self.alleles.is_some() {
@@ -235,27 +236,95 @@ impl Individual {
         for (i, parent) in parents.iter().enumerate() {
             // ---- Assign parent genome if not previously generated.
             if parent.borrow().alleles.is_none() {
-                parent.borrow_mut().assign_alleles(recombination_prob, i, rng)
+                parent.borrow_mut().assign_alleles(recombination_prob, i, rng, xchr_mode)
                     .with_loc(||InvalidAlleleAssignment)?;
             }
 
             // ---- Check if recombination occured for each parent and update recombination tracker if so.
-            if rng.f64() < recombination_prob {
-                trace!("- Cross-over occured in ped: {:<5} - ind: {}", ped_idx, self.label);
+            if (!xchr_mode || parent.borrow().sex == Some(Sex::Female)) && rng.f64() < recombination_prob { 
+                trace!("- Cross-over occured in ped: {:<5} - ind: {} (sex: {:?})", ped_idx, self.label, parent.borrow().sex);
                 self.currently_recombining[i] = ! self.currently_recombining[i];
             }
         }
-
+        
         // ---- Perform allele assignment for `self`, by simulating meiosis for each parent.
         let Some(strands) = self.strands else {
             return Err(anyhow!(MissingStrands)).with_loc(||InvalidAlleleAssignment)
         };
 
-        let haplo_0 = parents[0].borrow_mut().meiosis(strands[0], self.currently_recombining[0]);
-        let haplo_1 = parents[1].borrow_mut().meiosis(strands[1], self.currently_recombining[1]);
-        self.alleles = Some([haplo_0, haplo_1]);
+        self.alleles = if xchr_mode {
+            let mut alleles = [0u8 ; 2];
+            // ---- Find the index of both parents
+            let father_idx = parents.iter().position(|p| p.borrow().sex == Some(Sex::Male)).expect("No parent found..");
+            let mother_idx = (father_idx + 1 ) % 2;
+
+            alleles[mother_idx] = parents[mother_idx].borrow().meiosis(strands[mother_idx], self.currently_recombining[mother_idx]);
+            alleles[father_idx] = match self.sex {
+                Some(Sex::Male)           => Ok(alleles[mother_idx]), // If the descendant is a male, alleles are exclusively from the mother
+                Some(Sex::Female)         => Ok(parents[father_idx].borrow().meiosis(strands[father_idx], self.currently_recombining[father_idx])),
+                Some(Sex::Unknown) | None => Err(IndividualError::UnknownOrMissingSex).loc("While attempting to assign alleles during X-chromosome-mode"),
+            }?;
+
+            // ---- Sanity checks.
+            if self.sex == Some(Sex::Male) && alleles[0] != alleles[1] {
+                // Male individuals are not expected to be heterozygous during X-chromosome simulations.
+                return Err(IndividualError::SpuriousAlleleAssignment{alleles})
+                    .loc("Male Individual is heterozygous while in X-chromosome mode")
+            }
+            if self.currently_recombining[father_idx] {
+                // Fathers are not expected to recombine during X-chromosome simulations.
+                return Err(IndividualError::InvalidOrSpuriousRecombinationEvent)
+                    .loc("Father is recombining while in X-chromosome-mode")
+            }
+
+            Some(alleles)
+        } else {
+            let haplo_0 = parents[0].borrow().meiosis(strands[0], self.currently_recombining[0]);
+            let haplo_1 = parents[1].borrow().meiosis(strands[1], self.currently_recombining[1]);
+            Some([haplo_0, haplo_1])
+        };
+
         Ok(true)
     }
+
+    pub fn assign_random_sex(&mut self) -> Result<bool> {
+        use IndividualError::InvalidSexAssignment;
+        // ---- Ensure this method call is non-redundant
+        if self.sex.is_some() {
+            return Ok(false)
+        }
+
+        // ---- Perform sex-asignment for each parent (if the individual has known parents.)
+        if let Some(parents) = &self.parents { 
+            for (i, parent) in parents.iter().enumerate() {
+                // ---- Assign parent sex if not previously decided.
+                let spouse = &parents[(i+1) % 2];
+                if parent.borrow().sex.is_none() { // If the parent's sex is still unknown
+                    parent.borrow_mut().sex = if let Some(spouse_sex) = spouse.borrow().sex { // If the spouse sex is already known, assign the opposite sex.
+                        match spouse_sex {
+                            Sex::Female  => Some(Sex::Male),
+                            Sex::Male    => Some(Sex::Female),
+                            Sex::Unknown => None
+                        }
+                    } else {
+                        Some(Sex::random()) // If not, assign a random sex to the parent.
+                    }
+                }
+                // ---- Apply the same process for the parent.
+                parent.borrow_mut().assign_random_sex()
+                    .with_loc(||InvalidSexAssignment)?;
+            }
+        }
+
+        // ---- Randomly assign sex of the considered individual
+        self.sex = Some(Sex::random());
+        Ok(true)
+    }
+
+    pub fn is_sex_assigned(&self) -> bool {
+        self.sex.is_some_and(|s| s != Sex::Unknown)
+    }
+
 }
 
 #[cfg(test)]
@@ -268,7 +337,7 @@ mod tests {
         let parents = offspring.parents.as_ref().expect("Missing parents");
         parents[0].borrow_mut().alleles = Some(parents_alleles[0]);
         parents[1].borrow_mut().alleles = Some(parents_alleles[1]);        
-        offspring.assign_alleles(recombination_prob, 0, &rng)?;
+        offspring.assign_alleles(recombination_prob, 0, &rng, false)?;
         Ok(())
     }
 
@@ -392,9 +461,28 @@ mod tests {
     }
 
     #[test]
+    fn sex_setter_founder() -> Result<()>{
+        let mut ind = common::mock_founder("parent");
+        ind.assign_random_sex()?;
+        assert!(ind.sex.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn sex_setter_offspring() -> Result<()> {
+        for _ in 0..1000 {
+            let mut child = common::mock_offspring("child", Some(["parent-1", "parent-2"]));
+            child.assign_random_sex()?;
+            let parents = child.parents.expect("Test offspring has missing parents");
+            assert_ne!(parents[0].borrow().sex, parents[1].borrow().sex);
+        }
+        Ok(())
+    }
+
+    #[test]
     fn get_set_sampletag() {
         let mut ind = common::mock_founder("parent");
-        let tag = SampleTag::new("HG00096", Some(0));
+        let tag = SampleTag::new("HG00096", Some(0), None);
         ind.set_tag(tag.to_owned());
         assert_eq!(ind.get_tag(), Some(&tag));
         
@@ -434,14 +522,14 @@ mod tests {
 
     fn alleles_assignment_founder() {
         let mut ind = common::mock_founder("parent");
-        let result = ind.assign_alleles(0.0, 0, &fastrand::Rng::new());
+        let result = ind.assign_alleles(0.0, 0, &fastrand::Rng::new(), false);
         assert!(result.is_err())
     }
 
     #[test]
     fn alleles_assignments_unnassigned_parent_alleles(){
         let mut ind = common::mock_offspring("offspring", None);
-        let result = ind.assign_alleles(0.0, 0, &fastrand::Rng::new());
+        let result = ind.assign_alleles(0.0, 0, &fastrand::Rng::new(), false);
         assert!(result.is_err())
     }
 
@@ -504,7 +592,7 @@ mod tests {
 
         // Different Index should not impact ordering. What matters is the ID.
         let mut ind_a_prime = ind_a.clone();
-        ind_a_prime.set_tag(SampleTag::new("A", Some(996)));
+        ind_a_prime.set_tag(SampleTag::new("A", Some(996), None));
         assert!(ind_a <= ind_a_prime);
 
 
@@ -520,7 +608,7 @@ mod tests {
         assert!(display.contains(father_label));
         assert!(display.contains(mother_label));
 
-        offspring.set_tag(SampleTag::new("HG00096", None));
+        offspring.set_tag(SampleTag::new("HG00096", None, None));
         let display = format!("{offspring}");
         assert!(display.contains("HG00096"));
     }

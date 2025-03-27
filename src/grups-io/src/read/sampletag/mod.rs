@@ -1,3 +1,5 @@
+use genome::Sex;
+
 /// Simple Struct representing an Input Sample id information
 /// # Fields
 /// - `id` : (String)        - Name of the sample
@@ -7,6 +9,7 @@
 pub struct SampleTag {
     id : String,
     idx: Option<usize>,
+    sex: Option<Sex>,
     hash_id: u128,
 }
 
@@ -15,8 +18,9 @@ impl SampleTag {
     /// # Arguments:
     /// - `id` : raw string slice corresponding to the name of the sample
     /// - `idx`: optional vcf column field index of the sample.
-    pub fn new(id: &str, idx: Option<usize>) -> Self {
-        SampleTag{id: id.to_string(), idx, hash_id: Self::hash_id_u128(id.as_bytes()) }
+    pub fn new(id: &str, idx: Option<usize>, sex: Option<Sex>) -> Self {
+        let sex = sex.or(Some(Sex::Unknown));
+        SampleTag{id: id.to_string(), idx, sex, hash_id: Self::hash_id_u128(id.as_bytes()) }
     }
 
     /// Return the name of the sample.
@@ -29,6 +33,10 @@ impl SampleTag {
         &self.idx
     }
 
+    /// Return the sex of the sample 
+    pub fn sex(&self) -> Option<Sex> {
+        self.sex
+    }
     /// Return the u128 hash representation of the sample id
     pub fn hashed_id(&self) -> u128 {
         self.hash_id

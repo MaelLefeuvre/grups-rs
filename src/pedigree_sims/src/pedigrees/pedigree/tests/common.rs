@@ -10,7 +10,7 @@ use std::{
 /// # Arguments:
 ///  - `label`: raw string slice defining the individual's name (e.g. "father", "mother", etc.)
 pub fn mock_founder(label: &str) -> Individual {
-    Individual::new(label, None)
+    Individual::new(label, None, None)
 }
 
 /// Mock an offspring individual, with two parents.
@@ -23,7 +23,7 @@ pub fn mock_offspring(label: &str, parents_labels: Option<[&str; 2]>) -> Individ
     let father = Rc::new(RefCell::new(mock_founder(parents_labels[0])));
     let mother = Rc::new(RefCell::new(mock_founder(parents_labels[1])));
     let parents = Some([&father, &mother]);
-    Individual::new(label, parents)
+    Individual::new(label, parents, None)
 }
 
 /// Mock a pedigree comparison, using two founder individuals (=> this comparison is always labeled "unrelated")

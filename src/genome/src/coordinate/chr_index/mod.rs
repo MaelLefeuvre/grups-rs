@@ -11,7 +11,11 @@ pub struct ChrIdx(pub u8);
 impl FromStr for ChrIdx {
     type Err = ChrIdxError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(s.replace("chr", "").parse::<u8>()?))
+        let inner = match s.replace("chr", "").as_str() {
+            "X" | "X_par1" | "X_par2" => b'X',
+            other => other.parse::<u8>()?
+        };
+        Ok(Self(inner))
     }
 }
 

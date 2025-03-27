@@ -1,6 +1,6 @@
 use std::{
     collections::BTreeMap,
-    ops::{Deref}, 
+    ops::Deref, 
     path::Path,
     io::{BufRead, BufReader},
     fs::File, str::FromStr
@@ -71,20 +71,20 @@ impl Genome {
         let Some(ext) = Path::new(path).extension().map(|ext| ext.to_string_lossy().to_string()) else {
             return Err(InvalidExt{ext:"None".to_string()})
         };
+
         let fai = match ext.as_str() { 
             "fai"          => path.to_string(),                          
             "fasta" | "fa" => format!("{}{}", path, ".fai"), // Append '.fai' if it is not there
             other          => return Err(InvalidExt{ext: other.to_owned()})
         };
         debug!("Matching fasta.fai file : {}", fai);
-    
-    
+
         let mut genome = Self::new();
         let file = BufReader::new(match File::open(fai.clone()) {
             Ok(file) => file,
             Err(err) => return Err(FileNotFound{path: fai, err: err.to_string()}),
         });
-    
+
         let mut skipped_chrs = Vec::new();
         for (index,line) in file.lines().enumerate() {
             let line = line.map_err(|err| ParseLine{idx: index, err})?;
@@ -99,7 +99,7 @@ impl Genome {
                 }            
             };
         }
-    
+        
         if !skipped_chrs.is_empty(){
             warn!("\nSome chromosomes were skipped while parsing {}:\n{:?}", fai, skipped_chrs);
         }
@@ -109,6 +109,12 @@ impl Genome {
     pub fn add_chromosome(&mut self, chromosome: Chromosome) -> Option<Chromosome> {
         self.0.insert(chromosome.name, chromosome)
     }
+
+    pub fn pop_xchr(&mut self) -> Option<Genome> {
+        let idx = ChrIdx(b'X');
+        self.0.remove(&idx).map(|chr| Genome(BTreeMap::from([(idx, chr)])))
+    }
+
 }
 
 /// Simply returns a default genome index in case the user did not provide a specific .fasta.fai file. 
@@ -137,7 +143,8 @@ impl Default for Genome {
             (ChrIdx::from(19), Chromosome::new(19,  59_128_983)),
             (ChrIdx::from(20), Chromosome::new(20,  63_025_520)),
             (ChrIdx::from(21), Chromosome::new(21,  48_129_895)),
-            (ChrIdx::from(22), Chromosome::new(22,  51_304_566))
+            (ChrIdx::from(22), Chromosome::new(22,  51_304_566)),
+            (ChrIdx::from(b'X'), Chromosome::new(b'X', 155_270_560))
         ]))
     }
 }

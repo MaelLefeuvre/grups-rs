@@ -54,23 +54,45 @@ pub fn cite() {
 
 /// @TODO : Stay dry...
 pub fn run(cli: Cli) -> Result<()> {
-    match cli.commands {
-        PedigreeSims {common, pwd, ped} => {
-            // ----------------------------- Set seed (randomly assigned by parser-rs if none was provided.)
-            fastrand::seed(ped.seed);
-            //unsafe { libc::srand(ped.seed as u32) };
-            // ----------------------------- Parse Requested_samples
-            let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
-            // ----------------------------- Initialize genome.
+    // ----------------------------- Initialize genome.
+    let genome = match cli.commands {
+        PedigreeSims { ref common, pwd: _, ped: _} | PwdFromStdin { ref common, pwd: _ } => {
             info!("Indexing reference genome...");
-            let genome = match &common.genome {
+            let mut genome = match &common.genome {
                 Some(file) => Genome::from_fasta_index(file)?,
                 None       => Genome::default(),
             };
+            // ---- Split genome into autosome and X-chromosome chunks.            
+            let x_chromosome = genome.pop_xchr();
+
+            if common.x_chromosome_mode {
+                genome = x_chromosome.ok_or_else(||anyhow!("Missing Xchromosome"))?;
+            };
+            Some(genome)
+        },
+        _ => None
+    };
+
+    // ---- Run with autosomes.
+    _run(&cli, genome)?;
+
+    Ok(())
+}
+pub fn _run(cli: &Cli, genome: Option<Genome>) -> Result<()> {
+    match &cli.commands {
+        PedigreeSims {common, pwd, ped} => {
+            // ----------------------------- Set seed (randomly assigned by parser-rs if none was provided.)
+            fastrand::seed(ped.seed);
+            // ----------------------------- Parse Requested_samples
+            let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
+            let genome = genome.ok_or_else(|| anyhow!("Error: Missing genome"))?; // @TODO better handling
+
             // ----------------------------- Run PWD_from_stdin.
-            let (mut comparisons, output_files) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
+            let (mut comparisons, output_files) = pwd_from_stdin::run(common, pwd, &requested_samples, &genome)?;
             comparisons.write_pwd_results(!pwd.no_print_blocks, &output_files)?;
-            pedigree_sims::run(common, *ped, &requested_samples, &mut comparisons)?;
+
+            // ----------------------------- Run Pedigree-sims
+            pedigree_sims::run(common, ped, &requested_samples, &mut comparisons)?;
 
         },
         
@@ -78,24 +100,21 @@ pub fn run(cli: Cli) -> Result<()> {
             // ----------------------------- Parse Requested_samples
             let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
             // ----------------------------- Initialize genome.
-            info!("Indexing reference genome...");
-            let genome = match &common.genome {
-                Some(file) => Genome::from_fasta_index(file)?,
-                None       => Genome::default(),
-            };
+            let genome = genome.ok_or_else(|| anyhow!("Error: Missing genome"))?; // @TODO better handling
+
             // ----------------------------- Run PWD_from_stdin.
-            let (comparisons, output_files) = pwd_from_stdin::run(&common, &pwd, &requested_samples, &genome)?;
+            let (comparisons, output_files) = pwd_from_stdin::run(common, pwd, &requested_samples, &genome)?;
             if ! pwd.filter_sites {
                 comparisons.write_pwd_results(!pwd.no_print_blocks, &output_files)?;
             }
         },
 
         FST {fst: fst_cli} => {
-            vcf_fst::run(&fst_cli)?
+            vcf_fst::run(fst_cli)?
         },
 
         FromYaml{yaml} => {
-            let yaml_file = File::open(&yaml)?;
+            let yaml_file = File::open(yaml)?;
             let cli: Cli = match serde_yaml::from_reader(yaml_file){
                 Ok(cli)  => cli,
                 Err(e)   => return Err(anyhow!("Unable to deserialize arguments from {yaml:?} file: [{e}]"))

@@ -1,5 +1,5 @@
 use thiserror::Error;
-use genome::coordinate::Coordinate;
+use genome::coordinate::{Coordinate, CoordinateError};
 
 fn locate_genomic_position(coord: &[u8]) -> String {
     match Coordinate::try_from(&coord[0..5]).ok() {
@@ -7,7 +7,6 @@ fn locate_genomic_position(coord: &[u8]) -> String {
         None        => "[None]".to_string()
     }
 }
-
 
 #[derive(Error, Debug)]
 pub enum GenomeFstError {
@@ -55,4 +54,14 @@ pub enum GenomeFstError {
 
     #[error("Failed to finish FST set build")]
     CompleteBuild(#[source] fst::Error),
+
+    #[error("{} Failed to parse genotype of sample '{}': invalid length ({} characters)", locate_genomic_position(c), s, l)]
+    InvalidGenotypeKey{c: Vec<u8>, s: String, l: usize},
+
+    #[error("{} Invalid genotype index for sample '{}' (index was: {})", locate_genomic_position(c), s, i)]
+    InvalidGenotypeIndex{c: Vec<u8>, s: String, i: usize},
+
+    #[error("Failed to parse a valid coordinate from the current coordinate buffer")]
+    InvalidCoordinate(#[source] CoordinateError)
+
 }
