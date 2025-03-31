@@ -11,7 +11,7 @@
     - Added Zenodo DOI Badge
 ## Quality-of-life
 - `.blk` and `.sims` files now contain a descriptive header
-- Slower compile time, through the harmonization of workspace dependencies and versioning
+- Improved compile time, through the harmonization of workspace dependencies and versioning
 
 # 0.3.3
 ## Documentation
