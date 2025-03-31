@@ -4,13 +4,10 @@ use rand::{prelude::{ThreadRng, SliceRandom}, thread_rng};
 use nanorand::WyRand;
 
 use fastrand::{self};
+use rand::Rng;
 
 fn simulate_observed_reads(n: u8, rng: &mut ThreadRng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>, String> {
-    use rand::Rng;
-
     let mut reads = Vec::with_capacity(n as usize);
-    //let mut rng = rand::thread_rng();
-
     // ---- Simulate n pileup observations.
     for _ in 0..n {
         // ---- Simulate modern human contamination. 
@@ -45,10 +42,7 @@ fn simulate_observed_reads(n: u8, rng: &mut ThreadRng, contam_rate: f64, contam_
 
 fn simulate_observed_reads_wyrand(n: u8, rng: &mut WyRand, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>, String> {
     use nanorand::Rng;
-    
     let mut reads = Vec::with_capacity(n as usize);
-    //let mut rng = rand::thread_rng();
-
     // ---- Simulate n pileup observations.
     for _ in 0..n {
         // ---- Simulate modern human contamination. 
@@ -81,10 +75,7 @@ fn simulate_observed_reads_wyrand(n: u8, rng: &mut WyRand, contam_rate: f64, con
 }
 
 fn simulate_observed_reads_fastrand(n: u8, rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>, String> {
-    
     let mut reads = Vec::with_capacity(n as usize);
-    //let mut rng = rand::thread_rng();
-
     // ---- Simulate n pileup observations.
     for _ in 0..n {
         // ---- Simulate modern human contamination. 

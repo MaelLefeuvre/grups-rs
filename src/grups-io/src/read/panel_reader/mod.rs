@@ -152,7 +152,7 @@ impl PanelReader {
         if candidate.is_empty() { bail!(PanelReaderError::ExhaustedPanel) }
         
         // ---- Return a random sample
-        let rng = fastrand::Rng::new();   
+        let mut rng = fastrand::Rng::new();   
         Ok(candidate.get(rng.usize(0..candidate.len())).copied())
     }
 

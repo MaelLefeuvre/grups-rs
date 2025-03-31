@@ -1,5 +1,6 @@
 /target
 manual-test-data/
+grups-rs-benchmark/
 /grups-output
 lcov.info
 .vscode/

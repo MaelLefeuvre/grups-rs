@@ -1,2 +1,2 @@
 Pair_name	Most_Likely_rel	Corr.Overlap	Corr.Sum.PWD	Corr.Avg.PWD	Corr.CI.95	Corr.Avg.Phred	Sim.Avg.PWD	Min.Z_Score
-Ind0-Ind1	Mother-daughter	846	117.873915	0.139331	0.013821	59.733844	0.187021	0.710759
+Ind0-Ind1	Mother-daughter	846	117.873915	0.139331	0.013821	59.733844	0.186631	0.706964

@@ -453,15 +453,6 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e51093e27b0797c359783294ca4f0a911c270184cb10f85783b118614a1501be"
-dependencies = [
- "instant",
-]
-
-[[package]]
-name = "fastrand"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "486f806e73c5707928240ddc295403b1b93c96a02038563881c4a2fd84b81ac4"
@@ -530,12 +521,11 @@ dependencies = [
  "ahash",
  "anyhow",
  "coordinate-derive",
- "fastrand 1.9.0",
+ "fastrand",
  "float-cmp",
  "itertools 0.12.1",
  "located-error",
  "log",
- "rand",
  "rust-lapper",
  "tempfile",
  "thiserror",
@@ -577,7 +567,7 @@ version = "0.3.3"
 dependencies = [
  "ahash",
  "anyhow",
- "fastrand 1.9.0",
+ "fastrand",
  "fst",
  "genome",
  "gzp",
@@ -599,7 +589,7 @@ dependencies = [
  "clap 3.2.25",
  "coordinate-derive",
  "criterion",
- "fastrand 1.9.0",
+ "fastrand",
  "genome",
  "grups-io",
  "itertools 0.12.1",
@@ -721,15 +711,6 @@ checksum = "707907fe3c25f5424cce2cb7e1cbcafee6bdbe735ca90ef77c29e84591e5b9da"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
-]
-
-[[package]]
-name = "instant"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
-dependencies = [
- "cfg-if",
 ]
 
 [[package]]
@@ -1128,7 +1109,7 @@ dependencies = [
  "chrono",
  "clap 3.2.25",
  "expanduser",
- "fastrand 1.9.0",
+ "fastrand",
  "located-error",
  "log",
  "num 0.4.3",
@@ -1143,7 +1124,7 @@ version = "0.3.3"
 dependencies = [
  "ahash",
  "anyhow",
- "fastrand 1.9.0",
+ "fastrand",
  "fst",
  "genome",
  "grups-io",
@@ -1313,13 +1294,13 @@ version = "0.3.3"
 dependencies = [
  "ahash",
  "anyhow",
+ "fastrand",
  "genome",
  "grups-io",
  "itertools 0.12.1",
  "located-error",
  "log",
  "parser",
- "rand",
  "thiserror",
 ]
 
@@ -1593,7 +1574,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28cce251fcbc87fac86a866eeb0d6c2d536fc16d06f184bb61aeae11aa4cee0c"
 dependencies = [
  "cfg-if",
- "fastrand 2.2.0",
+ "fastrand",
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",

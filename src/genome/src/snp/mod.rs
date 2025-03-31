@@ -65,7 +65,7 @@ impl SNPCoord {
 mod tests {
     use super::*;
     use  crate::jackknife::JackknifeBlock;
-    use rand::{self, prelude::SliceRandom};
+    use fastrand::Rng;
     use anyhow::Result;
     const N_ITERS: u32 = 1_000_000;
 
@@ -140,17 +140,18 @@ mod tests {
 
     #[test]
     fn hash_block() -> Result<()> {
-        let mut rng = rand::thread_rng();
-
+        let mut rng = Rng::new();
         let nucleotides = ['A', 'C', 'G', 'T'];
         let mut test_hashset = std::collections::HashSet::new();
         for chromosome in 1..22 {
             for position in (1..N_ITERS).step_by(1000) {
-                let mut random_nucl = nucleotides.choose_multiple(&mut rng, 2);
+                //fastrand::choose_multiple(source, amount)
+                let random_nucl = rng.choose_multiple(nucleotides.iter(), 2);//.to_vec().choose_multiple(&mut rng, 2);
+    
                 let coord = SNPCoord::try_new(
                     chromosome, position,
-                    *random_nucl.next().expect("Missing random nucleotide"),
-                    *random_nucl.next().expect("Missing random nucleotide")
+                    *(*random_nucl.first().expect("Missing random nucleotide")),
+                    *(*random_nucl.last().expect("Missing random nucleotide"))
                 )?;
                 assert!(test_hashset.insert(coord));
             }

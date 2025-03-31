@@ -161,7 +161,7 @@ impl Individual {
         if self.strands.is_some() { // Strands are already assigned. Skip.
             return Ok(false)
         }
-        let rng = fastrand::Rng::new();
+        let mut rng = fastrand::Rng::new();
         self.strands = Some([rng.usize(0..=1), rng.usize(0..=1)]);
         Ok(true)
     }
@@ -221,7 +221,7 @@ impl Individual {
     /// # @ TODO
     /// - Instantiating a new Rng for each individual might not be very efficient...
     ///   Passing a &ThreadRng reference around might be better.
-    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize, rng: &fastrand::Rng, xchr_mode: bool) -> Result<bool> {
+    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize, rng: &mut fastrand::Rng, xchr_mode: bool) -> Result<bool> {
         use IndividualError::{InvalidAlleleAssignment, MissingParents, MissingStrands};
         // ---- Ensure this method call is non-redundant.
         if self.alleles.is_some() {
@@ -333,11 +333,11 @@ mod tests {
     use crate::pedigrees::pedigree::tests::common;
 
     fn perform_allele_asignment(offspring: &mut Individual, parents_alleles: [[u8;2];2], recombination_prob: f64) -> Result<()> {
-        let rng = fastrand::Rng::new();
+        let mut rng = fastrand::Rng::new();
         let parents = offspring.parents.as_ref().expect("Missing parents");
         parents[0].borrow_mut().alleles = Some(parents_alleles[0]);
         parents[1].borrow_mut().alleles = Some(parents_alleles[1]);        
-        offspring.assign_alleles(recombination_prob, 0, &rng, false)?;
+        offspring.assign_alleles(recombination_prob, 0, &mut rng, false)?;
         Ok(())
     }
 
@@ -522,14 +522,14 @@ mod tests {
 
     fn alleles_assignment_founder() {
         let mut ind = common::mock_founder("parent");
-        let result = ind.assign_alleles(0.0, 0, &fastrand::Rng::new(), false);
+        let result = ind.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false);
         assert!(result.is_err())
     }
 
     #[test]
     fn alleles_assignments_unnassigned_parent_alleles(){
         let mut ind = common::mock_offspring("offspring", None);
-        let result = ind.assign_alleles(0.0, 0, &fastrand::Rng::new(), false);
+        let result = ind.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false);
         assert!(result.is_err())
     }
 

@@ -245,7 +245,7 @@ impl Pedigrees {
             pedigree.update_founder_alleles(reader, &mut self.rng)?;
 
             // --------------------- Compute offspring genomes
-            pedigree.compute_offspring_alleles(interval_prob_recomb, i, &self.rng, xchr_mode)?;
+            pedigree.compute_offspring_alleles(interval_prob_recomb, i, &mut self.rng, xchr_mode)?;
 
             // --------------------- Compare genomes.
             pedigree.compare_alleles(cont_af, pileup_error_probs, &mut self.rng)?;

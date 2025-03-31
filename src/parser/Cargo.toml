@@ -13,15 +13,15 @@
   path = "src/lib.rs"
 
 [dependencies]
-  located-error = {path = "../located-error"}
-  clap          = {version = "3.2", features = ["derive"]}
+  located-error = {workspace = true}
+  clap          = {workspace = true}
+  chrono        = {workspace = true}
+  log           = {workspace = true}
+  fastrand      = {workspace = true}
+  thiserror     = {workspace = true}
+  anyhow        = {workspace = true}
+  serde_yaml    = {workspace = true}
   serde         = {version = "1.0",   features = ["derive"]} 
-  serde_yaml    = "0.8"
-  chrono        = "0.4"
-  log           = "0.4.16"
   num           = "0.4.0"
-  fastrand      = "1.8.0"
-  thiserror     = "1.0"
-  anyhow        = "1.0"
-  expanduser   = "1.2.0"
+  expanduser    = "1.2.0"
 

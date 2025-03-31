@@ -135,7 +135,7 @@ impl Pedigree {
     /// # Panics
     /// - if any individual's `self.parents` is set to none `None` (i.e. Individual is a founder.)
     #[inline]
-    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, rng: &fastrand::Rng, xchr_mode: bool) -> Result<()> {
+    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, rng: &mut fastrand::Rng, xchr_mode: bool) -> Result<()> {
         for mut offspring in self.offsprings_mut() {
             offspring.assign_alleles(interval_prob_recomb, pedigree_index, rng, xchr_mode)
             .with_loc(|| format!("While attempting to assign the alleles of {}", offspring.label))?;
@@ -372,20 +372,20 @@ mod test {
     fn meiosis_assign_alleles_empty_strands(){
         let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
-        offspr.assign_alleles(0.0, 0, &fastrand::Rng::new(), false).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
     }
 
     #[test]
     fn meiosis_assign_alleles_filled_strands(){
-        let rng          = fastrand::Rng::new();
+        let mut rng      = fastrand::Rng::new();
         let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands   = Some([0, 0]);
 
-        let output = offspr.assign_alleles(0.0, 0, &rng, false).expect("Failed to assign alleles");
+        let output = offspr.assign_alleles(0.0, 0, &mut rng, false).expect("Failed to assign alleles");
         assert!(output);
 
-        let output = offspr.assign_alleles(0.0, 0, &rng, false).expect("Failed to assign alleles");
+        let output = offspr.assign_alleles(0.0, 0, &mut rng, false).expect("Failed to assign alleles");
         assert!(!output);
     }
 
@@ -394,7 +394,7 @@ mod test {
         let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands   = Some([0, 0]);
-        offspr.assign_alleles(0.0, 0, &fastrand::Rng::new(), false).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([0, 1]))
     }
 
@@ -404,7 +404,7 @@ mod test {
         let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands   = Some([1, 1]);
 
-        offspr.assign_alleles(0.0, 0, &fastrand::Rng::new(), false).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([1, 0]));
         assert_eq!(offspr.currently_recombining, [false, false]);
 
@@ -415,7 +415,7 @@ mod test {
         let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands   = Some([0, 1]);
-        offspr.assign_alleles(1.0, 0, &fastrand::Rng::new(), false).expect("Failed to assign alleles");
+        offspr.assign_alleles(1.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([1, 1]));
         assert_eq!(offspr.currently_recombining, [true, true]);
 
