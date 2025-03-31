@@ -12,18 +12,19 @@
   path = "tests/test-coordinate-derive.rs"
 
 [dependencies]
-  located-error     = {path = "../located-error" }
-  coordinate-derive = {path = "src/coordinate-derive"}
-  itertools         = "0.12.0"
+  located-error     = {workspace = true}
+  fastrand          = {workspace = true}
+  coordinate-derive = {workspace = true}
+  itertools         = {workspace = true}
+  log               = {workspace = true}
+  anyhow            = {workspace = true}
+  thiserror         = {workspace = true}
+  ahash             = {workspace = true}
   rust-lapper       = "1.0.0"
-  log               = "0.4.16"
-  anyhow            = "1.0"
-  thiserror         = "1.0"
-  ahash             = "0.8.5"
 
 [dev-dependencies]
   float-cmp         = "0.9.0"
-  rand              = "0.8.5"
+  tempfile          = {workspace = true}
 
 
 

@@ -81,7 +81,13 @@ pub fn run<'a>(
     // ----------------------------- Parse requested Chromosomes
     let valid_chromosomes : Vec<u8> = match com_cli.chr.clone() {
         None         => genome.keys().copied().map(|x| x.into()).collect(),
-        Some(vector) => parser::parse_user_ranges(&vector, "chr")?
+        Some(vector) => {
+            let vec: Vec<String> = vector.into_iter().map(|c| match c.as_ref() {
+                "X" | "chrX" => "88".to_string(),
+                other => other.to_string()
+            }).collect::<Vec<String>>();
+            parser::parse_user_ranges(&vec, "chr")?
+        }
     };
     info!("Valid chromosomes: {:?}", valid_chromosomes);
 
@@ -95,11 +101,11 @@ pub fn run<'a>(
     // ---------------------------- Read Pileup
     info!("Parsing pileup...");   
     let loc_msg = {|c: &Coordinate| format!("While parsing coordinate coordinate: {c}")};
-    for entry in pileup_reader.lines() {
+    for (i, entry) in pileup_reader.lines().enumerate() {
         // ----------------------- Parse line.
         let entry = entry?;
         let mut line = pileup::Line::new(&entry, !pwd_cli.consider_dels)
-            .loc("While attempting to parse the next pileup line.")?;
+            .with_loc(|| format!("While attempting to parse pileup line n°{}", i+1))?;
 
 
         // ----------------------- Check if line should be skipped.

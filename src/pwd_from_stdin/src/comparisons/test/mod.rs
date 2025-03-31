@@ -8,7 +8,7 @@ pub mod common{
     use crate::pileup::Pileup;
     use genome::Genome;
     use genome::snp::Allele;
-    use rand::prelude::SliceRandom;
+    //use rand::prelude::SliceRandom;
     
     pub const MOCK_IND_INDICES: [usize; 2] = [0, 1];
     pub const MOCK_IND_MINDEPTH: [u16; 2] = [2; 2];
@@ -28,7 +28,8 @@ pub mod common{
     
     
     fn mock_pileup_strings(depth: u16, min_qual: u8) -> Result<(String, String)> {
-        let mut rng = rand::thread_rng();
+        //let mut rng = rand::thread_rng();
+        let mut rng = fastrand::Rng::new();
     
         let nucleotides = ['A', 'C', 'G', 'T'];
         let quals: Vec<char> = std::str::from_utf8( &(min_qual+33..33+33).collect::<Vec<u8>>())?.chars().collect();
@@ -36,8 +37,8 @@ pub mod common{
         let mut bases = String::new();
         let mut scores = String::new();
         for _ in 0..depth+1 {
-            bases.push(*nucleotides.choose(&mut rng).ok_or_else(||anyhow!("Empty nucleotide vector in 'mock_pileup_strings'"))?);
-            scores.push(*quals.choose(&mut rng).ok_or_else(||anyhow!("Empty quals vector in 'mock_pileup_strings'"))?);
+            bases.push(*rng.choice(nucleotides.iter()).ok_or_else(||anyhow!("Empty nucleotide vector in 'mock_pileup_strings'"))?);
+            scores.push(*rng.choice(quals.iter()).ok_or_else(||anyhow!("Empty quals vector in 'mock_pileup_strings'"))?);
         }
     
         Ok((bases, scores))

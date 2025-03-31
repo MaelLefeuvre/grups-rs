@@ -1,3 +1,18 @@
+# 0.4.0
+## Features
+- <b><ins>New</ins></b>: `--x-chromosome-mode` and `--sex-specific-mode` features, now allows the use of GRUPS-rs to perform genetic relatedness analysis on the X-chromosome
+
+## Dependencies
+  - Update `fastrand` to version `v2.0.0`
+  - Remove unneeded `rand` dependency in multiple crate
+  - bump `grups.plots` version to `v0.3.2`
+    - new function `grups.plots::plot_all`, allowing non interactive plotting of grups-rs results
+    - Allow the flexible importation of headed `.blk` and `.sims` files
+    - Added Zenodo DOI Badge
+## Quality-of-life
+- `.blk` and `.sims` files now contain a descriptive header
+- Improved compile time, through the harmonization of workspace dependencies and versioning
+
 # 0.3.3
 ## Documentation
 - Update citing information in `README.md` and `grups-rs cite` module.

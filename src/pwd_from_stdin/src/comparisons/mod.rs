@@ -107,7 +107,7 @@ impl Comparisons {
              {: <AVERG_FORMAT_LEN$}{DISPL_SEP}\
              {: <AVERG_FORMAT_LEN$}",
              "Pair_name", "Raw.Overlap", "Raw.Sum.PWD", "Raw.Avg.PWD", "Raw.CI.95", "Raw.Avg.Phred");
-        pwd_writer.write_iter(&vec![header.clone()])?; // Print PWD results to file.
+        pwd_writer.write_iter(vec![&header])?; // Print PWD results to file.
         pwd_writer.write_iter(self.iter())?;   // 
         
         if log::log_enabled!(log::Level::Debug) {
@@ -117,9 +117,19 @@ impl Comparisons {
         }
 
         if print_blocks {
+            use genome::jackknife::{CHROM_FORMAT_LEN, COUNT_FORMAT_LEN, RANGE_FORMAT_LEN};
+            let blk_header = format!(
+            "{: <CHROM_FORMAT_LEN$}{DISPL_SEP}\
+             {: <RANGE_FORMAT_LEN$}{DISPL_SEP}\
+             {: <RANGE_FORMAT_LEN$}{DISPL_SEP}\
+             {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\
+             {: <COUNT_FORMAT_LEN$}",
+             "chr", "start", "end", "overlap", "pwd"
+            );
             for comparison in self.iter() {
                 let pair = comparison.get_pair();
                 let mut block_writer = GenericWriter::new(Some(output_files[&pair].clone()))?;
+                block_writer.write_iter(vec![&blk_header])?;
                 block_writer.write_iter(vec![&comparison.blocks])?;
             }
         }

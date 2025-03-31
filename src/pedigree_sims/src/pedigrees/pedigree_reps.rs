@@ -1,5 +1,6 @@
 use super::pedigree::parser::PedigreeBuilder;
 use super::{Contaminant, Pedigree};
+use crate::pedigrees::constants::REPLICATE_ID_FORMAT_LEN;
 
 use std::{
     collections::HashMap,
@@ -55,17 +56,34 @@ impl PedigreeReps {
     /// - if any of the offspring `self.parents` field is set to None
     /// - if pop label is invalid.
     /// - returns `std::io::result::InvalidData` if an error occurs while parsing the pedigree definition file.
-    pub fn populate(&mut self, pedigree_path: &Path, pop: &String, panel: &PanelReader) -> Result<()> {
+    pub fn populate(&mut self, pedigree_path: &Path) -> Result<()> {
         let loc_msg = |ctxt: &str, i: usize| format!("While attempting to {ctxt} pedigree n°{i}");
         let pedigree_builder = PedigreeBuilder::new(pedigree_path)
             .with_loc(|| format!("While attempting to read the pedigree definition file {}", pedigree_path.display()))?;
         for i in 0..self.inner.capacity() {
-            let mut pedigree = pedigree_builder.build().with_loc(||loc_msg("parse", i))?;
-            pedigree.set_tags(panel, pop, self.contaminants.as_ref()).with_loc(||loc_msg("set population tags of", i))?;
-            pedigree.assign_offspring_strands().with_loc(||loc_msg("assign offspring strands of", i))?;
+            let pedigree = pedigree_builder.build().with_loc(||loc_msg("parse", i))?;
+            //pedigree.set_tags(panel, pop, self.contaminants.as_ref()).with_loc(||loc_msg("set population tags of", i))?;
+            //pedigree.assign_offspring_strands().with_loc(||loc_msg("assign offspring strands of", i))?;
             self.inner.push(pedigree);
         }
         Ok(())
+    }
+
+    pub fn assign_offspring_strands(&mut self) -> Result<()> {
+        self.inner.iter_mut().enumerate().try_for_each(|(i, pedigree)|{
+            pedigree.assign_offspring_strands().with_loc(||format!("While attempting to assign offspring strands of pedigree n°{i}"))
+        })
+    }
+    pub fn set_founder_tags(&mut self, panel: &PanelReader, pop: &String) -> Result<()>{
+        self.inner.iter_mut().enumerate().try_for_each(|(i, pedigree)| {
+            pedigree.set_founder_tags(panel, pop, self.contaminants.as_ref()).with_loc(||format!("While attempting to set population tags of pedigree n°{i}"))
+        })
+    }
+
+    pub fn assign_random_sex(&mut self) -> Result<()> {
+        self.inner.iter_mut().enumerate().try_for_each(|(i, pedigree)| {
+            pedigree.assign_random_sex().with_loc(|| format!("While attempting to randomly assign sex of pedigree n°{i}"))
+        })
     }
 
     /// Aggregate the sum of all simulated pairwise differences for each pedigree comparison.
@@ -118,18 +136,9 @@ impl PedigreeReps {
         }
     }
 
-    //// WIP: heterozygocity ratio
-    //pub fn compute_average_het_ratio(&self) -> HashMap<String, f64>{
-    //    let mut sum_simulated_stats = HashMap::new();
-    //    for pedigree in self.iter() {
-    //        // Sum the avg pwd of each replicate
-    //        for comparison in pedigree.comparisons.iter() {
-    //            *sum_simulated_stats.entry(comparison.label.to_owned()).or_insert(0.0) += comparison.get_heterozygocity_ratio()
-    //        }
-    //    }
-    //    sum_simulated_stats
-    //}
-
+    pub fn all_sex_assigned(&self) -> bool {
+        self.inner.iter().all(|ped| ped.all_sex_assigned())
+    }
 }
 
 impl Deref for PedigreeReps {
@@ -149,7 +158,7 @@ impl std::fmt::Display for PedigreeReps {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.inner.iter().enumerate().try_fold((), |_, (idx, pedigree)| {
             pedigree.comparisons.iter().try_fold((), |_, comparison| {
-                writeln!(f, "{idx} - {comparison}")
+                writeln!(f, "{idx: <REPLICATE_ID_FORMAT_LEN$} - {comparison}")
             })
         })
     }

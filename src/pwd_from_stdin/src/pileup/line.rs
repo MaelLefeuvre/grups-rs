@@ -1,6 +1,6 @@
 use genome::{Nucleotide, SNPCoord, coordinate::{ChrIdx, Position, Coordinate, derive::Coord}, snp::Allele};
 use crate::comparisons::Individual;
-use rand::seq::SliceRandom;
+//use rand::seq::SliceRandom;
 
 use located_error::prelude::*;
 
@@ -77,8 +77,8 @@ impl Line {
     /// Two nucleotide sampled (without replacement).
     #[must_use]
     pub fn random_sample_self(&self, index: &usize) -> Vec<&Nucleotide> {
-        let mut rng = &mut rand::thread_rng();
-        self.individuals[*index].nucleotides.choose_multiple(&mut rng, 2).collect() 
+        let mut rng = fastrand::Rng::new();
+        rng.choose_multiple(self.individuals[*index].nucleotides.iter(), 2) //.choose_multiple(&mut rng, 2).collect() 
     }
 
     /// Apply random sampling on a a pair of individuals for pairwise-comparison.
@@ -86,11 +86,10 @@ impl Line {
     /// @TODO: rng should not be initialized within function.
     #[must_use]
     pub fn random_sample_pair(&self, pair: &[Individual; 2]) -> Option<Vec<&Nucleotide>> {
-        // @TODO: change to fastrand.
-        let mut rng = &mut rand::thread_rng();
+        let mut rng = fastrand::Rng::new();
         Some(vec![ // @TODO: Yuk! change this horrid allocation.
-            self.individuals[pair[0].index].nucleotides.choose(&mut rng)?,
-            self.individuals[pair[1].index].nucleotides.choose(&mut rng)?,
+            rng.choice(self.individuals[pair[0].index].nucleotides.iter())?,
+            rng.choice(self.individuals[pair[1].index].nucleotides.iter())?
         ])
     }
 }

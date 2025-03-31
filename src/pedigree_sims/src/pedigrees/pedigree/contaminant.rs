@@ -66,7 +66,7 @@ impl Contaminant {
                     match allele {
                         0 => {ref_allele_count += 1.0; Ok(())},
                         1 => {alt_allele_count += 1.0; Ok(())},
-                        n => Err(anyhow!("Contaminating individual is multiallelic: {n}"))
+                        n => Err(anyhow!("Contaminating individual '{tag}' is multiallelic: {n}"))
                     }
                 }).loc(loc_msg)?;
             }
@@ -102,7 +102,7 @@ mod tests {
         let mut id = 0;
         for (i, num) in nums.into_iter().enumerate() {
             for _ in 0..num {
-                let new_tag = SampleTag::new(id.to_string().as_str(), None);
+                let new_tag = SampleTag::new(id.to_string().as_str(), None, None);
                 sample_tags[i].push(new_tag);
                 id+=1;
             }

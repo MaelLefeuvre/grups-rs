@@ -375,4 +375,15 @@ mod tests {
         );
         assert_eq!(expect_out, format!("{mock_comparison}"));
     }
+
+    #[test]
+    fn jackknife_estimates() -> anyhow::Result<()> {
+        let mut mock_comparison = common::mock_comparison(false);
+        test_compare(&mut mock_comparison, &[10,20], 'C', ["TATATATATATA", "TATATATATATA"], ["JJJJJJJJJJJJ", "JJJJJJJJJJJJ"])?;
+        test_compare(&mut mock_comparison, &[10,20], 'C', ["TTTTTTAAAAAA", "AAAAAATTTTTT"], ["JJJJJJJJJJJJ", "JJJJJJJJJJJJ"])?;
+
+        let jackknife = mock_comparison.get_jackknife_estimates();
+        assert_eq!(jackknife.estimate, 1.0);
+        Ok(())
+    }
 }

@@ -249,7 +249,29 @@ mod tests {
                 }
             }
         }
+    }
 
+    #[test]
+    fn coord_equality() {
+        let block = JackknifeBlock::new(17, 140_000_000, 160_000_000);
+        // -- Block contains coordinate => equal
+        assert_eq!(block, Coordinate::new(ChrIdx(17), Position(150_000_000))); 
+
+        // -- Block contains coordinate but on a different chromosome => unequal
+        assert_ne!(block, Coordinate::new(ChrIdx(18), Position(150_000_000)));
+
+        // -- Block does not contain coordinate, altough it is on the same chromosome
+        assert_ne!(block, Coordinate::new(ChrIdx(17), Position(30_000_000)));
+
+        // -- Coordinate is adjacent to the block (upper bound)
+        // NB: positions are zero based => should not be equal if Coordinate touches the
+        //     upper bound of the block
+        assert_ne!(block, Coordinate::new(ChrIdx(17), Position(160_000_000)));
+        
+        // -- Coordinate is adjacent to the block (lower bound)
+        // NB: positions are zero based => should be equal if Coordinate touches the
+        //     lower bound of the block
+        assert_eq!(block, Coordinate::new(ChrIdx(17), Position(140_000_000)));
     }
 
 }

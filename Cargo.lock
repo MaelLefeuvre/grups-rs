@@ -256,7 +256,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
 name = "coordinate-derive"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "proc-macro-crate",
  "quote",
@@ -453,15 +453,6 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e51093e27b0797c359783294ca4f0a911c270184cb10f85783b118614a1501be"
-dependencies = [
- "instant",
-]
-
-[[package]]
-name = "fastrand"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "486f806e73c5707928240ddc295403b1b93c96a02038563881c4a2fd84b81ac4"
@@ -525,17 +516,18 @@ checksum = "e575fab7d1e0dcb8d0c7bcf9a63ee213816ab51902e6d244a95819acacf1d4f7"
 
 [[package]]
 name = "genome"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "ahash",
  "anyhow",
  "coordinate-derive",
+ "fastrand",
  "float-cmp",
  "itertools 0.12.1",
  "located-error",
  "log",
- "rand",
  "rust-lapper",
+ "tempfile",
  "thiserror",
 ]
 
@@ -571,11 +563,11 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
 name = "grups-io"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "ahash",
  "anyhow",
- "fastrand 1.9.0",
+ "fastrand",
  "fst",
  "genome",
  "gzp",
@@ -585,18 +577,19 @@ dependencies = [
  "memmap2",
  "mockall",
  "regex",
+ "tempfile",
  "thiserror",
 ]
 
 [[package]]
 name = "grups-rs"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap 3.2.25",
  "coordinate-derive",
  "criterion",
- "fastrand 1.9.0",
+ "fastrand",
  "genome",
  "grups-io",
  "itertools 0.12.1",
@@ -718,15 +711,6 @@ checksum = "707907fe3c25f5424cce2cb7e1cbcafee6bdbe735ca90ef77c29e84591e5b9da"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
-]
-
-[[package]]
-name = "instant"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
-dependencies = [
- "cfg-if",
 ]
 
 [[package]]
@@ -852,7 +836,7 @@ checksum = "78b3ae25bc7c8c38cec158d1f2757ee79e9b3740fbc7ccf0e59e4b08d793fa89"
 
 [[package]]
 name = "located-error"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "thiserror",
@@ -876,7 +860,7 @@ checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 
 [[package]]
 name = "logger"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "env_logger",
@@ -1119,13 +1103,13 @@ checksum = "e2355d85b9a3786f481747ced0e0ff2ba35213a1f9bd406ed906554d7af805a1"
 
 [[package]]
 name = "parser"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
  "clap 3.2.25",
  "expanduser",
- "fastrand 1.9.0",
+ "fastrand",
  "located-error",
  "log",
  "num 0.4.3",
@@ -1136,11 +1120,11 @@ dependencies = [
 
 [[package]]
 name = "pedigree_sims"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "ahash",
  "anyhow",
- "fastrand 1.9.0",
+ "fastrand",
  "fst",
  "genome",
  "grups-io",
@@ -1306,17 +1290,17 @@ dependencies = [
 
 [[package]]
 name = "pwd_from_stdin"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "ahash",
  "anyhow",
+ "fastrand",
  "genome",
  "grups-io",
  "itertools 0.12.1",
  "located-error",
  "log",
  "parser",
- "rand",
  "thiserror",
 ]
 
@@ -1590,7 +1574,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28cce251fcbc87fac86a866eeb0d6c2d536fc16d06f184bb61aeae11aa4cee0c"
 dependencies = [
  "cfg-if",
- "fastrand 2.2.0",
+ "fastrand",
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
@@ -1707,7 +1691,7 @@ checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
 
 [[package]]
 name = "vcf-fst"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "fst",
  "genome",

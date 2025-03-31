@@ -8,23 +8,23 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-  parser         = {path = "../parser"}
-  pwd_from_stdin = {path = "../pwd_from_stdin" }
-  genome         = {path = "../genome"}
-  grups-io       = {path = "../grups-io"}
-  located-error  = {path = "../located-error"}
-  gzp            = "0.9.5"
-  fst            = "0.4"
-  log            = "0.4.16"
+  parser         = {workspace = true}
+  pwd_from_stdin = {workspace = true}
+  genome         = {workspace = true}
+  grups-io       = {workspace = true}
+  located-error  = {workspace = true}
+  log            = {workspace = true}
+  fastrand       = {workspace = true}
+  ahash          = {workspace = true}
+  thiserror      = {workspace = true}
+  anyhow         = {workspace = true}
+  gzp            = {workspace = true}
+  fst            = {workspace = true}
+  memmap2        = {workspace = true}
   rand           = "0.8.5"
-  memmap2        = "0.5.10"
-  fastrand       = "1.8.0"
-  ahash          = "0.8.5"
-  thiserror      = "1.0"
-  anyhow         = "1.0"
-  libsvm         = {version = "0.4.2", git = "https://github.com/MaelLefeuvre/libsvm-rust.git", features=["link"]}
   indexmap       = "2.0.2"
+  libsvm         = {version = "0.4.2", git = "https://github.com/MaelLefeuvre/libsvm-rust.git", features=["link"]}
 [dev-dependencies]
-  mockall        = "0.11.0"
-  itertools      = "0.12.0"
+  itertools      = {workspace = true}
+  mockall        = {workspace = true}
 

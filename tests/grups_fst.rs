@@ -1,30 +1,40 @@
-use clap::Parser;
-
 #[cfg(test)]
 mod common;
-use common::Fixture;
-use common::test_grups_run;
+use common::GrupsRunnerBuilder;
 
 use anyhow::Result;
 
 #[test]
 fn test_grups_fst() -> Result<()> {
-    let vcf_dir    =  Fixture::copy("vcf/binary-2FIN-1ACB-virtual/");
-    let output_dir  = Fixture::blank("test_grups_fst");
 
-    let args = format!("grups fst
-        --vcf-dir    {vcf_dir}
-        --output-dir {output_dir}
-    ");
+    // ---- Create fst index
+    let fst_runner = GrupsRunnerBuilder::new()
+        .module("fst")
+        .set_vcf_dir("vcf/binary-2FIN-1ACB-virtual-autosomes/")
+        .set_output_dir("test_grups_fst")
+        .build()
+        .unwrap();
 
-    eprintln!("{args}");
+    fst_runner.run();
+    // ---- Ensure grups can correctly estimate results using the newly generated FST index.
+    let fst_dir = fst_runner.get_fixture("output-dir").to_string();
+    let pedigree_sims_runner = GrupsRunnerBuilder::new()
+        .module("pedigree-sims")
+        .set_data_dir(fst_dir.as_str())
+        .set_pileup("pileup/parents-offspring.pileup")
+        .set_recomb_dir("recombination-maps/autosomes/")
+        .set_pedigree("pedigree/tiny_pedigree.txt")
+        .set_output_dir("grups-test-output")
+        .set_contam_pop("AFR")
+        .set_samples("0-2")
+        .set_mode(parser::Mode::Fst)
+        .overwrite()
+        .build()
+        .unwrap();
+    pedigree_sims_runner.run();
 
-    let cli = parser::Cli::parse_from(args.split_whitespace());
-    grups_rs::run(cli)?;
-    
-    // Ensure grups can correctly estimate results using the newly generated FST index.
-    test_grups_run(parser::Mode::Fst, &format!("{output_dir}"));
-
+    validate_file!("expect/parents-offspring.pwd", pedigree_sims_runner.output_pwd().unwrap());
+    validate_file!("expect/parents-offspring-fst.result", pedigree_sims_runner.output_results().unwrap());
     Ok(())
 
 }

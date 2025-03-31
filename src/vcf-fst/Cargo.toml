@@ -8,13 +8,13 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-  genome         = {path = "../genome"}
-  pedigree_sims  = {path = "../pedigree_sims" }
-  located-error  = {path = "../located-error"}
-  grups-io       = {path = "../grups-io"}
-  logger         = {path = "../logger"}
-  parser         = {path = "../parser"}
-  fst            = "0.4"
-  log            = "0.4.16"
+  genome         = {workspace = true}
+  pedigree_sims  = {workspace = true}
+  located-error  = {workspace = true}
+  grups-io       = {workspace = true}
+  logger         = {workspace = true}
+  parser         = {workspace = true}
+  fst            = {workspace = true}
+  log            = {workspace = true}
+  thiserror      = {workspace = true}
   rayon          = "1.5.2"
-  thiserror      = "1.0"

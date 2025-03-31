@@ -128,7 +128,6 @@ impl From<Coordinate> for [u8; 5] {
     fn from(value: Coordinate) -> [u8; 5] {
         let mut out: [u8;5] = [0; 5];
         out[0] = u8::from(value.chromosome);
-        // @TODO: this could panic if 
         u32::from(value.position).to_be_bytes().iter().enumerate().for_each(|(i,byte)| out[i+1] = *byte);
         out
     }
@@ -178,6 +177,8 @@ impl FromStr for Coordinate {
 
 #[cfg(test)]
 mod tests {
+    use crate::{SNPCoord, snp::Allele};
+
     use super::*;
 
     #[test]
@@ -187,5 +188,39 @@ mod tests {
         let got  = format!("{:_^18}", Coordinate::new(ChrIdx(chr), Position(pos)));
         println!("want: {want}\ngot : {got}");
         assert_eq!(want, got);
+    }
+
+    #[test]
+    fn from_str_ok() {
+        let chr=ChrIdx(22);
+        let pos=Position(123456);
+        let coord = Coordinate::from_str(&format!("{chr}:{pos}"));
+        assert!(coord.as_ref().is_ok_and(|c| c.chromosome == chr));
+        assert!(coord.as_ref().is_ok_and(|c| c.position   == pos));
+    }
+
+    #[test]
+    fn from_string_err() {
+        assert!(Coordinate::from_str("123456").is_err());
+    }
+
+    #[test]
+    fn try_from_tuple_string(){
+        assert!(Coordinate::try_from(("22", "123456")).is_ok())
+    }
+
+    #[test]
+    fn from_bytes(){
+        let bytes = [17, 7, 91, 205, 21]; // 123456789 u32
+
+        let coord = Coordinate::from(bytes);
+        assert!(coord.chromosome == ChrIdx(17) && coord.position == Position(123456789))
+    }
+
+    #[test]
+    fn genome_coordinate_matches(){
+        let coordinate = Coordinate::new(ChrIdx(10), Position(20));
+        let my_ref     = SNPCoord{coordinate, reference: Allele::A, alternate: Allele::C};
+        assert!(my_ref.matches(&coordinate))
     }
 }

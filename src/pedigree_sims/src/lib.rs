@@ -26,8 +26,8 @@ use pwd_from_stdin::comparisons::Comparisons;
 // -------------------------------------------------------------------------------------------------------------------
 //
 pub fn run(
-    com_cli           : parser::Common,
-    ped_cli           : parser::PedigreeSims,
+    com_cli           : &parser::Common,
+    ped_cli           : &parser::PedigreeSims,
     requested_samples : &[usize],
     comparisons       : &mut Comparisons,
 ) -> Result<()>
@@ -59,13 +59,13 @@ pub fn run(
     // ---- Add final_results files.
     let mut output_files = parse::get_output_files(
         &mut com_cli.get_file_prefix(None)?, // extract the user requested file prefix
-        com_cli.overwrite,                       // Should we allow file overwriting ?
-        FileKey::Ext,                   // What key are we using to hash these files ?
-        &["".to_string()],   // Vector of filename suffixes.
-        &["result"]          // Vector of file extensions.
+        com_cli.overwrite,                   // Should we allow file overwriting ?
+        FileKey::Ext,                        // What key are we using to hash these files ?
+        &["".to_string()],                   // Vector of filename suffixes.
+        &["result"]                          // Vector of file extensions.
     )?;
 
-    // ---- Add blocks files.
+    // ---- Add simulations files.
     output_files.extend(
         parse::get_output_files(
             &mut com_cli.get_file_prefix(Some("simulations/"))?,
@@ -98,11 +98,12 @@ pub fn run(
     // --------------------- Generate empty pedigrees for each Comparison & each requested replicate.
     info!("Initializing pedigree replicates...");
     let mut pedigrees = pedigrees::Pedigrees::initialize(
-        ped_cli.pedigree_pop,
+        &ped_cli.pedigree_pop,
         comparisons,
         &ped_cli.recomb_dir
     )?;
 
+    // -------------------- Populate all pedigree replicates.
     info!("Populating pedigree replicates...");
     pedigrees.populate(
         comparisons,
@@ -110,8 +111,28 @@ pub fn run(
         ped_cli.reps,
         &ped_cli.pedigree,
         &ped_cli.contam_pop,
-        &ped_cli.contam_num_ind
+        &ped_cli.contam_num_ind,
     )?;
+
+    // --------------------- Sanity check: if x-chromosome-mode, sex should be defined by the pedigree at this point
+    if com_cli.x_chromosome_mode && ! pedigrees.all_sex_assigned() {
+        return Err(anyhow!(
+            "Using --x-chromosome-mode without defining sexes within the pedigree definition file will produce invalid results. \
+            For X-chromosome kinship analysis, please provide the software with a pedigree definition file containing sex assignments for every individuals. \
+            Check the documentation for additional information."
+        )).loc("While ensuring proper sex assignment of pedigree individuals before X-chromosome analysis.")
+    } 
+
+    // --------------------- Randomly assign chromosomal sex of samples if requested
+    if ped_cli.sex_specific_mode {
+        pedigrees.assign_random_sex().loc("While attempting to randomly assign sexes of all pedigrees")?
+    }
+
+    // -------------------- Fetch and assign reference sample tags in panel for all founders
+    pedigrees.set_founder_tags(&panel).loc("While attempting to randomly assign founder tags of founder individuals in pedigrees")?;  
+
+    // -------------------- Randomly assign and initialize strand-provenance of offpsrings.
+    pedigrees.assign_offspring_strands().loc("While attempting to randomly assign strand provenance of offpsrings in pedigrees")?;
 
     // --------------------- Assign simulation parameters for each pedigree.
     info!("Assigning simulation parameters...");

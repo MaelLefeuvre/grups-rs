@@ -20,4 +20,7 @@ pub enum PedigreeError {
 
     #[error("Failed to assign allele in individual {0}")]
     FailedAlleleAssignment(String),
+
+    #[error("Failed to assign sex in individual {0}")]
+    FailedSexAssignment(String)
 }

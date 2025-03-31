@@ -8,19 +8,21 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-  located-error  = {path = "../located-error"}
-  genome         = {path = "../genome"}
-  log            = "0.4.16"
-  fastrand       = "1.8.0"
-  gzp            = "0.9.5"
-  ahash          = "0.8.5"
-  fst            = "0.4"
-  memmap2        = "0.5.10"
-  thiserror      = "1.0"
-  anyhow         = "1.0"
-  mockall        = "0.11.0" #@TODO: find a way to put this back in dev-dependencies 
+  located-error  = {workspace = true}
+  genome         = {workspace = true}
+  log            = {workspace = true}
+  fastrand       = {workspace = true}
+  ahash          = {workspace = true}
+  thiserror      = {workspace = true}
+  anyhow         = {workspace = true}
+  memmap2        = {workspace = true}
+  fst            = {workspace = true}
+  gzp            = {workspace = true}
+  mockall        = {workspace = true} #@TODO: find a way to put this back in dev-dependencies 
   regex          = "1.5.0"
   lazy_static    = "1.4"
 
-[dev-dependencies]  
+[dev-dependencies]
+  tempfile          = {workspace = true}
+
 

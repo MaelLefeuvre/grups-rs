@@ -5,10 +5,9 @@ mod pedigree_params;
 pub use pedigree_params::PedigreeParams;
 
 
-use rand::Rng;
+use rand::{Rng, distributions::uniform::SampleUniform};
 use std::fmt::{Debug, Display};
 use std::ops::Range;
-use rand::distributions::uniform::SampleUniform;
 use std::cmp::PartialOrd;
 
 /// Trait defining a pedigree parameter. This struct is mainly leveraged by `super::ParamRateGenerator` to generate

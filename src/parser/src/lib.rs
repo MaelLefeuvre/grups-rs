@@ -214,6 +214,13 @@ pub struct Common {
     /// to force this behaviour.
     #[clap(short='w', long)]
     pub overwrite: bool,
+
+    /// Run GRUPS-rs in X-chromosome comparison mode
+    /// 
+    /// This mode will trigger specific rules of allele transmission and recombination during pedigree 
+    /// simulations, reflective of X-chromosomal inheritance rules.
+    #[clap(short='X', long)]
+    pub x_chromosome_mode: bool,
 }
 
 /// Estimate the raw average genetic PairWise Differences between individuals
@@ -534,6 +541,15 @@ pub struct PedigreeSims {
     /// Computationally inexpensive, but may provide with spurious results, when the different distributions carry drastically different standard deviations. 
     #[clap(long, arg_enum, default_value("svm"))]
     pub assign_method: RelAssignMethod,
+
+    /// Run GRUPS-rs in sex-specific mode
+    /// 
+    /// By default, grups-rs will randomly pick reference samples as founder individuals, without consideration of their 
+    /// original chromosomal sex.
+    /// With the use of --sex-specific-mode, pedigree samples are instead randomly assigned a chromosomal sex, and reference
+    /// samples are selected in accordance with the sex of the considered founder individual.
+    #[clap(long)]
+    pub sex_specific_mode: bool
 }
 
 /// Convert VCF files into sets of FSA-encoded indexes.

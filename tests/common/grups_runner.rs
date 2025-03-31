@@ -1,117 +1,326 @@
+use anyhow::{Result, bail};
 use clap::Parser;
-use std::io::{BufRead, BufReader};
-use std::fs::File;
+use std::collections::HashMap;
+use std::path::Path;
 
 use super::Fixture;
 
-const TEST_PEDIGREE_SIMS_REPS: usize = 10;
-const TEST_PEDIGREE_SIMS_SEED: usize = 42;
+pub const TEST_PEDIGREE_SIMS_REPS: usize = 10;
+pub const TEST_PEDIGREE_SIMS_SEED: usize = 42;
 
-fn get_bufreader(filename: &str) -> BufReader<File> {
-    let inner = File::open(filename)
-        .unwrap_or_else(|_| panic!("Failed to open test output file: {filename}"));
-    BufReader::new(inner)
+#[derive(Default)]
+pub struct GrupsRunnerBuilder<'a> {
+    module: Option<&'a str>,     // any
+    pileup: Option<&'a str>,     // pwd-from-stdin + pedigree-sims
+    targets: Option<&'a str>,    // pwd-from-stdin + pedigree-sims
+    output_dir: Option<&'a str>, // pwd-from-stdin + pedigree-sims + fst
+    samples: Option<&'a str>,    // pwd-from-stdin + pedigree-sims
+    overwrite: bool,             // pwd-from-stdin + pedigree-sims
+    x_chromosome_mode: bool,     // pwd-from-stdin + pedigree-sims
+    exclude_transitions: bool,   // pwd-from-stdin + pedigree-sims
+    pedigree: Option<&'a str>,   // pedigree-sims
+    recomb_dir: Option<&'a str>, // pedigree-sims
+    data_dir: Option<&'a str>,   // pedigree-sims
+    mode: Option<parser::Mode>,  // pedigree-sims
+    reps: Option<usize>,         // pedigree-sims
+    contam_pop: Option<&'a str>, // pedigree-sims
+    sex_specific_mode: bool,     // pedigree-sims
+    seed: Option<usize>,         // pedigree-sims
+    vcf_dir: Option<&'a str>,    // fst
+    pop_subset: Option<&'a str>, // fst
+    compute_pop_afs: bool,       // fst
 }
 
-fn parse_line<'a, E: std::fmt::Debug>(line: &'a Result<String,E>, sep: &str) -> Vec<&'a str> {
-    let line = line.as_ref().expect("Invalid line");
-    line.split(sep).map(|field| field.trim()).collect::<Vec<&str>>()
-}
-
-// @TODO: not really needed anymore. but better safe than sorry.
-fn assert_pwd_matches(
-    filename: &str,
-    expected_overlap: Vec<&str>,
-    expected_avg_pwd: Vec<&str>,
-){
-
-    const OVERLAP_COL: usize = 1;
-    const PWD_COL    : usize = 3;
-
-    let result = get_bufreader(filename);
-
-    for (i, line) in result.lines().skip(1).enumerate(){
-        let line = parse_line(&line, "\t");
-        assert_eq!(line[OVERLAP_COL], expected_overlap[i]);
-        assert_eq!(line[PWD_COL], expected_avg_pwd[i]);
+impl <'a> GrupsRunnerBuilder<'a> {
+    pub fn new() -> Self {
+        Self{..Default::default()}
     }
-}
 
-// @TODO: not really needed anymore. but better safe than sorry.
-fn assert_simulation_results(
-    filename: &str,
-    expected_relationships: Vec<&str>
-) {
-
-    const RELATIONSHIP_COL: usize = 1;
-
-    let result = get_bufreader(filename);
-    for (i, line) in result.lines().skip(1).enumerate(){
-        let line = parse_line(&line, "\t");
-        assert_eq!(line[RELATIONSHIP_COL], expected_relationships[i]);
-        //assert_eq!(line[PWD_COL], expected_avg_pwd[i]);
+    pub fn module(mut self, module: &'a str) -> Self {
+        self.module = Some(module);
+        self
     }
+
+    pub fn set_mode(mut self, mode: parser::Mode) -> Self {
+        self.mode = Some(mode);
+        self
+    }
+
+    pub fn set_data_dir(mut self, path: &'a str) -> Self {
+        self.data_dir = Some(path);
+        self
+    }
+
+    pub fn set_recomb_dir(mut self, path: &'a str) -> Self {
+        self.recomb_dir = Some(path);
+        self
+    }
+
+    pub fn set_output_dir(mut self, path: &'a str) -> Self {
+        self.output_dir = Some(path);
+        self
+    }
+
+    pub fn set_pileup(mut self, path: &'a str) -> Self {
+        self.pileup = Some(path);
+        self
+    }
+
+    pub fn set_pedigree(mut self, path: &'a str) -> Self {
+        self.pedigree = Some(path);
+        self
+    }
+
+    #[allow(unused)]
+    pub fn set_targets(mut self, path: &'a str) -> Self {
+        self.targets = Some(path);
+        self
+    }
+
+    pub fn set_samples(mut self, samples: &'a str) -> Self {
+        self.samples = Some(samples);
+        self
+    }
+
+    #[allow(unused)]
+    pub fn set_reps(mut self, reps: usize) -> Self {
+        self.reps = Some(reps);
+        self
+    }
+
+    #[allow(unused)]
+    pub fn set_seed(mut self, seed: usize) -> Self {
+        self.seed = Some(seed);
+        self
+    }
+
+    pub fn set_contam_pop(mut self, pop: &'a str) -> Self {
+        self.contam_pop = Some(pop);
+        self
+    }
+
+    pub fn overwrite(mut self) -> Self {
+        self.overwrite = true;
+        self
+    }
+
+    #[allow(unused)]
+    pub fn x_chromosome_mode(mut self) -> Self {
+        self.x_chromosome_mode = true;
+        self
+    }
+
+    #[allow(unused)]
+    pub fn exclude_transitions(mut self) -> Self {
+        self.exclude_transitions = true;
+        self
+    }
+
+    #[allow(unused)]
+    pub fn sex_specific_mode(mut self) -> Self {
+        self.sex_specific_mode = true;
+        self
+    }
+
+    #[allow(unused)]
+    pub fn set_vcf_dir(mut self, vcf_dir: &'a str) -> Self {
+        self.vcf_dir = Some(vcf_dir);
+        self
+    }
+
+    #[allow(unused)]
+    pub fn set_pop_subset(mut self, pop_subset: &'a str) -> Self {
+        self.pop_subset= Some(pop_subset);
+        self
+    }
+    #[allow(unused)]
+    pub fn compute_pop_afs(mut self) -> Self {
+        self.compute_pop_afs = true;
+        self
+    }
+
+    pub fn build(self) -> Result<GrupsRunner> {
+        let mut args = vec!["grups-rs".to_string()];
+        let mut filestem = None;
+        let mut output_dir = String::from("grups-output");
+        let mut fixtures: HashMap<&'static str, Fixture> = HashMap::new();
+
+        // --- Parse module
+        let Some(module) = self.module else {
+            bail!("No module selected");
+        };
+        args.push(module.to_string());
+        
+
+        // --- pedigree-sims specific
+        if module == "pedigree-sims" {
+            let Some(pedigree) = self.pedigree else {
+                bail!("No specified pedigree")
+            };
+            fixtures.insert("pedigree", Fixture::copy(pedigree));
+            args.push(format!("--pedigree {}", fixtures.get("pedigree").unwrap()));
+
+            let Some(data_dir) = self.data_dir else {
+                bail!("No specified data directory")
+            };
+            fixtures.insert("data-dir", Fixture::copy(data_dir));
+            args.push(format!("--data-dir {}", fixtures.get("data-dir").unwrap()));
+
+            let Some(recomb_dir) = self.recomb_dir else {
+                bail!("No specified recombination directory");
+            };
+            fixtures.insert("recomb-dir", Fixture::copy(recomb_dir));
+            args.push(format!("--recomb-dir {}", fixtures.get("recomb-dir").unwrap()));
+
+            if let Some(mode) = self.mode {
+                let mode_str = match mode {
+                    parser::Mode::Vcf     => "vcf",
+                    parser::Mode::Fst     => "fst",
+                    parser::Mode::FstMmap => "fst-mmap",
+                };
+
+                args.push(format!("--mode {mode_str}"));
+            }
+
+            match self.reps {
+                Some(arg) => args.push(format!("--reps {arg}")),
+                None      => args.push(format!("--reps {TEST_PEDIGREE_SIMS_REPS}"))
+            }
+
+            match self.seed {
+                Some(arg) => args.push(format!("--seed {arg}")),
+                None      => args.push(format!("--seed {TEST_PEDIGREE_SIMS_SEED}")),
+            }
+
+            if let Some(contam_pop) = self.contam_pop {
+                args.push(format!("--contam-pop {contam_pop}"));
+            }
+
+            if self.sex_specific_mode {
+                args.push("--sex-specific-mode".to_string());
+            }
+        }
+
+        // ---- pwd-from-stdin or pedigree-sims
+        if matches!(module, "pwd-from-stdin" | "pedigree-sims") {
+            let Some(pileup) = self.pileup else {
+                bail!("No specified pileup");
+            };
+            fixtures.insert("pileup", Fixture::copy(pileup));
+            args.push(format!("--pileup {}", fixtures.get("pileup").unwrap()));
+            filestem = Some(Path::new(pileup).file_stem().unwrap().to_string_lossy().to_string());
+
+            if let Some(targets) = self.targets {
+                fixtures.insert("targets", Fixture::copy(targets));
+                args.push(format!("--targets {}", fixtures.get("targets").unwrap()));
+            }
+
+            if let Some(samples) = self.samples {
+                args.push(format!("--samples {samples}"));
+            }
+
+            if self.exclude_transitions {
+                args.push("--exclude-transitions".to_string());
+            }
+
+            if self.x_chromosome_mode {
+                args.push("--x-chromosome-mode".to_string())
+            }
+        }
+
+        if matches!(module, "pwd-from-stdin" | "pedigree-sims" | "fst") {
+            if let Some(dir) = self.output_dir {
+                output_dir = dir.to_string();
+            }
+            fixtures.insert("output-dir", Fixture::blank(&output_dir));
+            args.push(format!("--output-dir {}", fixtures.get("output-dir").unwrap()));
+
+            if self.overwrite {
+                args.push("--overwrite".to_string());
+            }
+        }
+
+        if matches!(module, "fst") {
+            let Some(vcf_dir) = self.vcf_dir else {
+                bail!("No specified vcf directory");
+            };
+            fixtures.insert("vcf-dir", Fixture::copy(vcf_dir));
+            args.push(format!("--vcf-dir {}", fixtures.get("vcf-dir").unwrap()));
+
+            if let Some(pop_subset) = self.pop_subset {
+                args.push(format!("--pop-subset {pop_subset}"));
+            }
+
+            if self.compute_pop_afs {
+                args.push("--compute-pop-afs".to_string());
+            }
+        }
+
+        Ok(GrupsRunner {args, filestem, fixtures, module: module.to_string()})
+    }
+
 }
 
-pub fn test_grups_run(mode: parser::Mode, data_dir: &str) {
-    use parser::Mode::*;
 
-    let mode_str = match mode {
-        Fst | FstMmap => "fst",
-        Vcf           => "vcf",
-    }; 
+pub struct GrupsRunner {
+    args: Vec<String>,
+    filestem: Option<String>,
+    fixtures: HashMap<&'static str, Fixture>,
+    module: String,
+}
 
-    const FILESTEM: &str = "parents-offspring";
-    println!("before: {data_dir}");
-    let data_dir   = Fixture::copy(data_dir);
-    println!("after: {data_dir}");
+impl GrupsRunner {
+    pub fn run(&self) {
+        let args = self.args.join(" ");
+        let cli = parser::Cli::parse_from(args.split_whitespace());
+        grups_rs::run(cli).expect("Failed to run grups using stringified CLI Args");
+    }
 
-    let pileup_dir = Fixture::copy(&format!("pileup/{FILESTEM}.pileup"));
-    let recomb_dir = Fixture::copy("recombination-map/");
-    let pedigree   = Fixture::copy("pedigree/tiny_pedigree.txt");
-    let output_dir = Fixture::blank("grups-test-output");
+    pub fn get_fixture(&self, key: &str) -> &Fixture {
+        self.fixtures.get(key).unwrap()
+    }
 
-    let args = format!("grups pedigree-sims
-        --pileup {pileup_dir}
-        --data-dir {data_dir} 
-        --recomb-dir {recomb_dir}
-        --pedigree {pedigree}
-        --output-dir {output_dir}
-        --overwrite
-        --mode {mode_str}
-        --samples 0-2
-        --reps {TEST_PEDIGREE_SIMS_REPS}
-        --seed {TEST_PEDIGREE_SIMS_SEED}
-        --contam-pop AFR
-    ",);
+    fn filestem(&self) -> String {
+        let output_dir = self.get_fixture("output-dir");
+        let filestem = self.filestem.as_ref().unwrap();
+        format!("{output_dir}/{filestem}")
+    }
 
-    println!("{args}");
+    #[allow(unused)]
+    pub fn simulations_filestem(&self) -> String {
+        let output_dir = self.get_fixture("output-dir");
+        let filestem = self.filestem.as_ref().unwrap();
+        format!("{output_dir}/simulations/{filestem}")
 
-    let cli = parser::Cli::parse_from(args.split_whitespace());
-    grups_rs::run(cli).expect("Failed to run grups using stringified CLI Args");
+    }
 
-    let output_pwd            = format!("{output_dir}/{FILESTEM}.pwd");
-    let output_res            = format!("{output_dir}/{FILESTEM}.result");
-    let expected_overlap   = vec!["107"     , "86"      , "31"      ];
-    let expected_avg_pwd   = vec!["0.186916" , "0.197674" , "0.322581" ];
-    assert_pwd_matches(&output_pwd, expected_overlap, expected_avg_pwd);
+    pub fn output_pwd(&self) -> Option<String> {
+        let output = format!("{}.pwd", self.filestem());
+        match self.module.as_str() {
+            "pedigree-sims" => Some(output),
+            _               => None
+        }
+    }
 
-    // ---- Ensure pwd-from-stdin output results are the same.
-    let want = include_bytes!("../expect/parents-offspring.pwd");
-    let got  = std::fs::read(&output_pwd).unwrap_or_else(|_| panic!("Failed to open {output_res}"));
-    assert_eq!(want.to_vec(), got);
+    pub fn output_results(&self) -> Option<String> {
+        let output = format!("{}.result", self.filestem());
+        match self.module.as_str() {
+            "pwd-from-stdin" |"pedigree-sims" => Some(output),
+            _                                 => None
+        }
+    }
 
-    // ---- Ensure pedigree-sims output results are the same.
-    // Note files are different because simulated pwd will differ depending on the file type,
-    // even with seeding.
-    let want = match mode {
-        Fst | FstMmap   => include_bytes!("../expect/parents-offspring-fst.result"),
-        Vcf             => include_bytes!("../expect/parents-offspring-vcf.result"),
-    };
-    let got = std::fs::read(&output_res).unwrap_or_else(|_| panic!("Failed to open {output_res}"));
-    assert_eq!(want.to_vec(), got);
+    #[allow(unused)]
+    pub fn output_probs(&self) -> Option<String> {
+        let output = format!("{}.probs", self.filestem());
+        match self.module.as_str() {
+            "pwd-from-stdin" |"pedigree-sims" => Some(output),
+            _                                 => None
+        }
+    }
 
-    let output_results            = format!("{output_dir}/{FILESTEM}.result");
-    let expected_relationships   = vec!["First Degree", "First Degree", "Unrelated"];
-    assert_simulation_results(&output_results, expected_relationships);
+    #[allow(unused)]
+    pub fn args(&self) -> Vec<String> {
+        self.args.clone()
+    }
 }

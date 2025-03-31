@@ -6,6 +6,8 @@ use grups_io::read::{
     genotype_reader::GenotypeReader
 };
 
+use genome::Sex;
+
 use fastrand;
 
 use std::{
@@ -23,7 +25,7 @@ pub mod parser;
 mod contaminant;
 pub use contaminant::Contaminant;
 
-mod comparisons;
+pub mod comparisons;
 use comparisons::PedComparisons;
 use comparisons::PedComparison;
 
@@ -133,9 +135,9 @@ impl Pedigree {
     /// # Panics
     /// - if any individual's `self.parents` is set to none `None` (i.e. Individual is a founder.)
     #[inline]
-    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, rng: &fastrand::Rng) -> Result<()> {
+    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, rng: &mut fastrand::Rng, xchr_mode: bool) -> Result<()> {
         for mut offspring in self.offsprings_mut() {
-            offspring.assign_alleles(interval_prob_recomb, pedigree_index, rng)
+            offspring.assign_alleles(interval_prob_recomb, pedigree_index, rng, xchr_mode)
             .with_loc(|| format!("While attempting to assign the alleles of {}", offspring.label))?;
         }
         Ok(())
@@ -166,6 +168,14 @@ impl Pedigree {
         Ok(())
     }
 
+    /// Randomly assign the sex of each individual.
+    pub fn assign_random_sex(&mut self) -> Result<()> {
+        for mut offspring in self.offsprings_mut() {
+            offspring.assign_random_sex().with_loc(||PedigreeError::FailedSexAssignment(offspring.label.clone()))?;
+        }
+        Ok(())
+    }
+
     /// Instantiate and include a new individual within this pedigree. 
     /// # Fields:
     /// - `label`  : name of the individual (e.g. "child")
@@ -174,7 +184,7 @@ impl Pedigree {
     ///
     /// # Errors: 
     /// - returns `std::io::result::InvalidInput` If any of the parents cannot be found within `self.individuals`
-    pub fn add_individual(&mut self, label: &str, parents: Option<(&str, &str)>) -> std::io::Result<()>{
+    pub fn add_individual(&mut self, label: &str, parents: Option<(&str, &str)>, sex: Option<Sex>) -> std::io::Result<()>{
         use std::io::ErrorKind::InvalidInput;
         let parents = match parents {
             None => None,
@@ -184,7 +194,7 @@ impl Pedigree {
                 Some([parent1, parent2])
             },
         };
-        let ind = Rc::new(RefCell::new(Individual::new(label, parents)));
+        let ind = Rc::new(RefCell::new(Individual::new(label, parents, sex)));
         self.individuals.insert(label.to_owned(), ind);
         Ok(())
     }
@@ -271,7 +281,7 @@ impl Pedigree {
     /// 
     /// #Errors:
     /// - if `pop` name is invalid.
-    pub fn set_tags(&mut self, panel: &PanelReader, pop: &String, contaminants: Option<&Contaminant>) -> Result<()>{
+    pub fn set_founder_tags(&mut self, panel: &PanelReader, pop: &String, contaminants: Option<&Contaminant>) -> Result<()>{
         use PedigreeError::{MissingContaminant, MissingSampleTag};
         self.pop = Some(pop.to_owned());
 
@@ -282,8 +292,7 @@ impl Pedigree {
         for mut founder in self.founders_mut() {
 
             // ---- Pick a random SampleTag from our panel.
-            let random_tag = panel.random_sample(pop, Some(&exclude_tags))?.with_loc(||MissingSampleTag)?;
-            
+            let random_tag = panel.random_sample(pop, Some(&exclude_tags), founder.sex)?.with_loc(||MissingSampleTag)?; 
             founder.set_tag(random_tag.clone());
             exclude_tags.push(random_tag); // Exclude this pedigree individual for other iterations.
         };
@@ -295,6 +304,10 @@ impl Pedigree {
         for ind in self.individuals.values_mut(){
             ind.borrow_mut().clear_alleles()
         }
+    }
+
+    pub fn all_sex_assigned(&self) -> bool {
+        self.individuals.values().all(|ind| ind.borrow().is_sex_assigned())
     }
 
 }
@@ -309,63 +322,89 @@ impl Default for Pedigree {
 mod test {
     use super::*;
 
-    fn test_pedigree() -> std::io::Result<Pedigree> {
+    fn test_pedigree_set() -> std::io::Result<Pedigree> {
         let mut pedigree = Pedigree::new();
-        pedigree.add_individual("father", None)?;
-        pedigree.add_individual("mother", None)?;
-        pedigree.add_individual("offspr", Some(("father", "mother")))?;
-
+        pedigree.add_individual("father", None, None)?;
+        pedigree.add_individual("mother", None, None)?;
+        pedigree.add_individual("offspr", Some(("father", "mother")), None)?;
+    
         let mut father = pedigree.get_mutind(&"father".to_string()).expect("Cannot extract father");
         father.set_alleles([0, 1]);
         drop(father);
-
+    
         let mut mother = pedigree.get_mutind(&"mother".to_string()).expect("Cannot extract mother");
         mother.set_alleles([1, 0]);
         drop(mother);
+    
+    
+        Ok(pedigree)
+    }
 
+    type TestPedDef = Vec<(&'static str, Option<(&'static str, &'static str)>)>;
+    
+    fn test_pedigree_random(def: Option<TestPedDef>) -> std::io::Result<Pedigree> {
+        let mut pedigree = Pedigree::new();
+        if let Some(map) = def {
+            for (label, parents) in map {
+                println!("{label}, {parents:?}");
+                pedigree.add_individual(label, parents, None)?;
+            }
+            for (_label, ind) in pedigree.individuals.iter_mut() {
+                if ind.borrow().is_founder() {
+                    ind.borrow_mut().set_alleles([fastrand::bool() as u8, fastrand::bool() as u8]);
+                }
+            }
+        } else {
+            let def = Vec::from([
+                ("father", None),
+                ("mother", None),
+                ("offspr", Some(("father", "mother")))
+            ]);
+            return test_pedigree_random(Some(def))
+        }
 
         Ok(pedigree)
     }
 
+
     #[test]
     #[should_panic]
     fn meiosis_assign_alleles_empty_strands(){
-        let mut pedigree = test_pedigree().expect("Cannot generate test pedigree");
+        let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
-        offspr.assign_alleles(0.0, 0, &fastrand::Rng::new()).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
     }
 
     #[test]
     fn meiosis_assign_alleles_filled_strands(){
-        let rng = fastrand::Rng::new();
-        let mut pedigree = test_pedigree().expect("Cannot generate test pedigree");
-        let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
-        offspr.strands= Some([0,0]);
+        let mut rng      = fastrand::Rng::new();
+        let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
+        let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
+        offspr.strands   = Some([0, 0]);
 
-        let output = offspr.assign_alleles(0.0, 0, &rng).expect("Failed to assign alleles");
+        let output = offspr.assign_alleles(0.0, 0, &mut rng, false).expect("Failed to assign alleles");
         assert!(output);
 
-        let output = offspr.assign_alleles(0.0, 0, &rng).expect("Failed to assign alleles");
+        let output = offspr.assign_alleles(0.0, 0, &mut rng, false).expect("Failed to assign alleles");
         assert!(!output);
     }
 
     #[test]
     fn meiosis_check_strands_00() {
-        let mut pedigree = test_pedigree().expect("Cannot generate test pedigree");
-
-        let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
-        offspr.strands= Some([0,0]);
-        offspr.assign_alleles(0.0, 0, &fastrand::Rng::new()).expect("Failed to assign alleles");
+        let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
+        let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
+        offspr.strands   = Some([0, 0]);
+        offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([0, 1]))
     }
 
     #[test]
     fn meiosis_check_strands_01() {
-        let mut pedigree = test_pedigree().expect("Cannot generate test pedigree");
-        let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
-        offspr.strands= Some([1,1]);
+        let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
+        let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
+        offspr.strands   = Some([1, 1]);
 
-        offspr.assign_alleles(0.0, 0, &fastrand::Rng::new()).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([1, 0]));
         assert_eq!(offspr.currently_recombining, [false, false]);
 
@@ -373,12 +412,44 @@ mod test {
 
     #[test]
     fn meiosis_check_recombination() {
-        let mut pedigree = test_pedigree().expect("Cannot generate test pedigree");
-        let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
-        offspr.strands= Some([0,1]);
-        offspr.assign_alleles(1.0, 0, &fastrand::Rng::new()).expect("Failed to assign alleles");
+        let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
+        let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
+        offspr.strands   = Some([0, 1]);
+        offspr.assign_alleles(1.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([1, 1]));
         assert_eq!(offspr.currently_recombining, [true, true]);
 
+    }
+
+    #[test]
+    fn assign_offspring_strands() -> Result<()> {
+        let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
+        pedigree.assign_offspring_strands()?;
+        Ok(())
+    }
+
+    #[test]
+    fn assign_sex() -> Result<()> {
+        let def = Vec::from([
+            ("F1.1", None),
+            ("F1.2", None),
+            ("F1.3", None),
+            ("F2.1", None),
+            ("O2.2", Some(("F1.1", "F1.2"))),
+            ("O2.3", Some(("F1.1", "F1.2"))),
+            ("F2.4", None),
+            ("02.5", Some(("F1.2", "F1.3"))),
+            ("O3.1", Some(("F2.1", "O2.2"))),
+            ("O3.2", Some(("O2.3", "F2.4")))
+            
+        ]);
+        for _ in 0..1000 {
+            let mut pedigree = test_pedigree_random(Some(def.clone())).unwrap();//.expect("Cannot generate test pedigree");
+            pedigree.assign_random_sex()?;
+            for (_label, ind) in pedigree.individuals.iter() {
+                assert!(ind.borrow().sex.is_some());
+            }
+        }
+        Ok(())
     }
 }
