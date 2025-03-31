@@ -216,6 +216,9 @@ pub struct Common {
     pub overwrite: bool,
 
     /// Run GRUPS-rs in X-chromosome comparison mode
+    /// 
+    /// This mode will trigger specific rules of allele transmission and recombination during pedigree 
+    /// simulations, reflective of X-chromosomal inheritance rules.
     #[clap(short='X', long)]
     pub x_chromosome_mode: bool,
 }

@@ -1,6 +1,7 @@
 /target
 manual-test-data/
-grups-rs-benchmark/
+resources/grups-rs-benchmark
+resources/run-hyperfine
 /grups-output
 lcov.info
 .vscode/

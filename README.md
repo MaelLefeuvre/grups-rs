@@ -544,9 +544,10 @@ COMPARE second         Ind2  Ind7
 COMPARE Unrelated      Ind1  Ind2
 ```
 
-**Legacy format**:
+<b><ins>Legacy format</b></ins>:
 
-Alternatively, one could also define this family tree using the legacy format of `GRUPS` in such a manner
+Alternatively, one could also define this family tree using the legacy format of `GRUPS` in such a manner: <b><inb><details><summary>Legacy format (click to unroll)</summary></ins></b>
+
 ```python
 # legacy format
 INDIVIDUALS
@@ -573,11 +574,65 @@ second=compare(Ind2,Ind7)         # Compare Ind2 and Ind7. label this relationsh
 unrelated=compare(Ind1,Ind2)      # Compare Ind1 and Ind2. label this relationship as 'unrelated'
 ```
 
-Note that founder individuels (i.e. `Ind1`, `Ind2` and `Ind6`) are only defined in the `INDIVIDUALS` section and do *not* require to be defined in the `RELATIONSHIPS` section.  
+Note that founder individuals (i.e. `Ind1`, `Ind2` and `Ind6`) are only defined in the `INDIVIDUALS` section and do *not* require to be defined in the `RELATIONSHIPS` section.  
+
+</details>
+<br>
 
 Other example pedigree definition files may be found in the [resources/pedigrees](/resources/pedigrees) subdirectory of this repository.
 
+### Specifying A genetic sex for simulated individuals 
+
+Starting at version `v0.4.0`, Pedigree definition files may optionally contain an additional columns specifying information regarding the chromosomal sex of the individuals. This feature is only relevant when genetic relatedness analysis on the X-chromosoma, using [`--x-chromosome-mode`](#-x--x-chromosome-mode) (see section: [X-chromosomal analysis](#running-x-chromosomal-kinship-analysis-with-grups-rs) )or when using `--sex-specific-mode` 
+
+A usable file is available for convenience here: [resources/pedigrees/chrX-pedigree.ped](/resources/pedigrees/chrX-pedigree.ped). 
+
+An example of this optional column can be seen here :
+<details><summary>Example X-chromosome aware pedigree (click to unroll) </summary>
+
+  ```text
+  # First section: define the pedigree's topology
+  iid         fid     mid     sex
+  father      0       0       1
+  mother      0       0       2
+  son1        father  mother  1
+  son2        father  mother  1
+  daughter1   father  mother  2
+  daughter2   father  mother  2
+  ```
+
+</details>
+<br>
+
 ---
+
+## Applying genetic relatedness analysis on the X-chromosome with GRUPS-rs
+
+Starting at version `v0.4.0`, GRUPS-rs now carries the ability to perform genetic relatedness analysis and pedigree simulations on the X-chromosome. Using `GRUPS-rs` in this mode will however require the use of specific pedigree definition files and panels
+
+1. Your pedigree definition file `must` specify the sex of every simulated individual for this type of analysis to make sense. See the dedicated section here: [Specifying A genetic sex for simulated individuals](#specifying-a-genetic-sex-for-simulated-individuals). Example pedigree files may be consulted here in the [resources/pedigrees](/resources/pedigrees/) directory.
+
+2. We *strongly* recommend that the provided [Input panel definition file](#2-input-panel-definition-file) contain an additional column specifying the sex of every reference individual, as in:
+    ```txt
+    HG00171 FIN     EUR     female
+    HG00181 FIN     EUR     male
+    HG01882 ACB     AFR     male
+    ```
+    ### The `fst` module: Encoding VCF files as a set of deterministic Finite State Acceptors
+
+3. The set of [`.fst`](#the-fst-module-encoding-vcf-files-as-a-set-of-deterministic-finite-state-acceptors), or `vcf` files, provided trough the [`-F`|`--data-dir`](#-f--data-dir) parameter should of course contain genotype targets for the X-chromosome.
+
+Once these conditions are met, one may use GRUPS-rs with the [`-X`|`--x-chromosome-mode`](#-x--x-chromosome-mode) argument, to specifically estimate genetic relatedness on X-chromosome:
+```bash
+grups-rs pedigree-sims --x-chromosome-mode --mode fst                         \
+--data-dir tests/test-data/fst/binary-2FIN-1ACB-virtual-chrX/                 \
+--recomb-dir tests/test-data/recombination-maps/chrX/                         \
+--pileup tests/test-data/pileup/ash128-ash133.virtual.min-depth-5.chrX.pileup \
+--pedigree resources/pedigrees/chrX-pedigree.ped                              \
+--contam-pop AFR                                                              \
+--reps 1000                                                                   \
+--versbose
+```
 
 ## Output Files
 
@@ -765,6 +820,13 @@ Note that the length of the provided vector does not need to be the same as the 
 | 3      | 2     | 
 | 4      | 3     | 
 
+###### `-X`|`--X-chromosome-mode`
+Run GRUPS-rs in X-chromosome comparison mode.
+
+This mode will trigger specific rules of allele transmission and recombination during pedigree simulations, reflective of X-chromosomal inheritance rules.
+Note that this mode requires the use of specific pedigree definition files and panels, containing information regarding the chromosomal sex of individuals. See the dedicated
+section regarding the use of this mode here: [Applying genetic relatedness analysis on the X-chromosome with GRUPS-rs](#applying-genetic-relatedness-analysis-on-the-x-chromosome-with-grups-rs)
+
 #### Optional flags 
 ###### `-f`|`--filter-sites`
 Do not perform comparison, but rather print out the pileup lines where a comparison
@@ -935,6 +997,13 @@ By default, `grups-rs` will automatically search for a file ending with the `.pa
 Number of additional parallel decompression threads.
  
 Can increase performance when working with BGZF compressed `.vcf.gz` files. Note that this parameter has no effect when working with uncompressed `.vcf` or `.fst[.frq]` files.
+
+###### `--sex-specific-mode`
+Run GRUPS-rs in sex-specific mode
+
+By default, grups-rs will randomly pick reference samples as founder individuals, without consideration of their original chromosomal sex.
+With the use of `--sex-specific-mode`, pedigree samples are instead randomly assigned a chromosomal sex. Reference samples are then selected
+in accordance with the sex of the considered founder individual.
 
 ###### `--seed`
 Provide the random number generator with a set seed.
