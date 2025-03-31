@@ -13,6 +13,17 @@
 - `.blk` and `.sims` files now contain a descriptive header
 - Slower compile time, through the harmonization of workspace dependencies and versioning
 
+# 0.3.3
+## Documentation
+- Update citing information in `README.md` and `grups-rs cite` module.
+
+## Minor changes
+- Update Cargo.lock
+- Remove unneeded `atty` dependency (Not this change bumps the MSRV to `cargo>=1.70.0`)
+
+## Bugfixes
+- Prevent the program from displaying signed zeroes (i.e.: `-0.0`) on `x32`bit architectures
+- Fix grups.plots submodule URL format (set it back to http)
 
 # 0.3.2
 ## Features
