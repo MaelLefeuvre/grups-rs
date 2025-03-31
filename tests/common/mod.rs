@@ -1,10 +1,8 @@
-#[cfg(test)]
-mod fixture;
-pub use fixture::Fixture;
+#[cfg(test)] mod fixture;
+#[cfg(test)] pub use fixture::Fixture;
 
-#[cfg(test)]
-mod grups_runner;
-pub use grups_runner::GrupsRunnerBuilder;
+#[cfg(test)] mod grups_runner;
+#[cfg(test)] pub use grups_runner::GrupsRunnerBuilder;
 
 #[macro_export]
 macro_rules! validate_file {

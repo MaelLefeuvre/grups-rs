@@ -1,7 +1,7 @@
 
-const CHROM_FORMAT_LEN: usize = 4;
-const RANGE_FORMAT_LEN: usize = 15;
-const COUNT_FORMAT_LEN: usize = 5;
+pub const CHROM_FORMAT_LEN: usize = 4;
+pub const RANGE_FORMAT_LEN: usize = 15;
+pub const COUNT_FORMAT_LEN: usize = 5;
 
 mod jackknife_block;
 pub use jackknife_block::JackknifeBlock;

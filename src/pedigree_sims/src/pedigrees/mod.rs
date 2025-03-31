@@ -29,7 +29,21 @@ use error::PedigreeError;
 
 mod pedigree_sim_builder;
 
+pub mod constants;
+use constants::{
+    REPLICATE_ID_FORMAT_LEN,
+    COMPARISON_LABEL_FORMAT_LEN,
+    IND_LABEL_FORMAT_LEN,
+    IND_TAG_FORMAT_LEN,
+    PWD_FORMAT_LEN,
+    OVERLAP_FORMAT_LEN,
+    AVG_PWD_FORMAT_LEN,
+    SEX_FORMAT_LEN,
+    FLOAT_FORMAT_PRECISION
+};
+
 use crate::svm::LibSvmBuilder;
+
 
 /// A Pedigree simulator, aggregating all pileup-comparison pedigree simulation replicates.
 /// # Fields
@@ -458,7 +472,20 @@ impl Pedigrees {
 
         // --------------------- Print pedigree simulation results.
         trace!("Printing pairwise simulation results:");
-
+        let simulations_header = format!(
+            "{: <REPLICATE_ID_FORMAT_LEN$} - \
+            {: <COMPARISON_LABEL_FORMAT_LEN$} - \
+            {: <IND_LABEL_FORMAT_LEN$} - \
+            {: <IND_LABEL_FORMAT_LEN$} - \
+            {: <IND_TAG_FORMAT_LEN$} - \
+            {: <IND_TAG_FORMAT_LEN$} - \
+            {: >PWD_FORMAT_LEN$} - \
+            {: >OVERLAP_FORMAT_LEN$} - \
+            {: <AVG_PWD_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$} - \
+            {: <SEX_FORMAT_LEN$} - \
+            {: <SEX_FORMAT_LEN$}",
+            "replicate", "label", "parent0", "parent1", "parent0.id", "parent1.id", "pwd", "overlap", "avg", "parent0.sex", "parent1.sex"
+        );
         for comparison in comparisons.iter() {
             let comparison_label = comparison.get_pair();
 
@@ -466,10 +493,13 @@ impl Pedigrees {
             let pedigree_vec = self.get_pedigree_vec(&comparison_label).loc(loc_msg)?;
 
             let mut writer = GenericWriter::new(Some(output_files[&comparison_label].clone())).loc(loc_msg)?;
+            writer.write_iter(vec![&simulations_header])?;
             writer.write_iter(vec![&pedigree_vec])?;
 
             if log::log_enabled!(log::Level::Trace) {
-                println!("--------------------- {comparison_label}\n{pedigree_vec}");
+                eprintln!("{comparison_label:-^152}");
+                eprintln!("{simulations_header}");
+                eprintln!("{pedigree_vec}");
             }
         }
         Ok(())

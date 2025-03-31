@@ -25,7 +25,7 @@ pub mod parser;
 mod contaminant;
 pub use contaminant::Contaminant;
 
-mod comparisons;
+pub mod comparisons;
 use comparisons::PedComparisons;
 use comparisons::PedComparison;
 

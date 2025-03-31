@@ -52,7 +52,6 @@ pub fn cite() {
     println!("{CITATIONS}");
 }
 
-/// @TODO : Stay dry...
 pub fn run(cli: Cli) -> Result<()> {
     // ----------------------------- Set seed (randomly assigned by parser-rs if none was provided.)
     if let PedigreeSims{ref ped, common: _, pwd:_ } = cli.commands {

@@ -1,0 +1,9 @@
+pub (crate) const REPLICATE_ID_FORMAT_LEN: usize     = 10;
+pub (crate) const COMPARISON_LABEL_FORMAT_LEN: usize = 20;
+pub (crate) const IND_LABEL_FORMAT_LEN: usize        = 10;
+pub (crate) const IND_TAG_FORMAT_LEN: usize          = 10;
+pub (crate) const PWD_FORMAT_LEN: usize              = 9;
+pub (crate) const OVERLAP_FORMAT_LEN: usize          = 9;
+pub (crate) const AVG_PWD_FORMAT_LEN: usize          = 12;
+pub (crate) const SEX_FORMAT_LEN: usize              = 11;
+pub (crate) const FLOAT_FORMAT_PRECISION: usize      = 6;

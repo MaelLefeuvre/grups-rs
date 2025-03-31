@@ -1,5 +1,6 @@
 use super::pedigree::parser::PedigreeBuilder;
 use super::{Contaminant, Pedigree};
+use crate::pedigrees::constants::REPLICATE_ID_FORMAT_LEN;
 
 use std::{
     collections::HashMap,
@@ -157,7 +158,7 @@ impl std::fmt::Display for PedigreeReps {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.inner.iter().enumerate().try_fold((), |_, (idx, pedigree)| {
             pedigree.comparisons.iter().try_fold((), |_, comparison| {
-                writeln!(f, "{idx} - {comparison}")
+                writeln!(f, "{idx: <REPLICATE_ID_FORMAT_LEN$} - {comparison}")
             })
         })
     }

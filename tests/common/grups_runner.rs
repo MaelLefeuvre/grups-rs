@@ -1,6 +1,5 @@
 use anyhow::{Result, bail};
 use clap::Parser;
-use logger::Logger;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -72,6 +71,7 @@ impl <'a> GrupsRunnerBuilder<'a> {
         self
     }
 
+    #[allow(unused)]
     pub fn set_targets(mut self, path: &'a str) -> Self {
         self.targets = Some(path);
         self
@@ -82,11 +82,13 @@ impl <'a> GrupsRunnerBuilder<'a> {
         self
     }
 
+    #[allow(unused)]
     pub fn set_reps(mut self, reps: usize) -> Self {
         self.reps = Some(reps);
         self
     }
 
+    #[allow(unused)]
     pub fn set_seed(mut self, seed: usize) -> Self {
         self.seed = Some(seed);
         self
@@ -102,31 +104,36 @@ impl <'a> GrupsRunnerBuilder<'a> {
         self
     }
 
+    #[allow(unused)]
     pub fn x_chromosome_mode(mut self) -> Self {
         self.x_chromosome_mode = true;
         self
     }
 
+    #[allow(unused)]
     pub fn exclude_transitions(mut self) -> Self {
         self.exclude_transitions = true;
         self
     }
 
+    #[allow(unused)]
     pub fn sex_specific_mode(mut self) -> Self {
         self.sex_specific_mode = true;
         self
     }
 
+    #[allow(unused)]
     pub fn set_vcf_dir(mut self, vcf_dir: &'a str) -> Self {
         self.vcf_dir = Some(vcf_dir);
         self
     }
 
+    #[allow(unused)]
     pub fn set_pop_subset(mut self, pop_subset: &'a str) -> Self {
         self.pop_subset= Some(pop_subset);
         self
     }
-
+    #[allow(unused)]
     pub fn compute_pop_afs(mut self) -> Self {
         self.compute_pop_afs = true;
         self
@@ -279,6 +286,7 @@ impl GrupsRunner {
         format!("{output_dir}/{filestem}")
     }
 
+    #[allow(unused)]
     pub fn simulations_filestem(&self) -> String {
         let output_dir = self.get_fixture("output-dir");
         let filestem = self.filestem.as_ref().unwrap();
@@ -302,6 +310,7 @@ impl GrupsRunner {
         }
     }
 
+    #[allow(unused)]
     pub fn output_probs(&self) -> Option<String> {
         let output = format!("{}.probs", self.filestem());
         match self.module.as_str() {
@@ -310,6 +319,7 @@ impl GrupsRunner {
         }
     }
 
+    #[allow(unused)]
     pub fn args(&self) -> Vec<String> {
         self.args.clone()
     }

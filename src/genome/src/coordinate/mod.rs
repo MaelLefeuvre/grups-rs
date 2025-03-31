@@ -128,7 +128,6 @@ impl From<Coordinate> for [u8; 5] {
     fn from(value: Coordinate) -> [u8; 5] {
         let mut out: [u8;5] = [0; 5];
         out[0] = u8::from(value.chromosome);
-        // @TODO: this could panic if 
         u32::from(value.position).to_be_bytes().iter().enumerate().for_each(|(i,byte)| out[i+1] = *byte);
         out
     }
