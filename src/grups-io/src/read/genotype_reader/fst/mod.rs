@@ -125,23 +125,6 @@ impl<T: AsRef<[u8]> + SetRead<T>>FSTReader<T> {
         Ok(chromosomes)
     }
 
-    /// Recursively search through the index for a given chromosome and return true if it has been found.
-    /// # Arguments:
-    /// - `chr`: chromosome name to look for.
-    pub fn contains_chr(&self, chr: u8) -> bool {
-        let regex= format!("{chr} ");
-        let mut node = self.genotypes_set.as_fst().root();
-        for b in regex.as_bytes() {
-            match node.find_input(*b) {
-                None => return false,
-                Some(i) => {
-                    node = self.genotypes_set.as_fst().node(node.transition_addr(i));
-                }
-            }
-        }
-        true
-    }
-
     /// @TODO: This should be a macro ?
     #[inline]
     fn format_coordinate_pattern(coord_bytes: &[u8; 5]) -> StartsWith<Str> {
@@ -231,5 +214,167 @@ impl<T: AsRef<[u8]> + SetRead<T>>FSTReader<T> {
         }
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use genome::coordinate::ChrIdx;
     
+    fn fst_line(chr: u8, coord: u32, id: &str, alleles: [u8; 2]) -> Vec<u8> {
+        // ---- {chr(u8)}{pos(u32_be)}{sample_id(chars)}{allele(u8)}{allele(u8)}   
+        let mut line = vec![ChrIdx(chr).into()];
+        line.extend_from_slice(&coord.to_be_bytes());
+        line.extend_from_slice(id.as_bytes());
+        line.extend_from_slice(&alleles.iter().map(|a| a + 48).collect::<Vec<u8>>());
+        line
+    }
+
+    fn frq_line(chr: u8, coord: u32, pop: &str, freq: f32) -> Vec<u8> {
+        // ---- {chr(u8)}{pos(u32_be)}{pop(chars)}{freq(f32_be)}   
+        let mut line = vec![ChrIdx(chr).into()];
+        line.extend_from_slice(&coord.to_be_bytes());
+        line.extend_from_slice(pop.as_bytes());
+        line.extend_from_slice(&freq.to_be_bytes());
+        line
+    }
+
+    fn fake_fst() -> FSTReader<Vec<u8>> {
+        let genotypes_set = Set::from_iter(vec![
+            fst_line(1, 50000, "HG00096", [0, 0]),
+            fst_line(1, 50000, "HG00097", [0, 1]),
+            fst_line(1, 50000, "HG00098", [1, 0]),
+            fst_line(1, 50000, "HG00099", [1, 1]),
+            fst_line(1, 60000, "HG00096", [0, 0]),
+            fst_line(1, 60000, "HG00097", [0, 0]),
+            fst_line(1, 60000, "HG00098", [0, 0]),
+            fst_line(1, 60000, "HG00099", [0, 1]),
+        ]).unwrap();
+
+        let frequency_set = Set::from_iter(vec![
+            frq_line(1, 50000, "AFR", 0.0),
+            frq_line(1, 50000, "EUR", 0.5),
+            frq_line(1, 60000, "AFR", 1.0),
+            frq_line(1, 60000, "EUR", 0.125),
+        ]).unwrap();
+
+        FSTReader::<Vec<u8>>{genotypes_set, frequency_set, genotypes: AHashMap::new(), frequencies: AHashMap::new()}
+    }
+
+    #[test]
+    fn test_get_pop_allele_frequency() {
+        let mut reader = fake_fst();
+        
+        reader.search_coordinate_frequencies(&Coordinate::new(1, 50_000));
+        assert!(reader.get_pop_allele_frequency("EUR").is_ok_and(|freq| freq == 0.5));
+        assert!(reader.get_pop_allele_frequency("AFR").is_ok_and(|freq| freq == 0.0));
+        
+        reader.search_coordinate_frequencies(&Coordinate::new(1, 60_000));
+        assert!(reader.get_pop_allele_frequency("EUR").is_ok_and(|freq| freq == 0.125));
+        assert!(reader.get_pop_allele_frequency("AFR").is_ok_and(|freq| freq == 1.0));
+    }
+
+    #[test]
+    fn test_get_pop_allele_frequency_missing() {
+        let mut reader = fake_fst();
+        reader.search_coordinate_frequencies(&Coordinate::new(1, 50_000));
+        let alleles = reader.get_pop_allele_frequency("SAS"); // Pop not found 
+        assert!(alleles.is_err_and(|e| {
+            matches!(e.downcast_ref::<GenotypeReaderError>(), Some(GenotypeReaderError::MissingFreq(_)))
+        }));
+    }
+    #[test]
+    fn test_get_allele() {
+        let mut reader = fake_fst();
+    
+        reader.search_coordinate_genotypes(&Coordinate::new(1, 50_000));
+        for (sample, want) in [("HG00096", [0, 0]), ("HG00097", [0, 1]), ("HG00098", [1, 0]), ("HG00099", [1, 1])] {
+            let tag = SampleTag::new(sample, None, None);
+            let alleles = reader.get_alleles(&tag);
+            assert!(alleles.is_ok_and(|alleles| alleles == want));
+        }
+        
+        reader.search_coordinate_genotypes(&Coordinate::new(1, 60_000));
+        for (sample, want) in [("HG00096", [0, 0]), ("HG00097", [0, 0]), ("HG00098", [0, 0]), ("HG00099", [0, 1])] {
+            let tag = SampleTag::new(sample, None, None);
+            let alleles = reader.get_alleles(&tag);
+            assert!(alleles.is_ok_and(|alleles| alleles == want));
+        }
+    }
+
+    #[test]
+    fn test_get_allele_missing() {
+        let mut reader = fake_fst();
+        reader.search_coordinate_genotypes(&Coordinate::new(1, 50_000));
+        let alleles = reader.get_alleles(&SampleTag::new("NA0206", None, None)); // Sample not found 
+        assert!(alleles.is_err_and(|e| {
+            matches!(e.downcast_ref::<GenotypeReaderError>(), Some(GenotypeReaderError::MissingAlleles))
+        }));
+    }
+
+    #[test]
+    fn test_clear_buffers() {
+        let mut reader = fake_fst();
+
+        assert!(reader.frequencies.is_empty());
+        assert!(reader.genotypes.is_empty());
+
+        reader.search_coordinate_genotypes(&Coordinate::new(1, 50_000));
+        reader.search_coordinate_frequencies(&Coordinate::new(1, 50_000));
+        assert!(!reader.frequencies.is_empty());
+        assert!(!reader.genotypes.is_empty());
+
+        reader.clear_buffers();
+        assert!(reader.frequencies.is_empty());
+        assert!(reader.genotypes.is_empty());
+    }
+
+    #[test]
+    fn test_has_genotypes() {
+        let mut reader = fake_fst();
+        assert!(!reader.has_genotypes());
+        
+        reader.search_coordinate_frequencies(&Coordinate::new(1, 50_000));
+        assert!(!reader.has_genotypes());
+
+        reader.search_coordinate_genotypes(&Coordinate::new(1, 50_000));
+        assert!(reader.has_genotypes());
+        
+        reader.clear_buffers();
+        assert!(!reader.has_genotypes());
+    }
+
+    #[test]
+    fn test_find_chromosomes() {
+        let genotypes_set = Set::from_iter(vec![
+            fst_line(1, 50000, "HG00096", [0, 0]),
+            fst_line(3, 50000, "HG00098", [1, 0]),
+            fst_line(5, 60000, "HG00096", [0, 0]),
+            fst_line(7, 60000, "HG00097", [0, 0]),
+            fst_line(9, 60000, "HG00098", [0, 0]),
+            fst_line(21, 60000, "HG00099", [0, 1]),
+        ]).unwrap();
+
+        let frequency_set = Set::from_iter(vec![frq_line(1, 50000, "AFR", 0.0)]).unwrap();
+
+        let reader = FSTReader::<Vec<u8>>{genotypes_set, frequency_set, genotypes: AHashMap::new(), frequencies: AHashMap::new()};
+
+        assert!(reader.find_chromosomes().is_ok_and(|v| v == vec![1,3,5,7,9,21]));
+    }
+
+    #[test]
+    fn test_match_input_frq() -> anyhow::Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let fst_path = tmpdir.path().join(format!("genome.{FST_EXT}"));
+        let _ = File::create(&fst_path)?;
+        assert!(FSTReader::<Vec<u8>>::match_input_frq(&fst_path).is_err_and(|e| {
+            matches!(e.downcast_ref::<FSTReaderError>(), Some(FSTReaderError::MatchFrqFile { path: _}))
+        }));
+
+        let frq_path = tmpdir.path().join(format!("genome.{FRQ_EXT}"));
+        let _ = File::create(frq_path)?;
+        assert!(FSTReader::<Vec<u8>>::match_input_frq(&fst_path).is_ok());
+
+        Ok(())
+    }
 }

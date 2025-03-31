@@ -88,3 +88,22 @@ impl std::fmt::Display for SampleTag {
         write!(f, "{}{}", self.id, idx_str)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_equality() {
+        assert_eq!(SampleTag::new("HG00096", None, None), "HG00096");
+        assert_eq!(SampleTag::new("NA02098", None, None), "NA02098");
+        assert_ne!(SampleTag::new("HG00096", None, None), "NA02098");
+    }
+
+    #[test]
+    fn test_partial_cmp() {
+        let reference = SampleTag::new("HG00096", None, None);
+        assert_eq!(reference, SampleTag::new("HG00096", None, None));
+        assert_ne!(reference, SampleTag::new("NA02099", None, None));
+    }
+}

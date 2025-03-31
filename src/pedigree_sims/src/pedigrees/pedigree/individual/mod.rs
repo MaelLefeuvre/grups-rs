@@ -242,7 +242,7 @@ impl Individual {
 
             // ---- Check if recombination occured for each parent and update recombination tracker if so.
             if (!xchr_mode || parent.borrow().sex == Some(Sex::Female)) && rng.f64() < recombination_prob { 
-                trace!("- Cross-over occured in ped: {:<5} - ind: {} (sex: {:?})", ped_idx, self.label, parent.borrow().sex);
+                trace!("- Cross-over occured in ped: {:<5} - ind: {} ({} {:?})", ped_idx, self.label, parent.borrow().label, parent.borrow().sex);
                 self.currently_recombining[i] = ! self.currently_recombining[i];
             }
         }

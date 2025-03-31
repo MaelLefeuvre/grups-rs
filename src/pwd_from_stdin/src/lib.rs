@@ -101,11 +101,11 @@ pub fn run<'a>(
     // ---------------------------- Read Pileup
     info!("Parsing pileup...");   
     let loc_msg = {|c: &Coordinate| format!("While parsing coordinate coordinate: {c}")};
-    for entry in pileup_reader.lines() {
+    for (i, entry) in pileup_reader.lines().enumerate() {
         // ----------------------- Parse line.
         let entry = entry?;
         let mut line = pileup::Line::new(&entry, !pwd_cli.consider_dels)
-            .loc("While attempting to parse the next pileup line.")?;
+            .with_loc(|| format!("While attempting to parse pileup line n°{}", i+1))?;
 
 
         // ----------------------- Check if line should be skipped.

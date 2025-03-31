@@ -23,33 +23,6 @@ fn maybe_to_str(path: &Path) -> Result<&str> {
     path.to_str().ok_or(InvalidFilename).loc("While converting path to string")
 }
 
-/// Obtain predefined filenames from the given output directory and pileup file. Return a `HashMap` with 
-/// K: file-ext, V: Filepath. Right now this only outputs a single file, but is easily scalable.
-///  - {out-dir}/{file-prefix}.pwd -> where summary statistics are printed for pairwise differences. 
-/// 
-/// # Errors
-///  - If creating the parent directories of `file_prefix` is required: will throw a `PermissionDenied`
-///    if the user does not have the proper UNIX permissions
-/// 
-/// # Panics
-/// - If failing to convert `file_prefix` from `PathBuf` to `&str`
-/// 
-pub fn get_results_file_prefix<'a>(file_prefix: &'a mut PathBuf, file_ext: Vec<&'a str>) -> Result<HashMap<&'a str, String>> {
-    // Create output directory. Early return if we can't create it
-    create_parent_directory(file_prefix)?;
-    // Generate a HashMap of filepaths from the file_prefix
-    let mut outfiles_hash = HashMap::with_capacity(file_ext.len());
-    for ext in file_ext {
-        file_prefix.set_extension(ext);
-        let outfile = maybe_to_str(file_prefix).loc("While attempting to generate results file")?;
-        outfiles_hash.insert(ext, outfile.to_string());
-    }
-
-    trace!("Output File(s): {:#?}", outfiles_hash.values());
-    
-    Ok(outfiles_hash)
-}
-
 /// Simple enum for `get_output_files()`
 ///  Suffix => `HashMap` will use provided file suffixes as keys
 ///  Key    => `HashMap` will use provided file extensions as keys 
@@ -156,5 +129,63 @@ pub fn fetch_input_files(input_dir: &Path, extensions: &[&str] ) -> Result<Vec<P
     match files.is_empty() { 
         true  => Err(MissingInput{dir: input_dir.to_path_buf()}).loc(loc_msg),
         false => Ok(files)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    
+    #[test]
+    fn test_fetch_input_files_ok() -> anyhow::Result<()> {
+        // Create a directory inside of std::env::temp_dir()
+        let tmpdir = tempfile::tempdir()?;
+
+        let want = "targets.vcf.gz";
+        for file in ["README.txt", want, "targets.vcf.gz.tbi"] {
+            let path = tmpdir.path().join(file);
+            let _ = File::create(path)?;
+        }
+        let provided_path = tmpdir.path();
+        let files = fetch_input_files(provided_path, &[".vcf.gz"]).expect("Failed to fetch files");
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].file_name().map(Path::new), Some(Path::new(want)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_fetch_input_files_missing_input() -> anyhow::Result<()> {
+        // Create a directory inside of `std::env::temp_dir()`
+        let tmpdir = tempfile::tempdir()?;
+
+        for file in ["README.txt", "targets.vcf.gz", "targets.vcf.gz.tbi"] {
+            let path = tmpdir.path().join(file);
+            let _ = File::create(path)?;
+        }
+        let provided_path = tmpdir.path();
+        let files = fetch_input_files(provided_path, &[".vcf"]);
+        assert!(files.is_err_and(|e| matches!(e.downcast_ref::<ParseError>(), Some(ParseError::MissingInput{dir: _}))));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_can_write_file() -> anyhow::Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+
+        let path   = tmpdir.path().join("README.md");
+        assert!(can_write_file(false, &path).is_ok_and(|x| x)); // No overwrite, no file => should return true
+        assert!(can_write_file(true, &path).is_ok_and(|x| x));  // Overwrite, no file    => should return true
+
+        let _   = File::create(&path)?;
+        assert!(can_write_file(true, &path).is_ok_and(|x| x));  // Overwrite, file       => should return true
+        assert!(can_write_file(false, &path).is_err_and(|e| {   // No overwrite, file       => should error
+            matches!(e.downcast_ref::<ParseError>(), Some(ParseError::OverwriteDisallowed{path: _}))
+        })); 
+
+
+        Ok(())
     }
 }

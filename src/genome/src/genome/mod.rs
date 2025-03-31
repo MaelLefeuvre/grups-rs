@@ -148,3 +148,120 @@ impl Default for Genome {
         ]))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use std::fs::File;
+    use std::io::Write;
+
+    #[test]
+    fn from_fasta_index_fai() -> anyhow::Result<()> {
+        // Create a directory inside of `std::env::temp_dir()`
+        let tmpdir = tempdir()?;
+
+        let file_path = tmpdir.path().join("genome.fa.fai");
+        let mut file = File::create(file_path.clone())?;
+        writeln!(file, "\
+            1\t249250621\t52\t60\t61\n\
+            2\t243199373\t253404903\t60\t61\n\
+            3\t198022430\t500657651\t60\t61\n\
+            4\t191154276\t701980507\t60\t61\n\
+            5\t180915260\t896320740\t60\t61\n\
+            "
+        )?;
+
+        let genome = Genome::from_fasta_index(file_path.to_str().expect("Invalid path")).expect("Failed to generate genome");
+        for chr in [1,2,3,4,5] {
+            println!("{chr} {}", genome.0.contains_key(&ChrIdx(chr)))
+        }
+
+        assert_eq!(genome.0.get(&ChrIdx(1)).expect("Chr 1 not found").length, 249250621);
+        assert_eq!(genome.0.get(&ChrIdx(2)).expect("Chr 2 not found").length, 243199373);
+        assert_eq!(genome.0.get(&ChrIdx(3)).expect("Chr 3 not found").length, 198022430);
+        assert_eq!(genome.0.get(&ChrIdx(4)).expect("Chr 4 not found").length, 191154276);
+        assert_eq!(genome.0.get(&ChrIdx(5)).expect("Chr 5 not found").length, 180915260);
+        Ok(())
+    }
+
+    #[test]
+    fn from_fasta_index_fa() -> anyhow::Result<()> {
+        // Create a directory inside of `std::env::temp_dir()`
+        let tmpdir = tempdir()?;
+
+        let fai_path = tmpdir.path().join("genome.fa.fai");
+        let mut file = File::create(fai_path.clone())?;
+        writeln!(file, "1\t249250621\t52\t60\t61")?;
+
+        let provided_path = tmpdir.path().join("genome.fa");
+        let provided_path = provided_path.as_path().to_str().expect("Failed to create path");
+        let genome = Genome::from_fasta_index(provided_path);
+
+        let genome = genome.expect("Failed to generate genome");
+        assert_eq!(genome.0.get(&ChrIdx(1)).expect("Chr 1 not found").length, 249250621);
+        Ok(())
+    }
+
+    #[test]
+    fn from_fasta_index_fasta() -> anyhow::Result<()> {
+        // Create a directory inside of `std::env::temp_dir()`
+        let tmpdir = tempdir()?;
+
+        let fai_path = tmpdir.path().join("genome.fasta.fai");
+        let mut file = File::create(fai_path.clone())?;
+        writeln!(file, "1\t249250621\t52\t60\t61")?;
+
+        let provided_path = tmpdir.path().join("genome.fasta");
+        let provided_path = provided_path.as_path().to_str().expect("Failed to create path");
+        let genome = Genome::from_fasta_index(provided_path);
+
+        let genome = genome.expect("Failed to generate genome");
+        assert_eq!(genome.0.get(&ChrIdx(1)).expect("Chr 1 not found").length, 249250621);
+        Ok(())
+    }
+
+    #[test]
+    fn skip_chrs() -> anyhow::Result<()> {
+        // Create a directory inside of `std::env::temp_dir()`
+        let tmpdir = tempdir()?;
+        let fai_path = tmpdir.path().join("genome.fa.fai");
+        let mut file = File::create(fai_path.clone())?;
+        writeln!(file, "1\t249250621\t52\t60\t61\nY\t123456789\t52\t60\t61")?;
+        let genome = Genome::from_fasta_index(fai_path.to_str().expect("Invalid path")).expect("Failed to generate genome");
+        assert_eq!(genome.keys().len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn file_not_found() -> anyhow::Result<()> {
+        let tmpdir        = tempdir()?;
+        let fai_path      = tmpdir.path().join("genome.fa.fai");
+        let provided_path = fai_path.to_str().expect("Invalid path");
+        let genome        = Genome::from_fasta_index(provided_path);
+        assert!(genome.is_err_and(|e| matches!(e, FastaIndexReaderError::FileNotFound { path: _, err: _})));
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_ext() -> anyhow::Result<()> {
+        let tmpdir        = tempdir()?;
+        let fai_path      = tmpdir.path().join("genome.txt");
+        let provided_path = fai_path.to_str().expect("Invalid path");
+        let _             = File::create(fai_path.clone())?;
+        let genome        = Genome::from_fasta_index(provided_path);
+        assert!(genome.is_err_and(|e| matches!(e, FastaIndexReaderError::InvalidExt { ext: _ })));
+        Ok(())
+    }
+
+    #[test]
+    fn missing_ext() -> anyhow::Result<()> {
+        let tmpdir        = tempdir()?;
+        let fai_path      = tmpdir.path().join("genome");
+        let provided_path = fai_path.to_str().expect("Invalid path");
+        let _             = File::create(fai_path.clone())?;
+        let genome        = Genome::from_fasta_index(provided_path);
+        assert!(genome.is_err_and(|e| matches!(e, FastaIndexReaderError::InvalidExt { ext: _ })));
+        Ok(())
+    }
+}

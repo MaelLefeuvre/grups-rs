@@ -104,4 +104,19 @@ mod tests {
         println!("want: {want}\ngot : {got}");
         assert_eq!(want, got);
     }
+
+    #[test]
+    fn add() {
+        assert_eq!(ChrIdx(17) + ChrIdx(2), ChrIdx(19))
+    }
+
+    #[test]
+    fn as_ref(){
+        assert_eq!(ChrIdx(17).as_ref(), &17u8)
+    }
+
+    #[test]
+    fn into_inner(){
+        assert_eq!(ChrIdx(17).into_inner(), 17u8)
+    }
 }

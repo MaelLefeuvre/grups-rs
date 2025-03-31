@@ -54,6 +54,11 @@ pub fn cite() {
 
 /// @TODO : Stay dry...
 pub fn run(cli: Cli) -> Result<()> {
+    // ----------------------------- Set seed (randomly assigned by parser-rs if none was provided.)
+    if let PedigreeSims{ref ped, common: _, pwd:_ } = cli.commands {
+        fastrand::seed(ped.seed);
+        trace!("Seed: {}", fastrand::get_seed());
+    }
     // ----------------------------- Initialize genome.
     let genome = match cli.commands {
         PedigreeSims { ref common, pwd: _, ped: _} | PwdFromStdin { ref common, pwd: _ } => {
@@ -81,8 +86,6 @@ pub fn run(cli: Cli) -> Result<()> {
 pub fn _run(cli: &Cli, genome: Option<Genome>) -> Result<()> {
     match &cli.commands {
         PedigreeSims {common, pwd, ped} => {
-            // ----------------------------- Set seed (randomly assigned by parser-rs if none was provided.)
-            fastrand::seed(ped.seed);
             // ----------------------------- Parse Requested_samples
             let requested_samples: Vec<usize> = parser::parse_user_ranges(&pwd.samples, "samples")?;
             let genome = genome.ok_or_else(|| anyhow!("Error: Missing genome"))?; // @TODO better handling

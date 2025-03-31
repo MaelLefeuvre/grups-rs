@@ -7,6 +7,7 @@ use crate::coordinate::{ChrIdx, Coordinate};
 
 use ahash::AHashMap;
 
+#[derive(Debug)]
 pub struct JackknifeEstimates {
     pub estimate: f64,
     pub variance: f64,

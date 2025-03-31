@@ -343,7 +343,6 @@ mod test {
     type TestPedDef = Vec<(&'static str, Option<(&'static str, &'static str)>)>;
     
     fn test_pedigree_random(def: Option<TestPedDef>) -> std::io::Result<Pedigree> {
-
         let mut pedigree = Pedigree::new();
         if let Some(map) = def {
             for (label, parents) in map {

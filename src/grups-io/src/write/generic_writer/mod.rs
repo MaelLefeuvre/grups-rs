@@ -68,3 +68,23 @@ impl<'a> GenericWriter<'a>{
         self.source.flush().loc("While flushing buffer contents of Writer")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use genome::coordinate::Coordinate;
+
+    use super::*;
+    #[test]
+    fn write_file() -> anyhow::Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let path          = tmpdir.path().join("targets.txt");
+        let mut writer = GenericWriter::new(Some(&path))?;
+
+        let test_vec = vec![Coordinate::new(10, 10000)];
+        writer.write_iter(&test_vec)?;
+
+        let got = std::io::read_to_string(File::open(path)?)?;
+        assert_eq!(got.replace('\n', ""), test_vec[0].to_string());
+        Ok(())
+    }
+}

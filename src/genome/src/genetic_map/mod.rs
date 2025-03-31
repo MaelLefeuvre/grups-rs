@@ -67,7 +67,7 @@ impl GeneticMap {
 
             match fields.len() { // baild if we don't have 4 fields.
                 4 => Ok(()),
-                n => Err(anyhow!("Expected 4 fields, got {n}")).with_loc(|| InvalidFields(i))
+                n => Err(InvalidFields(i)).with_loc(|| format!("Expected 4 fields, got {n}"))//).with_loc(|| InvalidFields(i))
             }?;
 
             let chr : ChrIdx = fields[0].parse().with_loc(|| ParseChr(i))?;
@@ -127,5 +127,82 @@ impl GeneticMap {
 
         // Probability that an odd number of cross-over occurs, under Poisson distribution.
         0.5 * (1.0 - f64::exp(-2.0 * interval_prob_recomb))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    #[test]
+    fn from_map_ok() -> anyhow::Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+
+        let file_path = tmpdir.path().join("map.txt");
+        let mut file = File::create(file_path.clone())?;
+        writeln!(file, "\
+            Chromosome\tPosition(bp)\tRate(cM/Mb)\tMap(cM)\n\
+            chr1\t50000\t0.10\t0.000\n\
+            chr1\t100000\t0.10\t0.002\n\
+            chr2\t50000\t0.15\t0.000\n\
+            chr2\t10000\t0.15\t0.002\n\
+            "
+        )?;
+
+        let map = GeneticMap::from_dir(tmpdir.path()).expect("Failed to generate map");
+
+        assert!(map.0.contains_key(&ChrIdx(1)));
+        assert!(map.0.contains_key(&ChrIdx(2)));
+        Ok(())
+    }
+
+    #[test]
+    fn empty_dir() -> anyhow::Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let map = GeneticMap::from_dir(tmpdir.path());
+        assert!(map.is_err_and(|e| matches!(e.downcast_ref::<GeneticMapError>(), Some(GeneticMapError::EmptyDir))));
+        Ok(())
+    }
+
+    #[test]
+    fn missing_field() -> anyhow::Result<()> {
+        let tmpdir    = tempfile::tempdir()?;
+        let file_path = tmpdir.path().join("map.txt");
+        let mut file  = File::create(file_path.clone())?;
+        writeln!(file, "\
+            Chromosome\tPosition(bp)\tRate(cM/Mb)\tMap(cM)\n\
+            chr1\t50000\t0.10\t0.000\n\
+            chr1\t100000\t0.10\t0.002\n\
+            chr2\t0.15\t0.000\n\
+            chr2\t10000\t0.15\t0.002\n\
+            "
+        )?;
+        let map = GeneticMap::from_dir(tmpdir.path());
+        assert!(map.is_err_and(|e| matches!(e.downcast_ref::<GeneticMapError>(), Some(GeneticMapError::InvalidFields(3)))));
+        Ok(())
+    }
+
+    #[test]
+    fn x_chromosome() -> anyhow::Result<()> {
+        let tmpdir    = tempfile::tempdir()?;
+        let file_path = tmpdir.path().join("map.txt");
+        let mut file  = File::create(file_path.clone())?;
+        writeln!(file, "\
+            Chromosome\tPosition(bp)\tRate(cM/Mb)\tMap(cM)\n\
+            chrX_par1\t50000\t0.15\t0.000\n\
+            chrX_par1\t10000\t0.15\t0.002\n\
+            chrX\t50000\t0.10\t0.000\n\
+            chrX\t100000\t0.10\t0.002\n\
+            chrX_par2\t50000\t0.15\t0.000\n\
+            chrX_par2\t10000\t0.15\t0.002\n\
+            "
+        )?;
+
+        let map = GeneticMap::from_dir(tmpdir.path()).expect("Failed to generate map");
+
+        //
+        assert_eq!(map.0.keys().len(), 1);        // Should only contain a single key, for X-chromosome
+        assert!(map.0.contains_key(&ChrIdx(88))); // ASCII encoding
+        Ok(())
     }
 }

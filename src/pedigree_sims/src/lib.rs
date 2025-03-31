@@ -124,7 +124,7 @@ pub fn run(
     } 
 
     // --------------------- Randomly assign chromosomal sex of samples if requested
-    if com_cli.sex_specific_mode {
+    if ped_cli.sex_specific_mode {
         pedigrees.assign_random_sex().loc("While attempting to randomly assign sexes of all pedigrees")?
     }
 

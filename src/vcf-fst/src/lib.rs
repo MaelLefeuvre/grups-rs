@@ -201,13 +201,6 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
         self.reader.source.read_until(b'\t', &mut pos_buffer).with_loc(||ReadField { c: self.coordinate_buffer.clone() })?;
         pos_buffer.pop();
 
-        //let chr: u8  = std::str::from_utf8(&chr_buffer).ok().and_then(|c| c.parse::<u8>().ok())
-        //    .with_loc(||EncodeChr { c: self.coordinate_buffer.clone() })?;
-        //let chr: u8 = std::str::from_utf8(&chr_buffer).ok().and_then(|c| if c == "X" {
-        //    Some(88)
-        //} else {
-        //    c.parse::<u8>().ok()}).with_loc(|| EncodeChr { c:self.coordinate_buffer.clone()  })?;
-        //}
         let chr: u8 = std::str::from_utf8(&chr_buffer).ok()
             .and_then(|c| {
                 match c.parse::<u8>() {

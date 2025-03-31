@@ -102,6 +102,33 @@ mod tests {
         let test_chr = get_two_chromosome(1, 2);
         assert!(test_chr[0] < test_chr[1]);
         assert!(test_chr[1] > test_chr[0]);
+    }
 
+    #[test]
+    fn from_str_ok() {
+        for i in 1..=22 {
+            let chr = Chromosome::from_str(&format!("{i}\t555555"));
+            assert!(chr.is_ok())
+        }
+    }
+
+    #[test]
+    fn from_str_missing_chr(){
+        let chr = Chromosome::from_str("55555");
+        assert!(chr.is_err());
+    }
+
+    #[test]
+    fn from_str_missing_length(){
+        let chr = Chromosome::from_str("22\t");
+        assert!(chr.is_err());
+    }
+
+    #[test]
+    fn from_str_xchr() {
+        for label in ["X", "chrX"].iter() {
+            let chr = Chromosome::from_str(&format!("{label}\t123456789"));
+            assert!(chr.is_ok_and(|c| c.name == ChrIdx(88)));
+        }
     }
 }

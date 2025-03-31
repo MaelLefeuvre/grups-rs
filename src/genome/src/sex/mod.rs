@@ -35,3 +35,26 @@ impl Display for Sex {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display() {
+        assert_eq!(format!("{}", Sex::Female), "female");
+        assert_eq!(format!("{}", Sex::Male), "male");
+        assert_eq!(format!("{}", Sex::Unknown), "unknown");
+    }
+
+    #[test]
+    fn from_str() {
+        assert_eq!(Sex::from_str("FEMALE"), Ok(Sex::Female));
+        assert_eq!(Sex::from_str("2"), Ok(Sex::Female));
+        assert_eq!(Sex::from_str("MALE"), Ok(Sex::Male));
+        assert_eq!(Sex::from_str("1"), Ok(Sex::Male));
+        assert_eq!(Sex::from_str(""), Ok(Sex::Unknown));
+        assert_eq!(Sex::from_str("-"), Ok(Sex::Unknown));
+        assert_eq!(Sex::from_str("?"), Ok(Sex::Unknown));
+        assert_eq!(Sex::from_str("-9"), Ok(Sex::Unknown));
+    }
+}

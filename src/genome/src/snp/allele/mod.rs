@@ -69,7 +69,7 @@ impl Borrow<char> for Allele {
 
 impl Allele {
     pub fn is_known(&self) -> bool {
-        !matches!{self, Self::N}
+        !matches!{self, Self::N | Self::D}
     }
 }
 
@@ -85,6 +85,7 @@ mod tests {
             (Allele::G, 'G'),
             (Allele::T, 'T'),
             (Allele::N, 'N'),
+            (Allele::D, '*'),
         ])
     }
     #[test]
@@ -94,6 +95,7 @@ mod tests {
         assert_eq!(format!("'{:_<5}'", Allele::G), "'G____'");
         assert_eq!(format!("'{:_<5}'", Allele::T), "'T____'");
         assert_eq!(format!("'{:_<5}'", Allele::N), "'N____'");
+        assert_eq!(format!("'{:_<5}'", Allele::D), "'*____'");
     }
 
     #[test]
@@ -109,4 +111,20 @@ mod tests {
         Allele::try_from('x').expect("");
     }
 
+    #[test]
+    fn borrow_char() {
+        for (allele, character) in expected() {
+            assert_eq!(Borrow::<char>::borrow(&allele), &character);
+        }
+    }
+
+    #[test]
+    fn is_known() {
+        for (allele, _) in expected() {
+            assert_eq!(allele.is_known(), match allele {
+                Allele::A | Allele::C | Allele::G | Allele::T => true,
+                Allele::D | Allele::N                         => false
+            })
+        }
+    }
 }

@@ -537,6 +537,7 @@ dependencies = [
  "log",
  "rand",
  "rust-lapper",
+ "tempfile",
  "thiserror",
 ]
 
@@ -586,6 +587,7 @@ dependencies = [
  "memmap2",
  "mockall",
  "regex",
+ "tempfile",
  "thiserror",
 ]
 

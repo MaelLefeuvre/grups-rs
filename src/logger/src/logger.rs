@@ -11,7 +11,7 @@ impl Logger {
         let env = Env::default()
             .filter("GRUPS_LOG");
 
-        Builder::new().filter_level(log_level)
+        Builder::new().is_test(true).filter_level(log_level)
             .format(|buf, record| {
                 
                 let traceback: String;

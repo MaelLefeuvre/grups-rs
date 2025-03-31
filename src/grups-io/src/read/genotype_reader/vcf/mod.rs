@@ -267,6 +267,173 @@ impl<'a> VCFReader<'a> {
                 return Ok(samples)
             }
         }
-        panic!();
+        panic!("Missing VCF-header within file.");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gzp::{par::compress::{ParCompress, ParCompressBuilder}, ZWriter};
+
+    use super::*;
+    use std::io::Write;
+    const FAKE_VCF: &str = "\
+    ##fileformat=VCFv4.1\n\
+    #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tHG00096\tHG00097\tHG00099\tHG00100\n\
+    12\t60020\t.\tT\tTA,TAC\t100\tPASS\tAC=10,92;AMR_AF=0.0029,0.0086;AFR_AF=0.0008,0.0635;EUR_AF=0,0.002;SAS_AF=0.0031,0;EAS_AF=0.004,0;VT=INDEL;MULTI_ALLELIC\tGT\t0|0\t0|0\t0|0\t0|0\n\
+    12\t60026\t.\tA\tC\t100\tPASS\tAC=25;AF=0.00499201;AN=5008;NS=2504;DP=12821;AMR_AF=0.5;AFR_AF=0.5;EUR_AF=0.5;SAS_AF=0.5;EAS_AF=0.5;AA=.|||;VT=SNP\tGT\t0|0\t0|1\t1|0\t1|1\n\
+    12\t60057\t.\tC\tA\t100\tPASS\tAC=1582;AF=0.31;AMR_AF=0.02;AFR_AF=0.04;EUR_AF=0.06;SAS_AF=0.08;EAS_AF=0.010;AA=.|||;VT=SNP\tGT\t0|0\t0|1\t1|0\t1|1\n\
+    12\t60083\t.\tG\tA\t100\tPASS\tAC=25;AF=0.00499201;AN=5008;NS=2504;DP=12821;AMR_AF=0.43;AFR_AF=0.38;EUR_AF=0.99;SAS_AF=0.61;EAS_AF=0.01;AA=.|||;VT=SNP\tGT\t0|0\t0|1\t1|0\t1|1\n\
+    ";
+
+    const FAKE_VCF_XCHR: &str = "\
+    ##fileformat=VCFv4.1\n\
+    #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tHG00096\tHG00097\tHG00099\tHG00100\n\
+    X\t60020\t.\tT\tTA,TAC\t100\tPASS\tAC=10,92;AMR_AF=0.0029,0.0086;AFR_AF=0.0008,0.0635;EUR_AF=0,0.002;SAS_AF=0.0031,0;EAS_AF=0.004,0;VT=INDEL;MULTI_ALLELIC\tGT\t0\t0|0\t0|0\t0|0\n\
+    X\t60026\t.\tA\tC\t100\tPASS\tAC=25;AF=0.00499201;AN=5008;NS=2504;DP=12821;AMR_AF=0.5;AFR_AF=0.5;EUR_AF=0.5;SAS_AF=0.5;EAS_AF=0.5;AA=.|||;VT=SNP\tGT\t0|0\t0|1\t1|0\t1\n\
+    X\t60057\t.\tC\tA\t100\tPASS\tAC=1582;AF=0.31;AMR_AF=0.02;AFR_AF=0.04;EUR_AF=0.06;SAS_AF=0.08;EAS_AF=0.010;AA=.|||;VT=SNP\tGT\t0\t0|1\t1|0\t1|1\n\
+    X\t60083\t.\tG\tA\t100\tPASS\tAC=25;AF=0.00499201;AN=5008;NS=2504;DP=12821;AMR_AF=0.43;AFR_AF=0.38;EUR_AF=0.99;SAS_AF=0.61;EAS_AF=0.01;AA=.|||;VT=SNP\tGT\t0\t0|1\t1\t1|1\n\
+    ";
+
+    #[test]
+    fn test_open_vcf() -> Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let vcf_path = tmpdir.path().join("panel.vcf");
+        let mut file = File::create(&vcf_path)?;
+        writeln!(file, "{FAKE_VCF}")?;
+
+        let reader = VCFReader::new(&vcf_path, 1);
+        assert!(reader.is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_open_vcf_gz() -> Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let vcf_path = tmpdir.path().join("panel.vcf.gz");
+
+        
+        let file = File::create(&vcf_path)?;
+        let mut parz: ParCompress<Bgzf> = ParCompressBuilder::new().from_writer(file);
+        parz.write_all(FAKE_VCF.as_bytes()).unwrap();
+        parz.finish().unwrap();
+
+        let reader = VCFReader::new(&vcf_path, 1);
+        assert!(reader.is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_open_vcf_invalid() -> Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let vcf_path = tmpdir.path().join("README.txt");
+        let _ = File::create(&vcf_path)?;
+        let reader = VCFReader::new(&vcf_path, 1);
+        assert!(reader.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_sample_id() -> Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let vcf_path = tmpdir.path().join("panel.vcf");
+        let mut file = File::create(&vcf_path)?;
+        writeln!(file, "{FAKE_VCF}")?;
+
+        let reader = VCFReader::new(&vcf_path, 1).expect("Failed to create test reader");
+
+        let expected_samples=["HG00096", "HG00097", "HG00099", "HG00100"];
+        assert_eq!(reader.samples()[9..], expected_samples);
+        Ok(())
+    }
+
+    #[test]
+    fn test_readlines_autosomes() -> Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let vcf_path = tmpdir.path().join("panel.vcf");
+        let mut file = File::create(&vcf_path)?;
+        writeln!(file, "{FAKE_VCF}")?;
+
+        let mut reader = VCFReader::new(&vcf_path, 1).expect("Failed to create test reader");
+
+        assert_eq!(reader.parse_coordinate()?, Coordinate::new(12, 60020));
+        reader.parse_info_field()?;
+        assert!(reader.is_multiallelic());
+        reader.fill_genotypes()?;
+        assert!(reader.genotypes_filled);
+
+        reader.next_line()?;
+        assert_eq!(reader.parse_coordinate()?, Coordinate::new(12, 60026));
+
+        reader.next_line()?;
+        assert_eq!(reader.parse_coordinate()?, Coordinate::new(12, 60057));
+
+        reader.next_line()?;
+        assert_eq!(reader.parse_coordinate()?, Coordinate::new(12, 60083));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_alleles_autosomes() -> Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let vcf_path = tmpdir.path().join("panel.vcf");
+        let mut file = File::create(&vcf_path)?;
+        writeln!(file, "{FAKE_VCF}")?;
+
+        let mut reader = VCFReader::new(&vcf_path, 1).expect("Failed to create test reader");
+
+        let samples = &reader.samples()[9..];
+
+        let expected_alleles = [
+            [[0u8, 0], [0, 0], [0, 0], [0, 0]], // GT   0|0 0|0 0|0 0|0
+            [[0, 0], [0, 1], [1, 0], [1, 1]],   // GT   0|0 0|1 1|0 1|1
+            [[0, 0], [0, 1], [1, 0], [1, 1]],   // GT   0|0 0|1 1|0 1|1
+            [[0, 0], [0, 1], [1, 0], [1, 1]]    // GT   0|0 0|1 1|0 1|1
+        ];
+        for allele_row in expected_alleles {
+            assert_eq!(reader.parse_coordinate()?.chromosome, ChrIdx(12));
+
+            reader.fill_genotypes()?;
+            for (want, sample) in allele_row.iter().zip(samples.iter().enumerate().map(|(i, s)| SampleTag::new(s, Some(i), None))) {
+                let got = reader.get_alleles(&sample)?;
+                println!("{sample} ({want:?}) {got:?}");
+                assert_eq!(*want, got)
+            }
+            reader.next_line()?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_alleles_x_chr() -> Result<()> {
+        let tmpdir = tempfile::tempdir()?;
+        let vcf_path = tmpdir.path().join("panel.vcf");
+        let mut file = File::create(&vcf_path)?;
+        writeln!(file, "{FAKE_VCF_XCHR}")?;
+
+        let mut reader = VCFReader::new(&vcf_path, 1).expect("Failed to create test reader");
+
+        let samples = &reader.samples()[9..];
+
+
+        let expected_alleles = [
+            [[0u8, 0], [0, 0], [0, 0], [0, 0]], // GT   0   0|0 0|0 0|0
+            [[0, 0], [0, 1], [1, 0], [1, 1]],   // GT   0|0 0|1 1|0 1
+            [[0, 0], [0, 1], [1, 0], [1, 1]],   // GT   0   0|1 1|0 1|1
+            [[0, 0], [0, 1], [1, 1], [1, 1]]    // GT   0   0|1 1   1|1
+        ];
+        for allele_row in expected_alleles {
+            assert_eq!(reader.parse_coordinate()?.chromosome, ChrIdx(b'X'));
+
+            reader.fill_genotypes()?;
+            for (want, sample) in allele_row.iter().zip(samples.iter().enumerate().map(|(i, s)| SampleTag::new(s, Some(i), None))) {
+                let got = reader.get_alleles(&sample)?;
+                println!("{sample} ({want:?}) {got:?}");
+                assert_eq!(*want, got)
+            }
+            reader.next_line()?;
+        }
+        Ok(())
     }
 }
