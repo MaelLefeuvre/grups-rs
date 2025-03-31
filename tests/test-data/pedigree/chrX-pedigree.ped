@@ -1,0 +1,26 @@
+# example pedigree definition input file
+# First section: define the pedigree's topology
+iid         fid     mid	    sex
+father      0       0	    1
+mother	    0       0	    2
+son1        father  mother  1
+son2        father  mother  1
+daughter1   father  mother  2
+daughter2   father  mother  2
+
+# Second section: target specific comparisons within the pedigree
+#COMPARE	Self-Male       father     father
+COMPARE Father-Son      father     son1
+COMPARE Father-Son      father     son2
+COMPARE Mother-daughter mother     daughter1
+COMPARE Mother-daughter mother     daughter2
+COMPARE Mother-son      mother     son1
+COMPARE Mother-son      mother     son2
+COMPARE Father-daughter father     daughter1
+COMPARE Father-daughter father     daughter2
+COMPARE Brother-Sister  son1       daughter1
+COMPARE Brother-Sister  son1       daughter2
+COMPARE Brother-Sister  son2       daughter1
+COMPARE Brother-Sister  son2       daughter2
+COMPARE Sisters         daughter1  daughter2
+COMPARE Brothers        son1       son2
