@@ -64,10 +64,14 @@ impl Variance {
 
 /// A struct representing a given pairwise estimation of relatedness between two individuals.
 /// - `pair`            : contains a representation of the individuals being compared.
+/// 
 /// - `self_comparison` : whether or not this comparison is a Self-comparison. (i.e. pair.0 == pair.1)
+/// 
 /// - `pwd`             : counter for the number of pairwise differences found between our pair.
+/// 
 /// - `sum_phred`       : sum of the avg. phred-scores of each overlapping SNP. mainly used to compute the average
-///                       Phred-score (i.e. `overlap`/`sum_phred`)
+///   Phred-score (i.e. `overlap`/`sum_phred`)
+/// 
 /// - `blocks`          : genome blocks used for jackknife resampling.
 /// 
 /// # Traits : `Debug`

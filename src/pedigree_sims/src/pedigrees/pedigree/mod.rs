@@ -39,11 +39,14 @@ pub use error::PedigreeError;
 /// A Pedigree simulation replicate.
 /// # Fields:
 /// - `individuals`: BTreeMap containing all members of the pedigree (founders and offspring)
-///                  - Key  : (String)                   - Label of the individual
-///                  - Value: (Rc<RefCell<Individual>>>) - Reference to an individual, with interior mutability.
+///   - Key (String): Label of the individual
+///   - Value (Rc<RefCell<Individual>>>): Reference to an individual, with interior mutability.
+/// 
 /// - `comparisons`: `PedComparison` struct, containing all the user-requested kinship scenarios.
-/// - `params`     : `PedigreeParams` wrapper struct, containing the set of parameters (contam_rate, seq_error_rate, etc.)
-///                  required to perform simulations.
+/// 
+/// - `params`     : `PedigreeParams` wrapper struct, containing the set of parameters required
+///   to perform simulations(contam_rate, seq_error_rate, etc.).
+/// 
 /// - `pop`        : Optional tag defining the population of origin of the founder individual
 #[derive(Debug, Clone)]
 pub struct Pedigree {
@@ -125,9 +128,9 @@ impl Pedigree {
     /// Populate the genotypes of all the offspring alleles at the current position.
     /// # Arguments:
     /// - `inverval_prob_recomb`: probability that a recombination occured between the current and the previously typed position
-    ///                           Computed through the use of a `GeneticMap` interval tree.
+    ///   Computed through the use of a `GeneticMap` interval tree.
     /// - `pedigree_index`      : index of the current pedigree within the `PedigreeRep` vector. 
-    ///                           Serves no purpose appart from logging and debugging
+    ///   Serves no purpose appart from logging and debugging
     /// 
     /// # Errors
     /// - if any individual's `self.strands` field is set tot `None`.
@@ -138,7 +141,7 @@ impl Pedigree {
     pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, rng: &mut fastrand::Rng, xchr_mode: bool) -> Result<()> {
         for mut offspring in self.offsprings_mut() {
             offspring.assign_alleles(interval_prob_recomb, pedigree_index, rng, xchr_mode)
-            .with_loc(|| format!("While attempting to assign the alleles of {}", offspring.label))?;
+            .with_loc(|| format!("While attempting to assign the alleles of {}", offspring.label()))?;
         }
         Ok(())
     }
@@ -163,7 +166,7 @@ impl Pedigree {
     /// - if any of the offspring `self.parents` field is set to `None`
     pub fn assign_offspring_strands(&mut self) -> Result<()> {
         for mut offspring in self.offsprings_mut() {
-            offspring.assign_strands().with_loc(||PedigreeError::FailedAlleleAssignment(offspring.label.clone()))?;
+            offspring.assign_strands().with_loc(||PedigreeError::FailedAlleleAssignment(offspring.label().to_string()))?;
         }
         Ok(())
     }
@@ -171,7 +174,7 @@ impl Pedigree {
     /// Randomly assign the sex of each individual.
     pub fn assign_random_sex(&mut self) -> Result<()> {
         for mut offspring in self.offsprings_mut() {
-            offspring.assign_random_sex().with_loc(||PedigreeError::FailedSexAssignment(offspring.label.clone()))?;
+            offspring.assign_random_sex().with_loc(||PedigreeError::FailedSexAssignment(offspring.label().to_string()))?;
         }
         Ok(())
     }
@@ -180,7 +183,7 @@ impl Pedigree {
     /// # Fields:
     /// - `label`  : name of the individual (e.g. "child")
     /// - `parents`: Optional name of the parents (e.g. ("mother", "father")). 
-    ///              This should be set to `None` if the individual is a founder.
+    ///   This should be set to `None` if the individual is a founder.
     ///
     /// # Errors: 
     /// - returns `std::io::result::InvalidInput` If any of the parents cannot be found within `self.individuals`

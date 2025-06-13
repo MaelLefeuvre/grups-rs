@@ -6,10 +6,13 @@ use super::{UNDEFINED_LABEL_PREFIX, error::ComparisonError};
 
 /// Represents a requested individual Within the pileup.
 ///  - `name`      : Name of the individual. Either given through user-input, or constructed as `Ind{index}` by default
-///                  when no name has been provided.
+///    when no name has been provided.
+/// 
 ///  - `index`     : 0 based index of the individual within the pileup. Note that this index is technically offset by 3,
-///                  since the first three columns of a pileup respectively define 'chr', 'pos', 'ref'.
+///    since the first three columns of a pileup respectively define 'chr', 'pos', 'ref'.
+/// 
 ///  - `min_depth` : minimum sequencing depth that is allowed before making a comparison. User-defined, or defaults to 1.
+/// 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Individual {
     pub name     : String,

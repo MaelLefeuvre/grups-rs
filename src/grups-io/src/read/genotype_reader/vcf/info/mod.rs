@@ -55,7 +55,7 @@ impl InfoField {
         let pop_af_regex = format!("{pop}_AF");
         self.iter()
             .find(|&field| field.starts_with(&pop_af_regex))
-            .and_then(|x| x.split('=').last())
+            .and_then(|x| x.split('=').next_back())
             .ok_or(InfoFieldError::MissingAF(pop_af_regex))?
             .parse::<f32>()
             .map_err(InfoFieldError::ParseAlleleFrequency)

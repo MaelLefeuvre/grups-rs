@@ -465,10 +465,7 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
     panel.assign_vcf_indexes(input_vcf_paths[0].as_path()).loc(loc_msg)?;
 
     // --------------------- Subset the panel according to user-provided (super-)population id(s)
-    match &fst_cli.pop_subset {
-        Some(subset) => panel.subset_panel(subset),
-        None         => (),
-    }
+    if let Some(subset) = &fst_cli.pop_subset { panel.subset_panel(subset) }
 
     // --------------------- Parse the output panel file.
     let Some(output_dir) = fst_cli.output_dir.to_str() else {

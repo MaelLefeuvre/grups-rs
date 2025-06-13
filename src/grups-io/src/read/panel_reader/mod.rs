@@ -28,7 +28,8 @@ pub const PANEL_EXT: [&str; 1] = ["panel"];
 /// # Errors:
 /// Returns an error if, after iterating over all the contents of `input_dir`:
 /// - the output Vec<PathBuf> is empty.
-/// - the length of the output Vec<PathBuf> is greater than 1. 
+/// - the length of the output Vec<PathBuf> is greater than 1.
+/// 
 /// @TODO: use this as a 'from_dir()' constructor within PanelReader instead.
 fn fetch_input_panel(input_dir: &Path) -> Result<PathBuf>{
     use PanelReaderError::{NotFound, MultipleFound};
@@ -108,7 +109,7 @@ impl PanelReader {
     /// 
     /// # Behavior:
     /// - `When contam_pop.len()` and `contam_num_ind.len()` differ, indices and values are expected to wrap around,
-    ///    according to the smallest vector length out of the two. 
+    ///   according to the smallest vector length out of the two. 
     pub fn fetch_contaminants(&self, contam_pop: &[String], contam_num_ind: &Vec<usize>) -> Result<Vec<Vec<SampleTag>>> {
         let mut samples_contam_tags: Vec<Vec<SampleTag>> = Vec::new();
 
@@ -137,7 +138,7 @@ impl PanelReader {
     /// # Arguments:
     /// - `pop`: (super-)Population-id string
     /// - `exclude`: Optional vector of sample tags to exclude from our sampling batch.
-    ///    Thus, any provided sample tag cannot become a return value.
+    ///   Thus, any provided sample tag cannot become a return value.
     pub fn random_sample(&self, pop: &str, exclude: Option<&Vec<&SampleTag>>, sex_filter: Option<Sex>) -> Result<Option<&SampleTag>> {
         // Extract the vector of candidate SampleTags using the provided population-id.
         // Bailout if `pop` does not match anything.

@@ -169,6 +169,9 @@ impl Display for PedFormatField {
 ///   6. [`PedFormatField::Aff`]: Individual's assigned phenotype (ignored)
 ///
 /// - [`PedFormatFieldOrder::Custom`]: Any number of fields. Fields can be given in any order, provided the file starts with a header.
+/// 
+/// --- 
+/// 
 /// The expected header labels are given below (case-insensitive):  
 /// 
 ///   1.[`PedFormatField::FamId`]: famid (always ignored)
@@ -224,7 +227,7 @@ impl TryFrom<&[&str]> for PedFormatFieldOrder {
 /// Parse a pedigree definition file and return a `Pedigree` struct.
 /// # Fields:
 /// - `format`: Specify the appropriate pedigree definition file format
-/// for this file.
+///   for this file.
 pub struct PedigreeBuilder {
     lines: Vec<PedigreeLine>,
     format: PedigreeFormat,

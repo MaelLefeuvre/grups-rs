@@ -16,8 +16,7 @@ use located_error::prelude::*;
 /// A vector of pedigree simulation replicates. This struct is generally assigned to a given Pileup-Comparison.
 /// # Fields:
 /// - `inner`       : vector of `Pedigree` simulation replicates.
-/// - `contaminants`: Size-two array set of contaminating SampleTags, one vector for each compared pileup individual. 
-///                   (see pedigree::Contaminant)
+/// - `contaminants`: Size-two array set of contaminating SampleTags, one vector for each compared pileup individual. (see pedigree::Contaminant)
 pub struct PedigreeReps{
     pub inner: Vec<Pedigree>,
     pub contaminants: Option<Contaminant> 
@@ -34,12 +33,12 @@ impl PedigreeReps {
     /// Instantiate and assign a new `Contaminant` object to `self.contaminants`
     /// # Arguments
     /// - `sample_contam_tags`: Size-two vector of vectors of contaminating SampleTags.
-    ///                         `sample_contam_tags[i] = contaminating individuals for pileup individual[i]
+    ///   - `sample_contam_tags[i] = contaminating individuals for pileup individual[i]
     /// -  `pair_indices`     : Size-two array, containing the pileup index of each pileup individual being compared.
     /// 
     /// # @ TODO:
     /// - `samples_contam_tags` should be an array. at the very least, this method should 
-    ///    check if `samples_contam_tags.len()` == 2
+    ///   check if `samples_contam_tags.len()` == 2
     pub fn set_contaminants(&mut self, samples_contam_tags: &[Vec<SampleTag>], pair_indices: [usize; 2]) {
         let tags_0 = samples_contam_tags[pair_indices[0] % samples_contam_tags.len()].clone();
         let tags_1 = samples_contam_tags[pair_indices[1] % samples_contam_tags.len()].clone();

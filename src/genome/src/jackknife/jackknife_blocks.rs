@@ -20,7 +20,7 @@ pub struct JackknifeEstimates {
 /// 
 /// # Traits:
 ///   - `Display` : Pretty print. for file writing and debug. Recursively calls `Display` for each
-///                 `JackknifeBlock` found within the `blocks` field.
+///     `JackknifeBlock` found within the `blocks` field.
 /// # TODO:
 ///   - add a header for the `Display trait`
 pub struct JackknifeBlocks {

@@ -76,12 +76,11 @@ impl PedComparison {
     /// Simulate observed reads for the two pedigree individuals, and check if there is a pairwise difference between 
     /// these randomly sampled simulated data.
     /// # Arguments:
-    /// - `contam_rate`   : Size-two array of the simulated contamination rate. 
-    ///                     Entry[i] of the array corresponds to `self.pair[i]`.
+    /// - `contam_rate`   : Size-two array of the simulated contamination rate. Entry[i] of the array corresponds to `self.pair[i]`.
     /// - `contam_pop_af` : Population allele frequency of the contaminating population for the current SNP coordinate.
-    ///                     Entry[i] of the array corresponds to `self.pair[i]`.
+    ///   Entry[i] of the array corresponds to `self.pair[i]`.
     /// - `seq_error_rate`: Size-two array of the simulated sequencing error rate.
-    ///                     Entry[i] of the array corresponds to `self.pair[i]`.
+    ///   Entry[i] of the array corresponds to `self.pair[i]`.
     pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2], rng: &mut fastrand::Rng) -> Result<()> {
         use ComparisonError::CompareAllele;
         self.add_overlap();
@@ -177,10 +176,10 @@ impl std::fmt::Display for PedComparison {
             {: <SEX_FORMAT_LEN$} - \
             {: <SEX_FORMAT_LEN$}",
             self.label,
-            ind1.label,
-            ind2.label,
-            ind1.tag.as_ref().unwrap_or(&default_tag).id(),
-            ind2.tag.as_ref().unwrap_or(&default_tag).id(),
+            ind1.label(),
+            ind2.label(),
+            ind1.get_tag().as_ref().unwrap_or(&&default_tag).id(),
+            ind2.get_tag().as_ref().unwrap_or(&&default_tag).id(),
             self.pwd,
             self.overlap,
             self.get_avg_pwd(),

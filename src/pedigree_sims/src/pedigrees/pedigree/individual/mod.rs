@@ -26,26 +26,30 @@ const PARENTS_DISPLAY_LEN: usize = 25; // Space padding of `self.parents`
 
 /// Pedigree Individual.
 /// # Fields:
-/// - `tag`                  : Optional SampleTag of the Individual 
-///                              - `Some(SampleTag)` if the individual is a founder.
-///                              - `None`            if the individual is a simulated offspring.
-/// - `label`                : User-defined name of the individual (e.g. 'child', 'father', 'mother')
-/// - `parents`              : Optional Set of references for each parents of the individual.
-///                              - `None`             if the individual is a founder.
-///                              - `Some(references)` if the individual is a simulated offspring.
-/// - `strands`              : Optional array indicating the provenance of each individual's chromosome strand.
-///                            Strand provenance is tracked as a set of two indices. `strands[i]` = strand index of 
-///                            `parents[i]`. Two possible values: `0` = left strand and `1` == right strand of the 
-///                            given parent. 
-///                              - `None`          if the individual is a founder.
-///                              - `Some(strands)` if the individual is a simulated offspring. 
+/// - `tag`: Optional SampleTag of the Individual 
+///   - `Some(SampleTag)` if the individual is a founder.
+///   - `None`            if the individual is a simulated offspring.
+/// 
+/// - `label`: User-defined name of the individual (e.g. 'child', 'father', 'mother')
+/// 
+/// - `parents`: Optional Set of references for each parents of the individual.
+///   - `None` if the individual is a founder.
+///   - `Some(references)` if the individual is a simulated offspring.
+/// 
+/// - `strands` : Optional array indicating the provenance of each individual's chromosome strand.
+///   Strand provenance is tracked as a set of two indices. `strands[i]` = strand index of `parents[i]`.
+///   Two possible values: `0` = left strand and `1` == right strand of the given parent. 
+///   - `None` if the individual is a founder.
+///   - `Some(strands)` if the individual is a simulated offspring. 
+/// 
 /// - `currently_recombining`: Array of `bool` tracking whether or not the parent's chromosome is currently
-///                            recombining. `currently_recombining[i]` = tracker for `parents[i]`.
-/// - `alleles`              : Optional size-two set of alleles of the Individual for the current SNP position.
+///   recombining. `currently_recombining[i]` = tracker for `parents[i]`.
+/// 
+/// - `alleles` : Optional size-two set of alleles of the Individual for the current SNP position.
 #[derive(Debug, Clone)]
 pub struct Individual {
-    pub tag                  : Option<SampleTag>,
-    pub label                : String,
+    tag                      : Option<SampleTag>,
+    label                    : String,
     parents                  : Option<Parents>,
     pub strands              : Option<[usize; 2]>,
     pub currently_recombining: [bool; 2],
@@ -126,11 +130,12 @@ impl Individual {
 
     /// Simulate meiosis for the current position and return a unique allele (as `u8`).
     /// Arguments:
-    /// - `selected_strand`                : index of `self.alleles` used for sampling. The provided value will most likely
-    ///                                      originate from `self.strands` of the simulated offspring. 
+    /// - `selected_strand` : index of `self.alleles` used for sampling. The provided value will most likely
+    ///   originate from `self.strands` of the simulated offspring. 
+    /// 
     /// - `offspring_currently_recombining`: bool indicating whether the strand being currently simulated is under recombination.
-    ///                                      The provided value will most likely originate from `self.currently_recombining` of
-    ///                                      the simulated offspring.
+    ///   The provided value will most likely originate from `self.currently_recombining` of the simulated offspring.
+    /// 
     /// # Panics:
     /// - when `self.alleles` is `None`
     pub fn meiosis(&self, selected_strand: usize, offspring_currently_recombining: bool) -> u8 {
@@ -171,6 +176,12 @@ impl Individual {
         self.tag.as_ref()
     }
 
+    /// Return the indivdiual's label
+    pub fn label(&self) -> &str {
+        self.label.as_str()
+    }
+    
+
     /// Manually set the Individuals parents.
     /// # Arguments
     /// - `parents`: Size-two array of `&Rc<RefCell<Individual>>`, representing the individual's parents. 
@@ -208,10 +219,10 @@ impl Individual {
     /// 
     /// # Arguments:
     /// - `recombination_prob`: probability that a recombination occured between the previous and current coordinate.
-    ///                         This was most likely computed from a genetic_map. See `genome::GeneticMap` and 
-    ///                         `genome::RecombinationRange`
-    /// - `ped_idx`           : replicate index of this individual's belonging pedigree. This parameter is purely provided
-    ///                         for debugging and logging, and serves no purpose during allele assignment.
+    ///   This was most likely computed from a genetic_map. See `genome::GeneticMap` and  `genome::RecombinationRange`
+    /// 
+    /// - `ped_idx` : replicate index of this individual's belonging pedigree. This parameter is purely provided
+    ///   for debugging and logging, and serves no purpose during allele assignment.
     /// # Errors
     /// - when trying to assign alleles while `self.strands` is `None`.
     /// 
@@ -571,6 +582,9 @@ mod tests {
 
     #[test]
     fn hashable() {
+        // We're ok here, given that The Hash implementation of Individual only uses the `label` field
+        // which is not mutable.
+        #[allow(clippy::mutable_key_type)]
         let mut ind_set = std::collections::HashSet::new();
         let n_iters: u32 = 10_000;
         for i in 0..n_iters {

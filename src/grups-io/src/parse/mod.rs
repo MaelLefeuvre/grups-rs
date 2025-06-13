@@ -9,7 +9,7 @@ mod error;
 use error::ParseError;
 
 /// Attempt to create the parent directories of a path (if needed) and return an error if it failed.
-pub fn create_parent_directory(path: &PathBuf) -> Result<()> {
+pub fn create_parent_directory(path: &Path) -> Result<()> {
     use ParseError::CreateParentDirectory;
     let parent_dir = path.parent().unwrap_or(path);
     let loc_msg = || format!("While attempting to create output directory '{}'", path.display());
@@ -43,7 +43,7 @@ pub enum FileKey{Suffix, Ext}
 /// when failing to convert `file_prefix` from `PathBuf` to `&str`
 /// 
 pub fn get_output_files<'a>(
-    file_prefix: &'a mut PathBuf,
+    file_prefix    : &'a mut Path,
     allow_overwrite: bool,
     sort           : FileKey,
     suffixes       : &[String],

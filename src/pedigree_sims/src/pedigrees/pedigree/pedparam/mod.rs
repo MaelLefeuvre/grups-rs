@@ -23,8 +23,8 @@ impl<T: 'static + Copy + SampleUniform + PartialOrd + Debug + Display> dyn PedPa
     /// - `vec`: vector of user-provided value(s). Must either be of len 1 or 2.
     /// 
     /// # Panics
-    /// - whenever `vec.len() > 2`
-
+    ///  - Whenever `vec.len() > 2`
+    /// 
     pub fn from_vec(vec: &[T]) -> Box<dyn PedParam<T>> {
         match vec.len() {
             // If length is 1, the user is requesting a set, constant rate

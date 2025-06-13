@@ -4,7 +4,7 @@ use genome::Sex;
 /// # Fields
 /// - `id` : (String)        - Name of the sample
 /// - `idx`: (Option<usize>) - When using a VCFReader, `idx` corresponds to the column field at which the genotype
-///                            information  of this sample is located within the vcf file
+///   information  of this sample is located within the vcf file
 #[derive(Debug, Clone)]
 pub struct SampleTag {
     id : String,

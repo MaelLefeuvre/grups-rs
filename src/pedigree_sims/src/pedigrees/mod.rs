@@ -48,11 +48,11 @@ use crate::svm::LibSvmBuilder;
 /// A Pedigree simulator, aggregating all pileup-comparison pedigree simulation replicates.
 /// # Fields
 /// - `pedigrees`         : HashMap of pedigree simulation replicates.
-///                         Key = pileup comparison label | value = pedigree simulation replicates
+///   - Key = pileup comparison label | value = pedigree simulation replicates
 /// - `pedigree_pop`      : (super)-population id used for the pedigree simulations.
 /// - `genetic_map`       : Genetic recombination map interval tree.
 /// - `previous_positions`: Hashmap, tracking the coordinate of each previously typed SNP coordinate, for a given pileup comparison
-///                         Key = pileup comparison label | value = position of the previous SNP coordinate
+///   - Key = pileup comparison label | value = position of the previous SNP coordinate
 /// - `rng`               : random number generator.
 /// 
 /// # TODO:
@@ -172,9 +172,9 @@ impl Pedigrees {
     /// - `snp_downsampling_rate` : user-defined probability of ignoring an snp coordinate during simulations
     /// - `af_downsampling_rate`  : user-defined probability of performing allele fixation during simulations
     /// - `seq_error_rates`       : user-defined probabilities of simulating a sequencing error (constant values and/or ranges)
-    ///                             `seq_error_rate[i]` is tied to pileup `sample[i]`
+    ///   - `seq_error_rate[i]` is tied to pileup `sample[i]`
     /// - `seq_error_rates`       : user-defined probabilities of simulating a human contamination (constant values and/or ranges)
-    ///                             `contam_rate[i]` is tied to pileup `sample[i]`
+    ///    -  `contam_rate[i]` is tied to pileup `sample[i]`
     /// 
     /// # Errors
     /// - if `self.pedigrees` does contain a given pileup comparison label.
@@ -294,8 +294,8 @@ impl Pedigrees {
         let min = contained_chromosomes[0];
 
         // ---- Convert these values as a range of valid coordinates.
-        let start = Coordinate::new(min, std::u32::MIN);
-        let stop  = Coordinate::new(max, std::u32::MAX);
+        let start = Coordinate::new(min, u32::MIN);
+        let stop  = Coordinate::new(max, u32::MAX);
 
         // Keep a record of positions that should get filtered out after maf < treshold.
         let mut positions_to_delete: AHashMap<String, Vec<Coordinate>> = AHashMap::new();
@@ -379,8 +379,7 @@ impl Pedigrees {
     /// - `comparisons`   : pileup Comparisons of our real samples.
     /// - `input_vcf_path`: path leading to the target VCF file, containing genotype information for founder individuals. (`.vcf` or `.vcf.gz`).
     /// - `maf`           : user-defined minor-allele-frequency treshold.
-    /// - `threads`       : user-requested number of decompression threads for our VCFReader
-    ///                    (this is only relevant when reading BGZF-compressed `.vcf.gz` files)
+    /// - `threads`       : user-requested number of decompression threads for our VCFReader (this is only relevant when reading BGZF-compressed `.vcf.gz` files)
     /// 
     /// # Panics:
     /// - when failing to convert `input_vcf_path` to a string slice.
@@ -465,8 +464,7 @@ impl Pedigrees {
     /// Log pedigree simulation results and write them into a set of output files.
     /// # Arguments
     /// - `comparisons`   : pileup Comparisons of our real samples.
-    /// - `output_files`  : HashMap of target output files.
-    ///                     Key = comparison label | value = target output path.
+    /// - `output_files`  : HashMap of target output files. Key = comparison label | value = target output path.
     pub fn write_simulations(&self, comparisons: &PileupComparisons, output_files: &HashMap<String, String>) -> Result<()> {
         let loc_msg = "While attempting to write simulation results";
 

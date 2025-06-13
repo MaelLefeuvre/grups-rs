@@ -49,8 +49,8 @@ impl Genome {
     /// Read a `.fasta.fai` file and parse it into a vector of Chromosome structs.
     /// # Arguments
     /// - `path`: Path leading to either a `.fasta`, `.fasta.fai`, `.fa` or `.fa.fai` file.
-    ///           In the case of a `.fasta` or `.fa` file, a companion `.fai` with a matching file-stem
-    ///           must be located within the same directory.
+    ///   In the case of a `.fasta` or `.fa` file, a companion `.fai` with a matching file-stem
+    ///   must be located within the same directory.
     /// 
     /// # Expected file format:
     /// - Fields         : `<CHROMOSOME>`    `<LENGTH>`

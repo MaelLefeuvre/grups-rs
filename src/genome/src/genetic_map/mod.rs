@@ -95,7 +95,7 @@ impl GeneticMap {
             .filter_map(Result::ok)        
             .filter(|f| {
                 // Filter out anything that does not end with the .txt file extension (case insensitive).
-                f.path().extension().map_or(false, |ext| ext.eq_ignore_ascii_case("txt"))
+                f.path().extension().is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
             }).map(|f| f.path());
         
         Ok(paths)

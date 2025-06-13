@@ -91,7 +91,6 @@ impl<'a> SNPReader<'a> {
     /// # Errors
     ///  - `InvalidFileFormat` if `path` is not carrying a supported file extension.
     ///  - `MissingExtension` if `path` does not contain a file extension
-    /// @TODO: convert separators from String -> &str
     fn get_file_format(path: &str) -> Result<(SNPReaderMode, [usize; 4], char)> {
         let file_type: &str = path.split('.')
             .collect::<Vec<&str>>()

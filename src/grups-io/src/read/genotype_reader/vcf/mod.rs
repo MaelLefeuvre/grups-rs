@@ -22,7 +22,6 @@ pub use error::VCFReaderError;
 
 const INFO_FIELD_INDEX   : usize = 7;  /// 0-based expected column index of the INFO field.
 const GENOTYPES_START_IDX: usize = 9;  /// 0-based expected column index where genotype entries are expected to begin.
-
 const VCF_EXT: [&str; 2] = ["vcf", "vcf.gz"];
 
 
@@ -236,7 +235,7 @@ impl<'a> VCFReader<'a> {
     /// # Arguments 
     /// - `path`   : path leading to the targeted vcf file.
     /// - `threads`: number of user-provided decompression threads for the BGZF decompressor.
-    ///              (Only relevant if the file extension ends with `.gz`)
+    ///   (Only relevant if the file extension ends with `.gz`)
     fn get_reader(path: &Path, threads: usize) -> Result<Box<dyn BufRead>> {
         use VCFReaderError::{InvalidFileExt, Open};
         let path_ext = path.extension().with_loc(||InvalidFileExt)?;
