@@ -1,4 +1,6 @@
-use std::collections::BTreeMap;
+#[cfg(test)]
+use std::sync::MutexGuard;
+use std::{collections::BTreeMap, sync::{Arc, Mutex}};
 
 use located_error::prelude::*;
 use grups_io::read::{
@@ -9,11 +11,6 @@ use grups_io::read::{
 use genome::Sex;
 
 use fastrand;
-
-use std::{
-    cell::{RefCell, RefMut},
-    rc::Rc,
-};
 
 #[cfg(test)] mod tests ; 
 
@@ -40,7 +37,7 @@ pub use error::PedigreeError;
 /// # Fields:
 /// - `individuals`: BTreeMap containing all members of the pedigree (founders and offspring)
 ///   - Key (String): Label of the individual
-///   - Value (Rc<RefCell<Individual>>>): Reference to an individual, with interior mutability.
+///   - Value (Arc<Mutex<Individual>>>): Reference to an individual, with interior mutability.
 /// 
 /// - `comparisons`: `PedComparison` struct, containing all the user-requested kinship scenarios.
 /// 
@@ -50,7 +47,7 @@ pub use error::PedigreeError;
 /// - `pop`        : Optional tag defining the population of origin of the founder individual
 #[derive(Debug, Clone)]
 pub struct Pedigree {
-    pub individuals: BTreeMap<String, Rc<RefCell<Individual>>>,
+    pub individuals: BTreeMap<String, Arc<Mutex<Individual>>>,
     pub comparisons: PedComparisons,
     params: Option<PedigreeParams>,
     pop : Option<String>,
@@ -72,7 +69,7 @@ impl Pedigree {
     /// - if `self.params` is `None`
     /// - if an individual being compared carries `None` alleles.
     #[inline]
-    pub fn compare_alleles(&mut self, cont_af: [f64; 2], pileup_error_probs: &[f64; 2], rng: &mut fastrand::Rng) -> Result<()> {
+    pub fn compare_alleles(&mut self, cont_af: [f64; 2], pileup_error_probs: &[f64; 2], rng: Arc<Mutex<fastrand::Rng>>) -> Result<()> {
         use PedigreeError::FailedAlleleComparison;
         // ---- Extract the user-defined contamination rate of this pedigree.
         let param = || self.get_params().with_loc(|| FailedAlleleComparison);
@@ -87,7 +84,7 @@ impl Pedigree {
 
         // ---- update the PWD of all comparisons at the current position.
         for comparison in &mut self.comparisons.iter_mut() {
-            comparison.compare_alleles(contam_rate, cont_af, seq_error_rate, rng).with_loc(|| FailedAlleleComparison)?;
+            comparison.compare_alleles(contam_rate, cont_af, seq_error_rate, rng.clone()).with_loc(|| FailedAlleleComparison)?;
         }
         Ok(())
     }
@@ -103,7 +100,7 @@ impl Pedigree {
     /// # Panics
     /// - if any founder's tag is set to `None`
     #[inline]
-    pub fn update_founder_alleles(&mut self, reader: &dyn GenotypeReader, rng: &mut fastrand::Rng) -> Result<()> {
+    pub fn update_founder_alleles(&mut self, reader: &dyn GenotypeReader, mut rng: std::sync::MutexGuard<fastrand::Rng>) -> Result<()> {
         let loc_msg = "While updating founder individiuals' alleles";
         // ---- Extract this pedigree allele frequency downsampling rate.
         let af_downsampling_rate = self.get_params().loc(loc_msg)?.af_downsampling_rate;
@@ -138,9 +135,9 @@ impl Pedigree {
     /// # Panics
     /// - if any individual's `self.parents` is set to none `None` (i.e. Individual is a founder.)
     #[inline]
-    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, rng: &mut fastrand::Rng, xchr_mode: bool) -> Result<()> {
+    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, rng: Arc<Mutex<fastrand::Rng>>, xchr_mode: bool) -> Result<()> {
         for mut offspring in self.offsprings_mut() {
-            offspring.assign_alleles(interval_prob_recomb, pedigree_index, rng, xchr_mode)
+            offspring.assign_alleles(interval_prob_recomb, pedigree_index, rng.clone(), xchr_mode)
             .with_loc(|| format!("While attempting to assign the alleles of {}", offspring.label()))?;
         }
         Ok(())
@@ -197,7 +194,7 @@ impl Pedigree {
                 Some([parent1, parent2])
             },
         };
-        let ind = Rc::new(RefCell::new(Individual::new(label, parents, sex)));
+        let ind = Arc::new(Mutex::new(Individual::new(label, parents, sex)));
         self.individuals.insert(label.to_owned(), ind);
         Ok(())
     }
@@ -215,7 +212,7 @@ impl Pedigree {
         use std::io::ErrorKind::InvalidInput;
         let pair0 = self.individuals.get(pair.0).ok_or(InvalidInput)?;
         let pair1 = self.individuals.get(pair.1).ok_or(InvalidInput)?;
-        self.comparisons.push(PedComparison::new(label, [pair0, pair1], pair0==pair1));
+        self.comparisons.push(PedComparison::new(label, [pair0, pair1], *pair0.lock().unwrap() == *pair1.lock().unwrap()));
         Ok(())
     }
 
@@ -234,7 +231,7 @@ impl Pedigree {
 
         self.individuals.get_mut(ind)
             .ok_or(InvalidInput)?
-            .borrow_mut()
+            .lock().unwrap()
             .set_parents([parent0, parent1]);
             Ok(())
 
@@ -244,11 +241,13 @@ impl Pedigree {
     /// # Arguments:
     /// - `label`: name of the target individual;
     #[cfg(test)]
-    pub fn get_mutind(&mut self, label: &String) -> Result<std::cell::RefMut<Individual>, std::io::Error>{
+    pub fn get_mutind(&mut self, label: &String) -> Result<MutexGuard<Individual>, std::io::Error>{
         use std::io::ErrorKind::InvalidInput;
         Ok(self.individuals.get_mut(label)
             .ok_or(InvalidInput)?
-            .borrow_mut())
+            .lock()
+            .unwrap()
+        )
     }
 
     /// Obtain a vector of mutable references leading to the founder individuals of this pedigree.
@@ -260,20 +259,20 @@ impl Pedigree {
     ///  - collecting the iterator is useless, since we're always calling this method to iterate over the items.
     ///    --> return an iterator!!
     #[inline]
-    pub fn founders_mut(&mut self) -> impl Iterator<Item = RefMut<Individual>> {
+    pub fn founders_mut(&mut self) -> impl Iterator<Item = std::sync::MutexGuard<Individual>> {
         self.individuals
             .values_mut()
-            .filter(|ind| RefCell::borrow(ind).is_founder())
-            .map(|x| x.borrow_mut())
+            .filter(|ind| Mutex::lock(ind).unwrap().is_founder())
+            .map(|x| x.lock().unwrap())
     }
 
     /// Obtain a vector of mutable references leading to the offsprings of this pedigree.
     #[inline]
-    pub fn offsprings_mut(&mut self) -> impl Iterator<Item = RefMut<Individual>> {
+    pub fn offsprings_mut(&mut self) -> impl Iterator<Item = std::sync::MutexGuard<Individual>> {
         self.individuals
             .values_mut()
-            .filter(|ind| !RefCell::borrow(ind).is_founder())
-            .map(|x| x.borrow_mut())
+            .filter(|ind| !Mutex::lock(ind).unwrap().is_founder())
+            .map(|x| x.lock().unwrap())
     }
 
     /// Set the population tags, and assign random SampleTag for each founder individual within this pedigree.
@@ -305,12 +304,12 @@ impl Pedigree {
     /// Set all individual allele's to `None` within this pedigree.
     pub fn clear_alleles(&mut self){
         for ind in self.individuals.values_mut(){
-            ind.borrow_mut().clear_alleles()
+            ind.lock().unwrap().clear_alleles()
         }
     }
 
     pub fn all_sex_assigned(&self) -> bool {
-        self.individuals.values().all(|ind| ind.borrow().is_sex_assigned())
+        self.individuals.values().all(|ind| ind.lock().unwrap().is_sex_assigned())
     }
 
 }
@@ -353,8 +352,8 @@ mod test {
                 pedigree.add_individual(label, parents, None)?;
             }
             for (_label, ind) in pedigree.individuals.iter_mut() {
-                if ind.borrow().is_founder() {
-                    ind.borrow_mut().set_alleles([fastrand::bool() as u8, fastrand::bool() as u8]);
+                if ind.lock().unwrap().is_founder() {
+                    ind.lock().unwrap().set_alleles([fastrand::bool() as u8, fastrand::bool() as u8]);
                 }
             }
         } else {
@@ -375,20 +374,20 @@ mod test {
     fn meiosis_assign_alleles_empty_strands(){
         let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
-        offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, Arc::new(Mutex::new(fastrand::Rng::new())), false).expect("Failed to assign alleles");
     }
 
     #[test]
     fn meiosis_assign_alleles_filled_strands(){
-        let mut rng      = fastrand::Rng::new();
+        let rng      = Arc::new(Mutex::new(fastrand::Rng::new()));
         let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands   = Some([0, 0]);
 
-        let output = offspr.assign_alleles(0.0, 0, &mut rng, false).expect("Failed to assign alleles");
+        let output = offspr.assign_alleles(0.0, 0, rng.clone(), false).expect("Failed to assign alleles");
         assert!(output);
 
-        let output = offspr.assign_alleles(0.0, 0, &mut rng, false).expect("Failed to assign alleles");
+        let output = offspr.assign_alleles(0.0, 0, rng.clone(), false).expect("Failed to assign alleles");
         assert!(!output);
     }
 
@@ -397,7 +396,7 @@ mod test {
         let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands   = Some([0, 0]);
-        offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, Arc::new(Mutex::new(fastrand::Rng::new())), false).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([0, 1]))
     }
 
@@ -407,7 +406,7 @@ mod test {
         let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands   = Some([1, 1]);
 
-        offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
+        offspr.assign_alleles(0.0, 0, Arc::new(Mutex::new(fastrand::Rng::new())), false).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([1, 0]));
         assert_eq!(offspr.currently_recombining, [false, false]);
 
@@ -418,7 +417,7 @@ mod test {
         let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands   = Some([0, 1]);
-        offspr.assign_alleles(1.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
+        offspr.assign_alleles(1.0, 0, Arc::new(Mutex::new(fastrand::Rng::new())), false).expect("Failed to assign alleles");
         assert_eq!(offspr.alleles, Some([1, 1]));
         assert_eq!(offspr.currently_recombining, [true, true]);
 
@@ -450,7 +449,7 @@ mod test {
             let mut pedigree = test_pedigree_random(Some(def.clone())).unwrap();//.expect("Cannot generate test pedigree");
             pedigree.assign_random_sex()?;
             for (_label, ind) in pedigree.individuals.iter() {
-                assert!(ind.borrow().sex.is_some());
+                assert!(ind.lock().unwrap().sex.is_some());
             }
         }
         Ok(())

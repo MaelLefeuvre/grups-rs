@@ -1,5 +1,4 @@
-use std::{rc::Rc, cell::RefCell};
-
+use std::sync::{Arc, Mutex};
 use super::super::Individual;
 use super::ComparisonError;
 use grups_io::read::SampleTag; 
@@ -29,7 +28,7 @@ use crate::pedigrees::constants::{
 #[derive(Debug, Clone)]
 pub struct PedComparison {
     pub label        : String,
-    pair             : [Rc<RefCell<Individual>>; 2],
+    pair             : [Arc<Mutex<Individual>>; 2],
     pwd              : u32,
     overlap          : u32,
     _self_comparison : bool,
@@ -41,7 +40,7 @@ impl PedComparison {
     /// - `label`          : User-defined name of the comparison (e.g. "Siblings")
     /// - `pair`           : Size-two array of Pedigree Individual references
     /// - `self_comparison`: Whether or not the two individuals of the pair are the same.
-    pub fn new(label: &str, pair: [&Rc<RefCell<Individual>>; 2], self_comparison: bool) -> PedComparison {
+    pub fn new(label: &str, pair: [&Arc<Mutex<Individual>>; 2], self_comparison: bool) -> PedComparison {
         let pair = Self::format_pair(pair);
         PedComparison{label: label.to_string(), pair, _self_comparison: self_comparison, pwd: 0, overlap: 0 }
     }
@@ -69,8 +68,8 @@ impl PedComparison {
     /// Rc::clone() the provided pair of pedigree individuals during instantiation. (see. `PedComparison::new()`)
     /// # Arguments:
     /// - `pair`: Size-two array of Pedigree Individual references.
-    fn format_pair(pair: [&Rc<RefCell<Individual>>; 2]) ->  [Rc<RefCell<Individual>>; 2] {
-        [Rc::clone(pair[0]), Rc::clone(pair[1])]
+    fn format_pair(pair: [&Arc<Mutex<Individual>>; 2]) ->  [Arc<Mutex<Individual>>; 2] {
+        [Arc::clone(pair[0]), Arc::clone(pair[1])]
     }
 
     /// Simulate observed reads for the two pedigree individuals, and check if there is a pairwise difference between 
@@ -81,15 +80,15 @@ impl PedComparison {
     ///   Entry[i] of the array corresponds to `self.pair[i]`.
     /// - `seq_error_rate`: Size-two array of the simulated sequencing error rate.
     ///   Entry[i] of the array corresponds to `self.pair[i]`.
-    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2], rng: &mut fastrand::Rng) -> Result<()> {
+    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2], rng: Arc<Mutex<fastrand::Rng>>) -> Result<()> {
         use ComparisonError::CompareAllele;
         self.add_overlap();
 
-        let random_sample0 = self.pair[0].borrow()
+        let random_sample0 = self.pair[0].lock().unwrap()
             .get_alleles()
-            .and_then(|allele| Self::simulate_observed_read(rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], allele))
+            .and_then(|allele| Self::simulate_observed_read(rng.clone(), contam_rate[0], contam_pop_af[0], seq_error_rate[0], allele))
             .with_loc(||CompareAllele)?;
-        let random_sample1 = self.pair[1].borrow()
+        let random_sample1 = self.pair[1].lock().unwrap()
             .get_alleles()
             .and_then(|allele| Self::simulate_observed_read(rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], allele))
             .with_loc(||CompareAllele)?;
@@ -113,8 +112,9 @@ impl PedComparison {
     /// - `seq_error_rate`: sequencing error rate required for the simulation.
     /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
     #[inline]
-    fn simulate_observed_read(rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<u8> {
+    fn simulate_observed_read(rng: Arc<Mutex<fastrand::Rng>>, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<u8> {
         use ComparisonError::{SampleAllele, SimSeqError};
+        let mut rng = rng.lock().unwrap();
         // ---- Simulate modern human contamination. 
         let chosen_base: u8 = match rng.f64() < contam_rate {
             true  => match rng.f64() < contam_pop_af {
@@ -148,11 +148,11 @@ impl PedComparison {
     /// - this is a legacy function, which now wraps around the more performant [[`simulate_observed_read`]].
     /// - Keeping this for unit-testing purposes.
     #[cfg(test)]
-    fn _simulate_observed_reads(n: u8, rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>> {
+    fn _simulate_observed_reads(n: u8, rng: Arc<Mutex<fastrand::Rng>>, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>> {
         // ---- Simulate n pileup observations.
         let mut reads = Vec::with_capacity(n as usize);
         for _ in 0..n {
-            reads.push(Self::simulate_observed_read(rng, contam_rate, contam_pop_af, seq_error_rate, alleles)?)
+            reads.push(Self::simulate_observed_read(rng.clone(), contam_rate, contam_pop_af, seq_error_rate, alleles)?)
         }
         Ok(reads)
     }
@@ -162,8 +162,8 @@ impl std::fmt::Display for PedComparison {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let default_tag=SampleTag::new("None", None, None);
         // <Comparison-Label> <Ind1-label> <Ind2-label> <Ind1-reference> <Ind2-reference> <Sum.PWD> <Overlap> <Avg.PWD>
-        let ind1 = self.pair[0].borrow();
-        let ind2 = self.pair[1].borrow();
+        let ind1 = self.pair[0].lock().unwrap();
+        let ind2 = self.pair[1].lock().unwrap();
         write!(f, 
             "{: <COMPARISON_LABEL_FORMAT_LEN$} - \
             {: <IND_LABEL_FORMAT_LEN$} - \
@@ -234,12 +234,12 @@ mod tests {
     fn simulate_observed_reads_contam() -> Result<()> {
         let binary_rates = [0.0, 1.0];
         let binary_alleles = [[0,0], [1,1]];
-        let mut rng = fastrand::Rng::new();
+        let rng = Arc::new(Mutex::new(fastrand::Rng::new()));
         for contam_rate in binary_rates {
             for contam_pop_af in binary_rates {
                 for alleles in binary_alleles {
                     let want = get_expected_simulated_allele(alleles[0], contam_rate, contam_pop_af);
-                    let got = PedComparison::_simulate_observed_reads(1, &mut rng, contam_rate, contam_pop_af, 0.0, alleles)?;
+                    let got = PedComparison::_simulate_observed_reads(1, rng.clone(), contam_rate, contam_pop_af, 0.0, alleles)?;
                     assert_eq!(want, got[0]);
                 }
             }
@@ -250,7 +250,7 @@ mod tests {
     #[test]
     fn allele_comparison() -> Result<()> {
 
-        let mut rng = fastrand::Rng::new();
+        let rng = Arc::new(Mutex::new(fastrand::Rng::new()));
 
         let ref_alt = [0, 1];
         let binary_rates = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]];
@@ -260,8 +260,8 @@ mod tests {
                     for contam_pop_af in binary_rates {
                         let mut comp = common::mock_pedcomparison();
                         let alleles = [[allele_ind_0, allele_ind_0], [allele_ind_1, allele_ind_1]];
-                        comp.pair.iter().zip(alleles.iter()).for_each(|(ind, all)| ind.borrow_mut().set_alleles(*all));
-                        comp.compare_alleles(contam_rate, contam_pop_af, [0.0,0.0], &mut rng)?;
+                        comp.pair.iter().zip(alleles.iter()).for_each(|(ind, all)| ind.lock().unwrap().set_alleles(*all));
+                        comp.compare_alleles(contam_rate, contam_pop_af, [0.0,0.0], rng.clone())?;
 
                         let mut want = [0, 0];
                         izip!(&mut want, [allele_ind_0, allele_ind_1], contam_rate, contam_pop_af)

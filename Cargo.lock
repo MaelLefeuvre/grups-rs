@@ -1139,6 +1139,7 @@ dependencies = [
  "parser",
  "pwd_from_stdin",
  "rand",
+ "rayon",
  "thiserror",
 ]
 

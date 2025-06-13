@@ -1,4 +1,4 @@
-use std::{fs::File, path::{Path, PathBuf}, io::Read};
+use std::{fs::File, io::Read, path::{Path, PathBuf}, sync::{Arc, Mutex}};
 
 use crate::{
     parse,
@@ -41,6 +41,8 @@ impl SetRead<Mmap> for Mmap {
     }
 }
 
+
+
 /// Implementation for the in-RAM memory model of FSTReader
 impl SetRead<Vec<u8>> for Vec<u8> {
     fn get_fst_memory(path: &str) -> Result<Set<Vec<u8>>> {
@@ -63,11 +65,23 @@ impl SetRead<Vec<u8>> for Vec<u8> {
 
 /// GenotypeReader from a pair of genotypes (`.fst`) and frequencies (`.fst.frq`) FST-Sets
 /// #### Implemented Traits: GenotypeReader
+#[derive(Debug)]
 pub struct FSTReader<T: SetRead<T> + AsRef<[u8]>> {
-    genotypes_set: Set<T>,
-    frequency_set: Set<T>,
+    genotypes_set: Arc<Mutex<Set<T>>>,
+    frequency_set: Arc<Mutex<Set<T>>>,
     genotypes    : AHashMap<u128, [u8; 2]>,
     frequencies  : AHashMap<String, f32>,
+}
+
+impl <T: AsRef<[u8]> + SetRead<T>>Clone for FSTReader<T> {
+    fn clone(&self) -> Self {
+        Self {
+            genotypes_set: self.genotypes_set.clone(),
+            frequency_set: self.frequency_set.clone(),
+            genotypes: self.genotypes.clone(),
+            frequencies: self.frequencies.clone()
+        }
+    }
 }
 
 impl<T: AsRef<[u8]> + SetRead<T>> GenotypeReader for FSTReader<T> {
@@ -111,14 +125,15 @@ impl<T: AsRef<[u8]> + SetRead<T>>FSTReader<T> {
     /// - `path`: path leading to the targeted `.fst` file.
     pub fn new(path: &str) -> Result<FSTReader<T>> {
         let loc_msg = || format!("While attempting to create FSTReader from {path}");
-        let genotypes_set = <T as SetRead<T>>::get_fst_memory(path).with_loc(loc_msg)?;
-        let frequency_set = <T as SetRead<T>>::get_fst_memory(&format!("{path}.frq")).with_loc(loc_msg)?; //@TODO: const FRQ_EXT should be used in place.
+        let genotypes_set = Arc::new(Mutex::new(<T as SetRead<T>>::get_fst_memory(path).with_loc(loc_msg)?));
+        let frequency_set = Arc::new(Mutex::new(<T as SetRead<T>>::get_fst_memory(&format!("{path}.frq")).with_loc(loc_msg)?)); //@TODO: const FRQ_EXT should be used in place.
         Ok(Self{genotypes_set, frequency_set, genotypes: AHashMap::new(), frequencies: AHashMap::new()})
     }
 
     /// Public wrapper for `find_chromosome()`. returns a sorted, unduplicated list of chromosomes contained within the set.
     pub fn find_chromosomes(&self) -> Result<Vec<u8>> {
-        let root = self.genotypes_set.as_fst().root();
+        let set = self.genotypes_set.lock().unwrap();
+        let root = set.as_fst().root();
         let mut chromosomes = Vec::from_iter( root.transitions().map(|transition| transition.inp) );
         chromosomes.sort_unstable();
         chromosomes.dedup();
@@ -142,7 +157,8 @@ impl<T: AsRef<[u8]> + SetRead<T>>FSTReader<T> {
         let matcher = Self::format_coordinate_pattern(&coord_bytes);
 
         // ---- Search through the set and format each match within `self.genotypes` (key=<sample-id>, val=<alleles>)
-        let mut stream = self.genotypes_set.search(&matcher).into_stream();
+        let gset = self.genotypes_set.lock().unwrap();
+        let mut stream = gset.search(&matcher).into_stream();
         while let Some(key) = stream.next() {
             // ---- Retrieve alleles and sample id.
             let key = &mut key[5..].to_vec();                // Skip coordinate bytes.
@@ -170,7 +186,8 @@ impl<T: AsRef<[u8]> + SetRead<T>>FSTReader<T> {
         let matcher = Self::format_coordinate_pattern(&coord_bytes);
 
         // ---- Search through the set and format each match within `self.frequencies` (key=<sample-id>, val=<allele-frequency>)
-        let mut stream = self.frequency_set.search(&matcher).into_stream();
+        let fset = self.frequency_set.lock().unwrap();
+        let mut stream = fset.search(&matcher).into_stream();
         while let Some(key) = stream.next() {
             // ---- Retrieve population tag and frequency.
             let key              = &mut key[5..].to_vec(); // Go from the end of the coordinate to the end.
@@ -240,7 +257,7 @@ mod tests {
     }
 
     fn fake_fst() -> FSTReader<Vec<u8>> {
-        let genotypes_set = Set::from_iter(vec![
+        let genotypes_set = Arc::new(Mutex::new(Set::from_iter(vec![
             fst_line(1, 50000, "HG00096", [0, 0]),
             fst_line(1, 50000, "HG00097", [0, 1]),
             fst_line(1, 50000, "HG00098", [1, 0]),
@@ -249,14 +266,14 @@ mod tests {
             fst_line(1, 60000, "HG00097", [0, 0]),
             fst_line(1, 60000, "HG00098", [0, 0]),
             fst_line(1, 60000, "HG00099", [0, 1]),
-        ]).unwrap();
+        ]).unwrap()));
 
-        let frequency_set = Set::from_iter(vec![
+        let frequency_set = Arc::new(Mutex::new(Set::from_iter(vec![
             frq_line(1, 50000, "AFR", 0.0),
             frq_line(1, 50000, "EUR", 0.5),
             frq_line(1, 60000, "AFR", 1.0),
             frq_line(1, 60000, "EUR", 0.125),
-        ]).unwrap();
+        ]).unwrap()));
 
         FSTReader::<Vec<u8>>{genotypes_set, frequency_set, genotypes: AHashMap::new(), frequencies: AHashMap::new()}
     }
@@ -346,16 +363,16 @@ mod tests {
 
     #[test]
     fn test_find_chromosomes() {
-        let genotypes_set = Set::from_iter(vec![
+        let genotypes_set = Arc::new(Mutex::new(Set::from_iter(vec![
             fst_line(1, 50000, "HG00096", [0, 0]),
             fst_line(3, 50000, "HG00098", [1, 0]),
             fst_line(5, 60000, "HG00096", [0, 0]),
             fst_line(7, 60000, "HG00097", [0, 0]),
             fst_line(9, 60000, "HG00098", [0, 0]),
             fst_line(21, 60000, "HG00099", [0, 1]),
-        ]).unwrap();
+        ]).unwrap()));
 
-        let frequency_set = Set::from_iter(vec![frq_line(1, 50000, "AFR", 0.0)]).unwrap();
+        let frequency_set = Arc::new(Mutex::new(Set::from_iter(vec![frq_line(1, 50000, "AFR", 0.0)]).unwrap()));
 
         let reader = FSTReader::<Vec<u8>>{genotypes_set, frequency_set, genotypes: AHashMap::new(), frequencies: AHashMap::new()};
 

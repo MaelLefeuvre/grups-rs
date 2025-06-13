@@ -1,27 +1,32 @@
 use std::{
-    ops::Deref,
-    cell::RefCell,
-    rc::Rc,
+    ops::Deref, sync::{Arc, Mutex}
 };
 
 use super::Individual;
 
 /// Helper struct to Deref and Display the parents of an individual.
 /// 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Parents([Rc<RefCell<Individual>>; 2]);
+#[derive(Debug, Clone)]
+pub struct Parents([Arc<Mutex<Individual>>; 2]);
 
 impl Parents{
     /// Instantiate a new set of Parents.
     /// # Arguments
-    /// - `parents`: size-two array of Rc<RefCell<Individual>. Each Individual being a parent.  
-    pub fn new(parents: [Rc<RefCell<Individual>>; 2]) -> Parents {
+    /// - `parents`: size-two array of Arc<Mutex<Individual>. Each Individual being a parent.  
+    pub fn new(parents: [Arc<Mutex<Individual>>; 2]) -> Parents {
         Parents(parents)
     }
 }
 
+impl PartialEq for Parents {
+    fn eq(&self, other: &Self) -> bool {
+        *self.0[0].lock().unwrap() == *other.0[0].lock().unwrap() && 
+        *self.0[1].lock().unwrap() == *other.0[1].lock().unwrap()
+    }
+}
+
 impl Deref for Parents {
-    type Target = [Rc<RefCell<Individual>>];
+    type Target = [Arc<Mutex<Individual>>];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -30,8 +35,8 @@ impl Deref for Parents {
 impl std::fmt::Display for Parents {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{} <-> {}", 
-            RefCell::borrow(&self[0]).label,
-            RefCell::borrow(&self[1]).label
+            &self[0].lock().unwrap().label,
+            &self[1].lock().unwrap().label
         )
     }
 }
@@ -43,8 +48,8 @@ mod tests {
     #[test]
     fn display(){
         let parents_labels = ["father", "mother"];
-        let father = Rc::new(RefCell::new(common::mock_founder(parents_labels[0])));
-        let mother = Rc::new(RefCell::new(common::mock_founder(parents_labels[1])));
+        let father = Arc::new(Mutex::new(common::mock_founder(parents_labels[0])));
+        let mother = Arc::new(Mutex::new(common::mock_founder(parents_labels[1])));
         let parents = Parents::new([father, mother]);
         let display = format!("{parents}");
 
