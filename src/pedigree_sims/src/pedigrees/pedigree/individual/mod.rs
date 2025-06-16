@@ -1,7 +1,7 @@
 use std::{
     cmp::{Ord, Ordering, PartialOrd},
     hash::{Hash, Hasher},
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 use grups_io::read::SampleTag;
@@ -102,13 +102,13 @@ impl PartialOrd for Individual {
     }
 }
 
-type ParentsRef<'a> = [&'a Arc<Mutex<Individual>>; 2];
+type ParentsRef<'a> = [&'a Arc<RwLock<Individual>>; 2];
 
 impl Individual {
     /// Instantiate a new individual.
     /// # Arguments
     /// - `label`  : User-defined name of the individual (e.g. "father", "mother", "child", etc.)
-    /// - `parents`: Size-two array of `&Arc<Mutex<Individual>>`, representing the individual's parents. 
+    /// - `parents`: Size-two array of `&Arc<RwLock<Individual>>`, representing the individual's parents. 
     pub fn new(label: &str, parents: Option<ParentsRef>, sex: Option<Sex> ) -> Individual {
         let parents = parents.map(Self::format_parents);
         Individual {tag: None, label: label.to_string(), parents, strands: None, currently_recombining: [false, false], alleles: None, sex}
@@ -183,13 +183,13 @@ impl Individual {
 
     /// Manually set the Individuals parents.
     /// # Arguments
-    /// - `parents`: Size-two array of `&Arc<Mutex<Individual>>`, representing the individual's parents. 
+    /// - `parents`: Size-two array of `&Arc<RwLock<Individual>>`, representing the individual's parents. 
     pub fn set_parents(&mut self, parents: ParentsRef) {
         self.parents = Some(Self::format_parents(parents));
     }
 
     /// Rc::clone() the provided pair of of parents during instantiation. (see. `Individual::new()`)
-    fn format_parents(parents:  [&Arc<Mutex<Individual>>; 2]) -> Parents {
+    fn format_parents(parents:  [&Arc<RwLock<Individual>>; 2]) -> Parents {
         Parents::new([Arc::clone(parents[0]), Arc::clone(parents[1])])
     }
 
@@ -231,7 +231,7 @@ impl Individual {
     /// # @ TODO
     /// - Instantiating a new Rng for each individual might not be very efficient...
     ///   Passing a &ThreadRng reference around might be better.
-    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize, rng: Arc<Mutex<fastrand::Rng>>, xchr_mode: bool) -> Result<bool> {
+    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize, rng: &mut fastrand::Rng, xchr_mode: bool) -> Result<bool> {
         use IndividualError::{InvalidAlleleAssignment, MissingParents, MissingStrands};
         // ---- Ensure this method call is non-redundant.
         if self.alleles.is_some() {
@@ -245,14 +245,14 @@ impl Individual {
         // ---- Perform allele assignment for each parent.
         for (i, parent) in parents.iter().enumerate() {
             // ---- Assign parent genome if not previously generated.
-            if parent.lock().unwrap().alleles.is_none() {
-                parent.lock().unwrap().assign_alleles(recombination_prob, i, rng.clone(), xchr_mode)
+            if parent.read().unwrap().alleles.is_none() {
+                parent.write().unwrap().assign_alleles(recombination_prob, i, rng, xchr_mode)
                     .with_loc(||InvalidAlleleAssignment)?;
             }
 
             // ---- Check if recombination occured for each parent and update recombination tracker if so.
-            if (!xchr_mode || parent.lock().unwrap().sex == Some(Sex::Female)) && rng.lock().unwrap().f64() < recombination_prob { 
-                trace!("- Cross-over occured in ped: {:<5} - ind: {} ({} {:?})", ped_idx, self.label, parent.lock().unwrap().label, parent.lock().unwrap().sex);
+            if (!xchr_mode || parent.read().unwrap().sex == Some(Sex::Female)) && rng.f64() < recombination_prob { 
+                trace!("- Cross-over occured in ped: {:<5} - ind: {} ({} {:?})", ped_idx, self.label, parent.read().unwrap().label, parent.read().unwrap().sex);
                 self.currently_recombining[i] = ! self.currently_recombining[i];
             }
         }
@@ -265,13 +265,13 @@ impl Individual {
         self.alleles = if xchr_mode {
             let mut alleles = [0u8 ; 2];
             // ---- Find the index of both parents
-            let father_idx = parents.iter().position(|p| p.lock().unwrap().sex == Some(Sex::Male)).expect("No parent found..");
+            let father_idx = parents.iter().position(|p| p.read().unwrap().sex == Some(Sex::Male)).expect("No parent found..");
             let mother_idx = (father_idx + 1 ) % 2;
 
-            alleles[mother_idx] = parents[mother_idx].lock().unwrap().meiosis(strands[mother_idx], self.currently_recombining[mother_idx]);
+            alleles[mother_idx] = parents[mother_idx].read().unwrap().meiosis(strands[mother_idx], self.currently_recombining[mother_idx]);
             alleles[father_idx] = match self.sex {
                 Some(Sex::Male)           => Ok(alleles[mother_idx]), // If the descendant is a male, alleles are exclusively from the mother
-                Some(Sex::Female)         => Ok(parents[father_idx].lock().unwrap().meiosis(strands[father_idx], self.currently_recombining[father_idx])),
+                Some(Sex::Female)         => Ok(parents[father_idx].read().unwrap().meiosis(strands[father_idx], self.currently_recombining[father_idx])),
                 Some(Sex::Unknown) | None => Err(IndividualError::UnknownOrMissingSex).loc("While attempting to assign alleles during X-chromosome-mode"),
             }?;
 
@@ -289,8 +289,8 @@ impl Individual {
 
             Some(alleles)
         } else {
-            let haplo_0 = parents[0].lock().unwrap().meiosis(strands[0], self.currently_recombining[0]);
-            let haplo_1 = parents[1].lock().unwrap().meiosis(strands[1], self.currently_recombining[1]);
+            let haplo_0 = parents[0].read().unwrap().meiosis(strands[0], self.currently_recombining[0]);
+            let haplo_1 = parents[1].read().unwrap().meiosis(strands[1], self.currently_recombining[1]);
             Some([haplo_0, haplo_1])
         };
 
@@ -309,8 +309,8 @@ impl Individual {
             for (i, parent) in parents.iter().enumerate() {
                 // ---- Assign parent sex if not previously decided.
                 let spouse = &parents[(i+1) % 2];
-                if parent.lock().unwrap().sex.is_none() { // If the parent's sex is still unknown
-                    parent.lock().unwrap().sex = if let Some(spouse_sex) = spouse.lock().unwrap().sex { // If the spouse sex is already known, assign the opposite sex.
+                if parent.read().unwrap().sex.is_none() { // If the parent's sex is still unknown
+                    parent.write().unwrap().sex = if let Some(spouse_sex) = spouse.read().unwrap().sex { // If the spouse sex is already known, assign the opposite sex.
                         match spouse_sex {
                             Sex::Female  => Some(Sex::Male),
                             Sex::Male    => Some(Sex::Female),
@@ -321,7 +321,7 @@ impl Individual {
                     }
                 }
                 // ---- Apply the same process for the parent.
-                parent.lock().unwrap().assign_random_sex()
+                parent.write().unwrap().assign_random_sex()
                     .with_loc(||InvalidSexAssignment)?;
             }
         }
@@ -343,11 +343,11 @@ mod tests {
     use crate::pedigrees::pedigree::tests::common;
 
     fn perform_allele_asignment(offspring: &mut Individual, parents_alleles: [[u8;2];2], recombination_prob: f64) -> Result<()> {
-        let rng = Arc::new(Mutex::new(fastrand::Rng::new()));
+        let mut rng = fastrand::Rng::new();
         let parents = offspring.parents.as_ref().expect("Missing parents");
-        parents[0].lock().unwrap().alleles = Some(parents_alleles[0]);
-        parents[1].lock().unwrap().alleles = Some(parents_alleles[1]);        
-        offspring.assign_alleles(recombination_prob, 0, rng, false)?;
+        parents[0].write().unwrap().alleles = Some(parents_alleles[0]);
+        parents[1].write().unwrap().alleles = Some(parents_alleles[1]);        
+        offspring.assign_alleles(recombination_prob, 0, &mut rng, false)?;
         Ok(())
     }
 
@@ -484,7 +484,7 @@ mod tests {
             let mut child = common::mock_offspring("child", Some(["parent-1", "parent-2"]));
             child.assign_random_sex()?;
             let parents = child.parents.expect("Test offspring has missing parents");
-            assert_ne!(parents[0].lock().unwrap().sex, parents[1].lock().unwrap().sex);
+            assert_ne!(parents[0].read().unwrap().sex, parents[1].read().unwrap().sex);
         }
         Ok(())
     }
@@ -532,14 +532,14 @@ mod tests {
 
     fn alleles_assignment_founder() {
         let mut ind = common::mock_founder("parent");
-        let result = ind.assign_alleles(0.0, 0, Arc::new(Mutex::new(fastrand::Rng::new())), false);
+        let result = ind.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false);
         assert!(result.is_err())
     }
 
     #[test]
     fn alleles_assignments_unnassigned_parent_alleles(){
         let mut ind = common::mock_offspring("offspring", None);
-        let result = ind.assign_alleles(0.0, 0, Arc::new(Mutex::new(fastrand::Rng::new())), false);
+        let result = ind.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false);
         assert!(result.is_err())
     }
 

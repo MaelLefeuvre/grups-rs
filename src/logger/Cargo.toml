@@ -13,3 +13,6 @@
   log        = {workspace = true}
   chrono     = {workspace = true}
   env_logger = "0.9.0"
+  indicatif-log-bridge = {workspace = true} # //MODIFIED
+  indicatif  = {workspace = true} # //MODIFIED
+  once_cell = "1.21.3"

@@ -156,13 +156,13 @@ pub fn run(
         parser::Mode::Fst => {
             info!("Starting FST pedigree comparisons (in RAM).");
             for fst in &input_paths{
-                pedigrees.pedigree_simulations_fst::<Vec<u8>>(comparisons, fst, ped_cli.maf)?;
+                pedigrees.pedigree_simulations_fst::<Vec<u8>>(comparisons, fst, ped_cli.maf, ped_cli.threads)?;
             }
         },
         parser::Mode::FstMmap => {
             info!("Starting FST pedigree comparisons (Memmap).");
             for fst in &input_paths{
-                pedigrees.pedigree_simulations_fst::<memmap2::Mmap>(comparisons, fst, ped_cli.maf)?;
+                pedigrees.pedigree_simulations_fst::<memmap2::Mmap>(comparisons, fst, ped_cli.maf, ped_cli.threads)?;
             }
         }
     }
@@ -173,7 +173,7 @@ pub fn run(
 
     // --------------------- Compute most likely relationship for each Comparison
     info!("Assigning most likely relationships using {}...", ped_cli.assign_method);
-    pedigrees.compute_results(comparisons, &output_files["result"], ped_cli.assign_method)?;
+    pedigrees.compute_results(comparisons, &output_files["result"], ped_cli.assign_method, ped_cli.threads)?;
 
     Ok(())
 }

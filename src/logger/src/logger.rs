@@ -1,8 +1,18 @@
+use indicatif::MultiProgress;
+use indicatif_log_bridge::LogWrapper;
 use log::LevelFilter;
 use log::Level;
 use env_logger::{Builder, Env, fmt::Color};
 use std::io::Write;
-pub struct Logger;
+use once_cell::sync::OnceCell;
+
+static INSTANCE: OnceCell<Logger> = OnceCell::new();
+
+#[derive(Debug)]
+pub struct Logger {
+    multi_pg: MultiProgress,
+}
+
 
 impl Logger {
 
@@ -11,7 +21,7 @@ impl Logger {
         let env = Env::default()
             .filter("GRUPS_LOG");
 
-        Builder::new().filter_level(log_level)
+        let logger = Builder::new().filter_level(log_level)
             .format(|buf, record| {
                 
                 let traceback: String;
@@ -48,7 +58,14 @@ impl Logger {
                 )
             })
             .parse_env(env)
-            .init();
+            .build();
+            // Progress bar support.
+            let multi_pg = MultiProgress::new();
+            LogWrapper::new(multi_pg.clone(), logger)
+                .try_init()
+                .expect("Failed to wrap logger with multiprogress");
+            //return Self{multi_pg }
+            INSTANCE.set(Self{multi_pg}).unwrap();
     }
 
     fn u8_to_loglevel(verbosity: u8) -> LevelFilter {
@@ -63,6 +80,10 @@ impl Logger {
 
     pub fn set_level(verbosity: u8) {
         log::set_max_level(Self::u8_to_loglevel(verbosity));
+    }
+
+    pub fn multi() -> &'static MultiProgress {
+        &INSTANCE.get().expect("Unitialized").multi_pg
     }
 }
 

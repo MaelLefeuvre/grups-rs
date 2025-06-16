@@ -17,4 +17,5 @@
   fst            = {workspace = true}
   log            = {workspace = true}
   thiserror      = {workspace = true}
-  rayon          = "1.5.2"
+  rayon          = {workspace = true} # // MODIFIED
+

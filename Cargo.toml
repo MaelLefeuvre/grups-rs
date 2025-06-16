@@ -68,8 +68,11 @@
   chrono            = "0.4"
   mockall           = "0.11.0"
   fst               = "0.4"
-  memmap2        = "0.5.10"
+  memmap2           = "0.5.10"
   gzp               = "0.9.5"
+  rayon             = "1.10.0"
+  indicatif            = "0.17.11"
+  indicatif-log-bridge = "0.2.3"
 
 [dependencies]
   vcf-fst           = {path = "src/vcf-fst"}

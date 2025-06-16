@@ -549,7 +549,15 @@ pub struct PedigreeSims {
     /// With the use of --sex-specific-mode, pedigree samples are instead randomly assigned a chromosomal sex, and reference
     /// samples are selected in accordance with the sex of the considered founder individual.
     #[clap(long)]
-    pub sex_specific_mode: bool
+    pub sex_specific_mode: bool,
+
+    /// Number of parallel CPU processes when performing Pedigree simulations
+    /// 
+    /// Parallelization is dispatched according to the number of pairwise comparisons. Thus, there is no point in 
+    /// invoking more threads than (n*n-1)/2 samples (or n^2/2, when allowing self-comparisons)
+    /// 
+    #[clap(short='@', long, default_value("1"))]
+    pub threads: usize,
 }
 
 /// Convert VCF files into sets of FSA-encoded indexes.
