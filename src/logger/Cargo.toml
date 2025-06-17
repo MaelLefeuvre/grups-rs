@@ -10,9 +10,9 @@
   path = "src/logger.rs"
 
 [dependencies]
-  log        = {workspace = true}
-  chrono     = {workspace = true}
-  env_logger = "0.9.0"
+  log                  = {workspace = true}
+  chrono               = {workspace = true}
   indicatif-log-bridge = {workspace = true} # //MODIFIED
-  indicatif  = {workspace = true} # //MODIFIED
-  once_cell = "1.21.3"
+  indicatif            = {workspace = true} # //MODIFIED
+  thiserror            = {workspace = true}
+  env_logger           = "0.9.0"

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem::ManuallyDrop, path::Path, sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard}};
+use std::{collections::HashMap, mem::ManuallyDrop, path::Path, sync::{Arc}};
 
 use grups_io::{
     read::genotype_reader::{fst::SetRead, FSTReader, GenotypeReader, VCFReader},
@@ -11,6 +11,7 @@ use genome::{
     coordinate::{Coordinate, Position},
     GeneticMap,
 };
+
 use located_error::prelude::*;
 use parser::RelAssignMethod;
 use pwd_from_stdin::comparisons::{Comparison, Comparisons as PileupComparisons};
@@ -20,7 +21,9 @@ use fastrand;
 use indexmap::IndexMap;
 use log::{self, debug, info, trace, warn};
 
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+
+use parking_lot::{RwLock, RwLockReadGuard,RwLockWriteGuard};
 
 mod pedigree_reps;
 pub use pedigree_reps::PedigreeReps;
@@ -105,14 +108,14 @@ impl Pedigrees {
 
     pub fn set_founder_tags(&mut self, panel: &PanelReader) -> Result<()> {
         self.pedigrees.iter_mut().try_for_each(|(label, ped_rep)|{
-            ped_rep.write().unwrap().set_founder_tags(panel, &self.pedigree_pop)
+            ped_rep.write().set_founder_tags(panel, &self.pedigree_pop)
                 .with_loc(||format!("While attempting to set founder tags in pedigree vector of comparison '{label}'"))
         })
     }
 
     pub fn assign_offspring_strands(&mut self) -> Result<()> {
         self.pedigrees.iter_mut().try_for_each(|(label, ped_rep)|{
-            ped_rep.write().unwrap().assign_offspring_strands()
+            ped_rep.write().assign_offspring_strands()
                 .with_loc(||format!("While attempting to randomly assign offspring strands in pedigree vector of comparison '{label}'"))
 
         })
@@ -182,12 +185,12 @@ impl Pedigrees {
     pub fn all_sex_assigned(&self) -> bool {
         self.pedigrees
             .values()
-            .all(|ped_rep| ped_rep.read().unwrap().all_sex_assigned())
+            .all(|ped_rep| ped_rep.read().all_sex_assigned())
     }
 
     pub fn assign_random_sex(&mut self) -> Result<()> {
         self.pedigrees.iter_mut().try_for_each(|(label, ped_rep)| {
-            ped_rep.write().unwrap().assign_random_sex().with_loc(|| {
+            ped_rep.write().assign_random_sex().with_loc(|| {
                 format!("While assigning sexes in pedigree replicate vector of comparison {label}")
             })
         })
@@ -223,7 +226,7 @@ impl Pedigrees {
             let mut pedigree_reps = self.pedigrees
                 .get_mut(&pair_label)
                 .ok_or_else(|| MissingPedVec(pair_label.to_string()))
-                .loc(loc_msg)?.write().unwrap();
+                .loc(loc_msg)?.write();
 
             // ---- Instantiate a sequencing error `ParamRateGenerator` if the user specified sequencing error rates.
             //      If the user did not provide any, assign `None` -> the phred-scores of the pileup will then be used to compute the seq-error probability
@@ -288,13 +291,14 @@ impl Pedigrees {
         coordinate: &Coordinate,
         comparison_label: &String,
         pileup_error_probs: &[f64; 2],
+        rng: &mut fastrand::Rng
     ) -> Result<()> {
         use PedigreeError::{InvalidCoordinate, MissingContaminant};
         // ---- Compute the interval between current and previous position, search trough the genetic map interval tree,
         //      and compute the probability of recombination.
         let mut previous_position = self.previous_positions
             .get(comparison_label)
-            .with_loc(|| InvalidCoordinate)?.write().unwrap();
+            .with_loc(|| InvalidCoordinate)?.write();
         let interval_prob_recomb = self
             .genetic_map
             .compute_recombination_prob(coordinate, *previous_position);
@@ -311,7 +315,6 @@ impl Pedigrees {
             .compute_local_cont_af(reader)?;
 
         let xchr_mode = coordinate.chromosome.0 == b'X';
-        let mut rng = fastrand::Rng::new();
         'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
             // --------------------- Perform SNP downsampling if necessary
             if rng.f64() < pedigree.get_params()?.snp_downsampling_rate {
@@ -319,17 +322,18 @@ impl Pedigrees {
             }
 
             // --------------------- Update founder alleles. Perform allele frequency downsampling if necessary.
-            pedigree.update_founder_alleles(reader)?;
+            pedigree.update_founder_alleles(reader, rng)?;
 
             // --------------------- Compute offspring genomes
             pedigree.compute_offspring_alleles(
                 interval_prob_recomb,
                 i,
                 xchr_mode,
+                rng
             )?;
 
             // --------------------- Compare genomes.
-            pedigree.compare_alleles(cont_af, pileup_error_probs)?;
+            pedigree.compare_alleles(cont_af, pileup_error_probs, rng)?;
             // --------------------- Clear genotypes before the next line!
             pedigree.clear_alleles();
         }
@@ -377,12 +381,22 @@ impl Pedigrees {
         // Keep a record of positions that should get filtered out after maf < treshold.
         let positions_to_delete: RwLock<AHashMap<String, Vec<Coordinate>>> = RwLock::new(AHashMap::new());
 
-        let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
+        let pool          = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
         let multiprogress = logger::Logger::multi();
-        let pb_style = ProgressStyle::with_template("[{elapsed_precise}] {wide_bar:.cyan/blue} {percent:>3}% [{prefix}] {msg}").unwrap();
+        let pb_style      = ProgressStyle::with_template(
+            "{spinner:.blue} [{elapsed_precise}] {wide_bar:.white/white} {percent:>3}% [{prefix}] {msg}"
+            )?
+            .tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾");
+
+        let mut rng = fastrand::Rng::new();
+        let (tx, rx) = std::sync::mpsc::channel();
         pool.scope(|scope| {
             'comparison: for comparison in comparisons.iter() {
+                let tx = tx.clone();
+                let rng = rng.fork();
                 scope.spawn( |_| {
+                    let tx = tx;
+                    let mut rng = rng;
                     let pair_name = comparison.get_pair();
                     let mut fst_reader = fst_reader.clone();
                     let mut missing_snps: u32 = 0; //MODIFIED
@@ -397,6 +411,7 @@ impl Pedigrees {
                     let progress_bar = multiprogress.insert(
                         rayon::current_thread_index().unwrap(), ProgressBar::new(n as u64).with_style(pb_style.clone()));
                     progress_bar.set_prefix(pair_name.to_string());
+                    if ! log::log_enabled!(log::Level::Info) { progress_bar.set_draw_target(ProgressDrawTarget::hidden())}
 
                     // Loop along positions.
                     let key = comparison.get_pair();
@@ -419,20 +434,24 @@ impl Pedigrees {
                         }
 
                         // --------------------- Skip line if allele frequency is < maf and keep in memory for filtration..
-                        let pop_af = fst_reader.get_pop_allele_frequency(&self.pedigree_pop).unwrap();
-                        if pop_af < maf || pop_af > (1.0 - maf) {
-                            trace!("[{pair_name}] skip allele at {coordinate}: pop_af: {pop_af:<8.5} --maf: {maf}");
-                            positions_to_delete.write().unwrap()
-                                .entry(key.to_owned())
-                                .or_default()
-                                .push(pairwise_diff.coordinate);
-                            continue 'coordinate;
+                        match fst_reader.get_pop_allele_frequency(&self.pedigree_pop) {
+                            Ok(pop_af) => if pop_af < maf || pop_af > (1.0 - maf) {
+                                trace!("[{pair_name}] skip allele at {coordinate}: pop_af: {pop_af:<8.5} --maf: {maf}");
+                                positions_to_delete.write()
+                                    .entry(key.to_owned())
+                                    .or_default()
+                                    .push(pairwise_diff.coordinate);
+                                continue 'coordinate;
+                            },
+                            Err(e) => tx.send(Some(e)).expect("MPSC Channel Receiver disconnected")
                         }
 
                         let pileup_error_probs = pairwise_diff.error_probs();
                         // --------------------- Parse genotype fields and start updating dynamic simulations.
-                        let res = self.update_pedigrees(&fst_reader, &coordinate, &key, &pileup_error_probs).unwrap();
-                        //results.write().unwrap().push(res);
+                        if let Err(e) = self.update_pedigrees(&fst_reader, &coordinate, &key, &pileup_error_probs, &mut rng){
+                            tx.send(Some(e)).expect("MPSC Channel Receiver disconnected");
+                        }
+
                     }
                     progress_bar.finish();
 
@@ -442,16 +461,20 @@ impl Pedigrees {
                         self.pedigrees
                             .get(&comparison.get_pair())
                             .unwrap()
-                            .write().unwrap()
+                            .write()
                             .add_non_informative_snps(missing_snps);
                     }
-
                     multiprogress.remove(&progress_bar)
                 })
             }
         });
+        drop(tx);
+        while let Some(e) = rx.try_iter().next() {
+            println!("{e:?}");
+        }
+
         // --------------------- Filter out unwanted alleles.
-        Self::filter_pileup_positions(&mut positions_to_delete.write().unwrap(), comparisons);
+        Self::filter_pileup_positions(&mut positions_to_delete.write(), comparisons);
         multiprogress.clear()?;
         Ok(())
     }
@@ -476,10 +499,7 @@ impl Pedigrees {
                     .or_default()
                     .contains(&pwd.coordinate)
             });
-            info!(
-                "- {key: <20} filtered-out SNPs: {}",
-                pre_filtered_n - comparison.positions.len()
-            );
+            info!("- {key: <20} filtered-out SNPs: {}", pre_filtered_n - comparison.positions.len());
         }
     }
 
@@ -524,6 +544,7 @@ impl Pedigrees {
             i += 1;
 
             // --------------------- Loop across comparisons.
+            let mut rng = fastrand::Rng::new();
             'comparison: for comparison in comparisons.iter() {
                 let key = comparison.get_pair();
                 // --------------------- Skip if the current position is not a valid candidate.
@@ -575,6 +596,7 @@ impl Pedigrees {
                             &coordinate,
                             &comparison.get_pair().to_owned(),
                             &pileup_error_probs,
+                            &mut rng
                         )
                         .with_loc(|| loc_coord(&coordinate))?;
                     }
@@ -593,14 +615,14 @@ impl Pedigrees {
        use PedigreeError::MissingPedVec;
         Ok(self.pedigrees 
             .get(comparison_label)
-            .ok_or_else(|| MissingPedVec(comparison_label.to_string()))?.read().unwrap())
+            .ok_or_else(|| MissingPedVec(comparison_label.to_string()))?.read())
     }
 
     fn get_pedigree_vec_mut(&self, comparison_label: &str) -> Result<RwLockWriteGuard<PedigreeReps>, PedigreeError> {
        use PedigreeError::MissingPedVec;
         Ok(self.pedigrees 
             .get(comparison_label)
-            .ok_or_else(|| MissingPedVec(comparison_label.to_string()))?.write().unwrap())
+            .ok_or_else(|| MissingPedVec(comparison_label.to_string()))?.write())
     }
 
     /// Log pedigree simulation results and write them into a set of output files.
@@ -773,7 +795,7 @@ impl Pedigrees {
             "Pair_name", "Most_Likely_rel", "Corr.Overlap", "Corr.Sum.PWD", "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred", "Sim.Avg.PWD", "Min.Z_Score"
         );
 
-        simulations_results.write().unwrap().push(simulation_header);
+        simulations_results.write().push(simulation_header);
 
         // ---- We might have removed some PWDs during simulations. We need to recompute the variance before printing out
         //      "corrected" 95% Confidence intervals.
@@ -783,16 +805,22 @@ impl Pedigrees {
         // The use of this indexer helps us ensure SVM columns always keep the same order within the .prob file
         let svm_indexer = RwLock::new(IndexMap::with_capacity(comparisons.len()));
 
-        // ---- loop across our pileup comparisons and assign a most-likely relationship, using our simulations.
-        let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
+        // ---- Prepare progress bar
         let multiprogress = logger::Logger::multi();
         let pb_style = ProgressStyle::with_template(
-            "{spinner:.cyan/blue} [{elapsed_precise}] {wide_bar:.cyan/blue} {pos:>7}/{len:7} [{prefix}] {msg}"
-        ).unwrap()
-        .tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾");
+            "{spinner:.blue} [{elapsed_precise}] {wide_bar:.white/white} {pos:>7}/{len:7} [{prefix}] {msg}"
+            )?
+            .tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾");
 
-        let progress_bar = multiprogress.insert(0, ProgressBar::new(comparisons.len() as u64).with_style(pb_style.clone()));
-        progress_bar.enable_steady_tick(std::time::Duration::from_millis(100));
+        let progress_bar = multiprogress.insert(0, 
+            ProgressBar::new(comparisons.len() as u64).with_style(pb_style.clone())
+        );
+        progress_bar.enable_steady_tick(std::time::Duration::from_millis(500));
+        if ! log::log_enabled!(log::Level::Info) { progress_bar.set_draw_target(ProgressDrawTarget::hidden())}
+
+        // ---- Set Threadpool
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
+        // ---- loop across our pileup comparisons and assign a most-likely relationship, using our simulations.
         pool.scope(|scope| {
             for comparison in comparisons.iter() {
                 scope.spawn(|_| {
@@ -820,7 +848,7 @@ impl Pedigrees {
 
                         // ---- Insert label wise svm probabilities for that comparison.
                         for i in 0..ordered_rels.len() {
-                            *svm_indexer.write().unwrap()
+                            *svm_indexer.write()
                                 .entry(ordered_rels[i].clone())
                                 .or_insert(f64::NAN) = svm_probs[i];
                         }
@@ -874,27 +902,26 @@ impl Pedigrees {
                         {most_likely_avg_pwd: <11.6} - \
                         {min_z_score: >11.6}"
                     );
-                    simulations_results.write().unwrap().push(simulation_result);
+                    simulations_results.write().push(simulation_result);
 
                     let mut svm_row = format!("{comparison_label:<20} - {observed_avg_pwd:<12.6}");
 
-                    for (_, prob) in svm_indexer.read().unwrap().iter() {
+                    for (_, prob) in svm_indexer.read().iter() {
                         svm_row.push_str(&format!(" - {prob:>12.6}"));
                     }
-                    svm_results.write().unwrap().push(svm_row);
+                    svm_results.write().push(svm_row);
 
                     // ---- Increment progress bar / Spinner
                     progress_bar.inc(1);
                 });
             }
         });
-        //multiprogress.remove(&progress_bar);
         multiprogress.clear()?;
 
         // ---- Print simulation results to shell if debug mode.
         if log::log_enabled!(log::Level::Debug) {
             debug!("Simulation results:\n {}",
-                simulations_results.read().unwrap().iter().fold(String::new(), |acc, row| {
+                simulations_results.read().iter().fold(String::new(), |acc, row| {
                     acc + row + "\n"
                 })
             );
@@ -902,21 +929,21 @@ impl Pedigrees {
 
         // ---- Write simulation results to file...
         info!("Writing simulation results to output file...");
-        writer.write_iter(simulations_results.read().unwrap().iter()).loc(loc_msg)?;
+        writer.write_iter(simulations_results.read().iter()).loc(loc_msg)?;
 
         // --- Write per-class SVM probability results to output file.
         if matches!(assign_method, RelAssignMethod::SVM) {
             info!("Writing per-class SVM probabilities to output file...");
             let mut svm_results_header = format!("{:<20} - {: <10}", "Pair_name", "Corr.Avg.PWD");
             svm_indexer
-                .read().unwrap()
+                .read()
                 .keys()
                 .for_each(|rel| svm_results_header += &format!(" - {rel: <10}"));
 
             let svm_output_file = output_file.strip_suffix("result").unwrap().to_owned() + "probs";
             let mut svm_writer = GenericWriter::new(Some(svm_output_file)).loc(loc_msg)?;
             svm_writer
-                .write_iter([svm_results_header].into_iter().chain(svm_results.read().unwrap().clone()))
+                .write_iter([svm_results_header].into_iter().chain(svm_results.read().clone()))
                 .loc(loc_msg)?;
         }
 

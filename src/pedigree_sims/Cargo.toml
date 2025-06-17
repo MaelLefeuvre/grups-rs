@@ -8,27 +8,27 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-  parser         = {workspace = true}
-  pwd_from_stdin = {workspace = true}
-  genome         = {workspace = true}
-  grups-io       = {workspace = true}
-  located-error  = {workspace = true}
-  log            = {workspace = true}
-  fastrand       = {workspace = true}
-  ahash          = {workspace = true}
-  thiserror      = {workspace = true}
-  anyhow         = {workspace = true}
-  gzp            = {workspace = true}
-  fst            = {workspace = true}
-  memmap2        = {workspace = true}
-  rayon          = "1.10.0" # // MODIFIED
-  indicatif      = {workspace = true} # // MODIFIED
-  logger            = {workspace = true}
-
-  indicatif-log-bridge = {workspace = true} # // MODIFIED
-  rand           = "0.8.5"
-  indexmap       = "2.0.2"
-  libsvm         = {version = "0.4.2", git = "https://github.com/MaelLefeuvre/libsvm-rust.git", features=["link"]}
+  parser               = {workspace = true}
+  pwd_from_stdin       = {workspace = true}
+  genome               = {workspace = true}
+  grups-io             = {workspace = true}
+  located-error        = {workspace = true}
+  logger               = {workspace = true}
+  log                  = {workspace = true}
+  fastrand             = {workspace = true}
+  ahash                = {workspace = true}
+  thiserror            = {workspace = true}
+  anyhow               = {workspace = true}
+  gzp                  = {workspace = true}
+  fst                  = {workspace = true}
+  memmap2              = {workspace = true}
+  rayon                = {workspace = true}
+  indicatif            = {workspace = true}
+  indicatif-log-bridge = {workspace = true}
+  parking_lot          = {workspace = true}
+  rand                 = "0.8.5"
+  indexmap             = "2.0.2"
+  libsvm               = {version = "0.4.2", git = "https://github.com/MaelLefeuvre/libsvm-rust.git", features=["link"]}
 [dev-dependencies]
   itertools      = {workspace = true}
   mockall        = {workspace = true}

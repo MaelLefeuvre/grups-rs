@@ -4,9 +4,10 @@ use log::LevelFilter;
 use log::Level;
 use env_logger::{Builder, Env, fmt::Color};
 use std::io::Write;
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
+use thiserror::Error;
 
-static INSTANCE: OnceCell<Logger> = OnceCell::new();
+static INSTANCE: OnceLock<Logger> = OnceLock::new();
 
 #[derive(Debug)]
 pub struct Logger {
@@ -14,9 +15,17 @@ pub struct Logger {
 }
 
 
-impl Logger {
+#[derive(Debug, Error)]
+pub enum LoggerError {
+    #[error("Logger is already initialized. ({0})")]
+    DoubleLogInitialization(#[from] log::SetLoggerError),
 
-    pub fn init(verbosity: u8) {
+    #[error("Static Instance of Logger is already set")]
+    DoubleCellInitialization
+}
+
+impl Logger {
+    pub fn init(verbosity: u8) -> Result<(), LoggerError>{
         let log_level = Self::u8_to_loglevel(verbosity);
         let env = Env::default()
             .filter("GRUPS_LOG");
@@ -59,13 +68,12 @@ impl Logger {
             })
             .parse_env(env)
             .build();
-            // Progress bar support.
-            let multi_pg = MultiProgress::new();
-            LogWrapper::new(multi_pg.clone(), logger)
-                .try_init()
-                .expect("Failed to wrap logger with multiprogress");
-            //return Self{multi_pg }
-            INSTANCE.set(Self{multi_pg}).unwrap();
+        // Progress bar support.
+        let multi_pg = MultiProgress::new();
+        LogWrapper::new(multi_pg.clone(), logger)
+            .try_init()?;
+
+        INSTANCE.set(Self{multi_pg}).map_err(|_| LoggerError::DoubleCellInitialization)
     }
 
     fn u8_to_loglevel(verbosity: u8) -> LevelFilter {
@@ -92,8 +100,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn log_level(){
-        Logger::init(0);
+    fn log_level() -> Result<(), LoggerError> {
+        Logger::init(0)?;
         for level in 0..u8::MAX {
             Logger::set_level(level);
 
@@ -107,5 +115,6 @@ mod tests {
 
             assert_eq!(log::max_level(), expected_level);
         }
+        Ok(())
     }
 }

@@ -1,8 +1,10 @@
 use std::{
     cmp::{Ord, Ordering, PartialOrd},
     hash::{Hash, Hasher},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
+
+use parking_lot::RwLock;
 
 use grups_io::read::SampleTag;
 use genome::Sex;
@@ -245,14 +247,14 @@ impl Individual {
         // ---- Perform allele assignment for each parent.
         for (i, parent) in parents.iter().enumerate() {
             // ---- Assign parent genome if not previously generated.
-            if parent.read().unwrap().alleles.is_none() {
-                parent.write().unwrap().assign_alleles(recombination_prob, i, rng, xchr_mode)
+            if parent.read().alleles.is_none() {
+                parent.write().assign_alleles(recombination_prob, i, rng, xchr_mode)
                     .with_loc(||InvalidAlleleAssignment)?;
             }
 
             // ---- Check if recombination occured for each parent and update recombination tracker if so.
-            if (!xchr_mode || parent.read().unwrap().sex == Some(Sex::Female)) && rng.f64() < recombination_prob { 
-                trace!("- Cross-over occured in ped: {:<5} - ind: {} ({} {:?})", ped_idx, self.label, parent.read().unwrap().label, parent.read().unwrap().sex);
+            if (!xchr_mode || parent.read().sex == Some(Sex::Female)) && rng.f64() < recombination_prob { 
+                trace!("- Cross-over occured in ped: {:<5} - ind: {} ({} {:?})", ped_idx, self.label, parent.read().label, parent.read().sex);
                 self.currently_recombining[i] = ! self.currently_recombining[i];
             }
         }
@@ -265,13 +267,13 @@ impl Individual {
         self.alleles = if xchr_mode {
             let mut alleles = [0u8 ; 2];
             // ---- Find the index of both parents
-            let father_idx = parents.iter().position(|p| p.read().unwrap().sex == Some(Sex::Male)).expect("No parent found..");
+            let father_idx = parents.iter().position(|p| p.read().sex == Some(Sex::Male)).expect("No parent found..");
             let mother_idx = (father_idx + 1 ) % 2;
 
-            alleles[mother_idx] = parents[mother_idx].read().unwrap().meiosis(strands[mother_idx], self.currently_recombining[mother_idx]);
+            alleles[mother_idx] = parents[mother_idx].read().meiosis(strands[mother_idx], self.currently_recombining[mother_idx]);
             alleles[father_idx] = match self.sex {
                 Some(Sex::Male)           => Ok(alleles[mother_idx]), // If the descendant is a male, alleles are exclusively from the mother
-                Some(Sex::Female)         => Ok(parents[father_idx].read().unwrap().meiosis(strands[father_idx], self.currently_recombining[father_idx])),
+                Some(Sex::Female)         => Ok(parents[father_idx].read().meiosis(strands[father_idx], self.currently_recombining[father_idx])),
                 Some(Sex::Unknown) | None => Err(IndividualError::UnknownOrMissingSex).loc("While attempting to assign alleles during X-chromosome-mode"),
             }?;
 
@@ -289,8 +291,8 @@ impl Individual {
 
             Some(alleles)
         } else {
-            let haplo_0 = parents[0].read().unwrap().meiosis(strands[0], self.currently_recombining[0]);
-            let haplo_1 = parents[1].read().unwrap().meiosis(strands[1], self.currently_recombining[1]);
+            let haplo_0 = parents[0].read().meiosis(strands[0], self.currently_recombining[0]);
+            let haplo_1 = parents[1].read().meiosis(strands[1], self.currently_recombining[1]);
             Some([haplo_0, haplo_1])
         };
 
@@ -309,8 +311,8 @@ impl Individual {
             for (i, parent) in parents.iter().enumerate() {
                 // ---- Assign parent sex if not previously decided.
                 let spouse = &parents[(i+1) % 2];
-                if parent.read().unwrap().sex.is_none() { // If the parent's sex is still unknown
-                    parent.write().unwrap().sex = if let Some(spouse_sex) = spouse.read().unwrap().sex { // If the spouse sex is already known, assign the opposite sex.
+                if parent.read().sex.is_none() { // If the parent's sex is still unknown
+                    parent.write().sex = if let Some(spouse_sex) = spouse.read().sex { // If the spouse sex is already known, assign the opposite sex.
                         match spouse_sex {
                             Sex::Female  => Some(Sex::Male),
                             Sex::Male    => Some(Sex::Female),
@@ -321,7 +323,7 @@ impl Individual {
                     }
                 }
                 // ---- Apply the same process for the parent.
-                parent.write().unwrap().assign_random_sex()
+                parent.write().assign_random_sex()
                     .with_loc(||InvalidSexAssignment)?;
             }
         }
@@ -345,8 +347,8 @@ mod tests {
     fn perform_allele_asignment(offspring: &mut Individual, parents_alleles: [[u8;2];2], recombination_prob: f64) -> Result<()> {
         let mut rng = fastrand::Rng::new();
         let parents = offspring.parents.as_ref().expect("Missing parents");
-        parents[0].write().unwrap().alleles = Some(parents_alleles[0]);
-        parents[1].write().unwrap().alleles = Some(parents_alleles[1]);        
+        parents[0].write().alleles = Some(parents_alleles[0]);
+        parents[1].write().alleles = Some(parents_alleles[1]);        
         offspring.assign_alleles(recombination_prob, 0, &mut rng, false)?;
         Ok(())
     }
@@ -484,7 +486,7 @@ mod tests {
             let mut child = common::mock_offspring("child", Some(["parent-1", "parent-2"]));
             child.assign_random_sex()?;
             let parents = child.parents.expect("Test offspring has missing parents");
-            assert_ne!(parents[0].read().unwrap().sex, parents[1].read().unwrap().sex);
+            assert_ne!(parents[0].read().sex, parents[1].read().sex);
         }
         Ok(())
     }

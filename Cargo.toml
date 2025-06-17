@@ -48,31 +48,32 @@
   path = "src/bin/main.rs"
 
 [workspace.dependencies]
-  coordinate-derive = {path = "src/genome/src/coordinate-derive"}
-  located-error     = {path = "src/located-error"}
-  genome            = {path = "src/genome"}
-  logger            = {path = "src/logger"}
-  parser            = {path = "src/parser"}
-  pwd_from_stdin    = {path = "src/pwd_from_stdin" }
-  pedigree_sims     = {path = "src/pedigree_sims" }
-  grups-io          = {path = "src/grups-io"}
-  fastrand          = "2.0.0"
-  ahash             = "0.8.5"
-  thiserror         = "1.0"
-  anyhow            = "1.0"
-  log               = "0.4.16"
-  clap              = {version = "3.2", features = ["derive"]}
-  itertools         = "0.12.0"
-  tempfile          = "3.3.0"
-  serde_yaml        = "0.8"
-  chrono            = "0.4"
-  mockall           = "0.11.0"
-  fst               = "0.4"
-  memmap2           = "0.5.10"
-  gzp               = "0.9.5"
-  rayon             = "1.10.0"
+  coordinate-derive    = {path = "src/genome/src/coordinate-derive"}
+  located-error        = {path = "src/located-error"}
+  genome               = {path = "src/genome"}
+  logger               = {path = "src/logger"}
+  parser               = {path = "src/parser"}
+  pwd_from_stdin       = {path = "src/pwd_from_stdin" }
+  pedigree_sims        = {path = "src/pedigree_sims" }
+  grups-io             = {path = "src/grups-io"}
+  fastrand             = "2.0.0"
+  ahash                = "0.8.5"
+  thiserror            = "1.0"
+  anyhow               = "1.0"
+  log                  = "0.4.16"
+  clap                 = {version = "3.2", features = ["derive"]}
+  itertools            = "0.12.0"
+  tempfile             = "3.3.0"
+  serde_yaml           = "0.8"
+  chrono               = "0.4"
+  mockall              = "0.11.0"
+  fst                  = "0.4"
+  memmap2              = "0.5.10"
+  gzp                  = "0.9.5"
+  rayon                = "1.10.0"
   indicatif            = "0.17.11"
   indicatif-log-bridge = "0.2.3"
+  parking_lot          = "0.12.4"
 
 [dependencies]
   vcf-fst           = {path = "src/vcf-fst"}

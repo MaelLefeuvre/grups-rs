@@ -1,4 +1,6 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use parking_lot::RwLock;
+
 use super::super::Individual;
 use super::ComparisonError;
 use grups_io::read::SampleTag; 
@@ -84,11 +86,11 @@ impl PedComparison {
         use ComparisonError::CompareAllele;
         self.add_overlap();
 
-        let random_sample0 = self.pair[0].read().unwrap()
+        let random_sample0 = self.pair[0].read()
             .get_alleles()
             .and_then(|allele| Self::simulate_observed_read(rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], allele))
             .with_loc(||CompareAllele)?;
-        let random_sample1 = self.pair[1].read().unwrap()
+        let random_sample1 = self.pair[1].read()
             .get_alleles()
             .and_then(|allele| Self::simulate_observed_read(rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], allele))
             .with_loc(||CompareAllele)?;
@@ -161,8 +163,8 @@ impl std::fmt::Display for PedComparison {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let default_tag=SampleTag::new("None", None, None);
         // <Comparison-Label> <Ind1-label> <Ind2-label> <Ind1-reference> <Ind2-reference> <Sum.PWD> <Overlap> <Avg.PWD>
-        let ind1 = self.pair[0].read().unwrap();
-        let ind2 = self.pair[1].read().unwrap();
+        let ind1 = self.pair[0].read();
+        let ind2 = self.pair[1].read();
         write!(f, 
             "{: <COMPARISON_LABEL_FORMAT_LEN$} - \
             {: <IND_LABEL_FORMAT_LEN$} - \
@@ -259,7 +261,7 @@ mod tests {
                     for contam_pop_af in binary_rates {
                         let mut comp = common::mock_pedcomparison();
                         let alleles = [[allele_ind_0, allele_ind_0], [allele_ind_1, allele_ind_1]];
-                        comp.pair.iter().zip(alleles.iter()).for_each(|(ind, all)| ind.write().unwrap().set_alleles(*all));
+                        comp.pair.iter().zip(alleles.iter()).for_each(|(ind, all)| ind.write().set_alleles(*all));
                         comp.compare_alleles(contam_rate, contam_pop_af, [0.0,0.0], &mut rng)?;
 
                         let mut want = [0, 0];

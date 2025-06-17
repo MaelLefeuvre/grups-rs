@@ -1,6 +1,8 @@
 use std::{
-    ops::Deref, sync::{Arc, RwLock}
+    ops::Deref, sync::Arc
 };
+
+use parking_lot::RwLock;
 
 use super::Individual;
 
@@ -20,8 +22,8 @@ impl Parents{
 
 impl PartialEq for Parents {
     fn eq(&self, other: &Self) -> bool {
-        *self.0[0].read().unwrap() == *other.0[0].read().unwrap() && 
-        *self.0[1].read().unwrap() == *other.0[1].read().unwrap()
+        *self.0[0].read() == *other.0[0].read() && 
+        *self.0[1].read() == *other.0[1].read()
     }
 }
 
@@ -35,8 +37,8 @@ impl Deref for Parents {
 impl std::fmt::Display for Parents {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{} <-> {}", 
-            &self[0].read().unwrap().label,
-            &self[1].read().unwrap().label
+            &self[0].read().label,
+            &self[1].read().label
         )
     }
 }

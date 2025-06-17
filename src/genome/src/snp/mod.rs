@@ -145,7 +145,6 @@ mod tests {
         let mut test_hashset = std::collections::HashSet::new();
         for chromosome in 1..22 {
             for position in (1..N_ITERS).step_by(1000) {
-                //fastrand::choose_multiple(source, amount)
                 let random_nucl = rng.choose_multiple(nucleotides.iter(), 2);//.to_vec().choose_multiple(&mut rng, 2);
     
                 let coord = SNPCoord::try_new(

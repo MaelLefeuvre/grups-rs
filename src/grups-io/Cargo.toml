@@ -18,6 +18,7 @@
   memmap2        = {workspace = true}
   fst            = {workspace = true}
   gzp            = {workspace = true}
+  parking_lot    = {workspace = true}
   mockall        = {workspace = true} #@TODO: find a way to put this back in dev-dependencies 
   regex          = "1.5.0"
   lazy_static    = "1.4"

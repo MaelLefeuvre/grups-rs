@@ -314,8 +314,8 @@ mod tests {
         
         let file = File::create(&vcf_path)?;
         let mut parz: ParCompress<Bgzf> = ParCompressBuilder::new().from_writer(file);
-        parz.write_all(FAKE_VCF.as_bytes()).unwrap();
-        parz.finish().unwrap();
+        parz.write_all(FAKE_VCF.as_bytes()).expect("Failed to write VCF with ParCompressBuilder");
+        parz.finish().expect("ParCompress should be able to flush its output.");
 
         let reader = VCFReader::new(&vcf_path, 1);
         assert!(reader.is_ok());

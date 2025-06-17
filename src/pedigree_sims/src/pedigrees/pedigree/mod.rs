@@ -1,6 +1,4 @@
-#[cfg(test)]
-use std::sync::{RwLockWriteGuard};
-use std::{collections::BTreeMap, sync::{Arc, RwLock}};
+use std::{collections::BTreeMap, sync::Arc};
 
 use located_error::prelude::*;
 use grups_io::read::{
@@ -11,6 +9,8 @@ use grups_io::read::{
 use genome::Sex;
 
 use fastrand;
+
+use parking_lot::{RwLock, RwLockWriteGuard};
 
 #[cfg(test)] mod tests ; 
 
@@ -51,14 +51,13 @@ pub struct Pedigree {
     pub comparisons: PedComparisons,
     params: Option<PedigreeParams>,
     pop : Option<String>,
-    pub rng : fastrand::Rng,
 }
 
 impl Pedigree {
     /// Instantiate a blank pedigree.
     /// # @TODO -> Convert this to default();
     pub fn new() -> Pedigree {
-        Pedigree { individuals: BTreeMap::new(), comparisons: PedComparisons::new(), params: None, pop: None, rng: fastrand::Rng::new()}
+        Pedigree { individuals: BTreeMap::new(), comparisons: PedComparisons::new(), params: None, pop: None}
     }
 
     /// Compute the pairwise differences of all the contained `self.comparisons`.
@@ -70,7 +69,7 @@ impl Pedigree {
     /// - if `self.params` is `None`
     /// - if an individual being compared carries `None` alleles.
     #[inline]
-    pub fn compare_alleles(&mut self, cont_af: [f64; 2], pileup_error_probs: &[f64; 2]) -> Result<()> {
+    pub fn compare_alleles(&mut self, cont_af: [f64; 2], pileup_error_probs: &[f64; 2], rng: &mut fastrand::Rng) -> Result<()> {
         use PedigreeError::FailedAlleleComparison;
         // ---- Extract the user-defined contamination rate of this pedigree.
         let param = || self.get_params().with_loc(|| FailedAlleleComparison);
@@ -85,7 +84,7 @@ impl Pedigree {
 
         // ---- update the PWD of all comparisons at the current position.
         for comparison in &mut self.comparisons.iter_mut() {
-            comparison.compare_alleles(contam_rate, cont_af, seq_error_rate, &mut self.rng).with_loc(|| FailedAlleleComparison)?;
+            comparison.compare_alleles(contam_rate, cont_af, seq_error_rate, rng).with_loc(|| FailedAlleleComparison)?;
         }
         Ok(())
     }
@@ -101,13 +100,13 @@ impl Pedigree {
     /// # Panics
     /// - if any founder's tag is set to `None`
     #[inline]
-    pub fn update_founder_alleles(&mut self, reader: &dyn GenotypeReader) -> Result<()> {
+    pub fn update_founder_alleles(&mut self, reader: &dyn GenotypeReader, rng: &mut fastrand::Rng) -> Result<()> {
         let loc_msg = "While updating founder individiuals' alleles";
         // ---- Extract this pedigree allele frequency downsampling rate.
         let af_downsampling_rate = self.get_params().loc(loc_msg)?.af_downsampling_rate;
 
         // ---- Perform allele fixation at random, according to this pedigrees af_downsampling_rate
-        if self.rng.f64() < af_downsampling_rate {
+        if rng.f64() < af_downsampling_rate {
             self.founders_mut().for_each(|mut founder| founder.alleles = Some([0, 0]))
         } else {
             // ---- Fetch and assign the 'true' alleles for all founder individuals. 
@@ -136,10 +135,9 @@ impl Pedigree {
     /// # Panics
     /// - if any individual's `self.parents` is set to none `None` (i.e. Individual is a founder.)
     #[inline]
-    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, xchr_mode: bool) -> Result<()> {
+    pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, xchr_mode: bool, rng: &mut fastrand::Rng) -> Result<()> {
         for mut offspring in self.offsprings_mut() {
-            let mut rng = self.rng.clone();
-            offspring.assign_alleles(interval_prob_recomb, pedigree_index, &mut rng, xchr_mode)
+            offspring.assign_alleles(interval_prob_recomb, pedigree_index, rng, xchr_mode)
             .with_loc(|| format!("While attempting to assign the alleles of {}", offspring.label()))?;
         }
         Ok(())
@@ -214,7 +212,7 @@ impl Pedigree {
         use std::io::ErrorKind::InvalidInput;
         let pair0 = self.individuals.get(pair.0).ok_or(InvalidInput)?;
         let pair1 = self.individuals.get(pair.1).ok_or(InvalidInput)?;
-        self.comparisons.push(PedComparison::new(label, [pair0, pair1], *pair0.read().unwrap() == *pair1.read().unwrap()));
+        self.comparisons.push(PedComparison::new(label, [pair0, pair1], *pair0.read() == *pair1.read()));
         Ok(())
     }
 
@@ -233,7 +231,7 @@ impl Pedigree {
 
         self.individuals.get_mut(ind)
             .ok_or(InvalidInput)?
-            .write().unwrap()
+            .write()
             .set_parents([parent0, parent1]);
             Ok(())
 
@@ -248,7 +246,6 @@ impl Pedigree {
         Ok(self.individuals.get_mut(label)
             .ok_or(InvalidInput)?
             .write()
-            .unwrap()
         )
     }
 
@@ -261,20 +258,20 @@ impl Pedigree {
     ///  - collecting the iterator is useless, since we're always calling this method to iterate over the items.
     ///    --> return an iterator!!
     #[inline]
-    pub fn founders_mut(&mut self) -> impl Iterator<Item = std::sync::RwLockWriteGuard<Individual>> {
+    pub fn founders_mut(&mut self) -> impl Iterator<Item = RwLockWriteGuard<Individual>> {
         self.individuals
             .values_mut()
-            .filter(|ind| ind.read().unwrap().is_founder())
-            .map(|x| x.write().unwrap())
+            .filter(|ind| ind.read().is_founder())
+            .map(|x| x.write())
     }
 
     /// Obtain a vector of mutable references leading to the offsprings of this pedigree.
     #[inline]
-    pub fn offsprings_mut(&self) -> impl Iterator<Item = std::sync::RwLockWriteGuard<Individual>> {
+    pub fn offsprings_mut(&self) -> impl Iterator<Item = RwLockWriteGuard<Individual>> {
         self.individuals
             .values()
-            .filter(|ind| !RwLock::read(ind).unwrap().is_founder())
-            .map(|x| x.write().unwrap())
+            .filter(|ind| !RwLock::read(ind).is_founder())
+            .map(|x| x.write())
     }
 
     /// Set the population tags, and assign random SampleTag for each founder individual within this pedigree.
@@ -306,12 +303,12 @@ impl Pedigree {
     /// Set all individual allele's to `None` within this pedigree.
     pub fn clear_alleles(&mut self){
         for ind in self.individuals.values_mut(){
-            ind.write().unwrap().clear_alleles()
+            ind.write().clear_alleles()
         }
     }
 
     pub fn all_sex_assigned(&self) -> bool {
-        self.individuals.values().all(|ind| ind.read().unwrap().is_sex_assigned())
+        self.individuals.values().all(|ind| ind.read().is_sex_assigned())
     }
 
 }
@@ -354,8 +351,8 @@ mod test {
                 pedigree.add_individual(label, parents, None)?;
             }
             for (_label, ind) in pedigree.individuals.iter_mut() {
-                if ind.read().unwrap().is_founder() {
-                    ind.write().unwrap().set_alleles([fastrand::bool() as u8, fastrand::bool() as u8]);
+                if ind.read().is_founder() {
+                    ind.write().set_alleles([fastrand::bool() as u8, fastrand::bool() as u8]);
                 }
             }
         } else {
@@ -451,7 +448,7 @@ mod test {
             let mut pedigree = test_pedigree_random(Some(def.clone())).unwrap();//.expect("Cannot generate test pedigree");
             pedigree.assign_random_sex()?;
             for (_label, ind) in pedigree.individuals.iter() {
-                assert!(ind.read().unwrap().sex.is_some());
+                assert!(ind.read().sex.is_some());
             }
         }
         Ok(())
