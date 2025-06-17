@@ -10,7 +10,7 @@ macro_rules! validate_file {
         let want = include_bytes!($ref_file);
         let got  = std::fs::read($obtained_file)
             .unwrap_or_else(|_| panic!("Failed to open {:?}", $obtained_file));
-        assert_eq!(want.to_vec(), got)
+        assert_eq!(String::from_utf8(want.to_vec()).unwrap(), String::from_utf8(got).unwrap())
     };
 }
 

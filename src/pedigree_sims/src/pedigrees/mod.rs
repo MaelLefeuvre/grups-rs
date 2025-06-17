@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem::ManuallyDrop, path::Path, sync::{Arc}};
+use std::{collections::{BTreeMap, HashMap}, mem::ManuallyDrop, path::Path, sync::Arc};
 
 use grups_io::{
     read::genotype_reader::{fst::SetRead, FSTReader, GenotypeReader, VCFReader},
@@ -786,8 +786,8 @@ impl Pedigrees {
     ) -> Result<()> {
         let loc_msg = "While attempting to compute corrected summary statistics";
         // ---- Resource acquisition
-        let simulations_results = RwLock::new(Vec::with_capacity(comparisons.len() + 1));
-        let svm_results = RwLock::new(Vec::with_capacity(comparisons.len() + 1));
+        let simulations_results = RwLock::new(BTreeMap::new());
+        let svm_results = RwLock::new(BTreeMap::new());
         let mut writer = GenericWriter::new(Some(output_file)).loc(loc_msg)?;
 
         // ---- Print header and write to output_file
@@ -795,7 +795,7 @@ impl Pedigrees {
             "Pair_name", "Most_Likely_rel", "Corr.Overlap", "Corr.Sum.PWD", "Corr.Avg.PWD", "Corr.CI.95", "Corr.Avg.Phred", "Sim.Avg.PWD", "Min.Z_Score"
         );
 
-        simulations_results.write().push(simulation_header);
+        simulations_results.write().insert((0 as char).to_string(), simulation_header);
 
         // ---- We might have removed some PWDs during simulations. We need to recompute the variance before printing out
         //      "corrected" 95% Confidence intervals.
@@ -848,9 +848,9 @@ impl Pedigrees {
 
                         // ---- Insert label wise svm probabilities for that comparison.
                         for i in 0..ordered_rels.len() {
-                            *svm_indexer.write()
+                            svm_indexer.write()
                                 .entry(ordered_rels[i].clone())
-                                .or_insert(f64::NAN) = svm_probs[i];
+                                .or_insert(BTreeMap::new()).insert(comparison_label.clone(), svm_probs[i]);
                         }
 
                         // ---- Print SVM results to shell if debug mode...
@@ -902,14 +902,14 @@ impl Pedigrees {
                         {most_likely_avg_pwd: <11.6} - \
                         {min_z_score: >11.6}"
                     );
-                    simulations_results.write().push(simulation_result);
-
+                    
                     let mut svm_row = format!("{comparison_label:<20} - {observed_avg_pwd:<12.6}");
-
-                    for (_, prob) in svm_indexer.read().iter() {
+                    simulations_results.write().insert(comparison_label.to_owned(), simulation_result);
+                    for (_, map) in svm_indexer.read().iter() {
+                        let prob = map.get(&comparison_label).unwrap();
                         svm_row.push_str(&format!(" - {prob:>12.6}"));
                     }
-                    svm_results.write().push(svm_row);
+                    svm_results.write().insert(comparison_label.to_owned(), svm_row);
 
                     // ---- Increment progress bar / Spinner
                     progress_bar.inc(1);
@@ -921,7 +921,7 @@ impl Pedigrees {
         // ---- Print simulation results to shell if debug mode.
         if log::log_enabled!(log::Level::Debug) {
             debug!("Simulation results:\n {}",
-                simulations_results.read().iter().fold(String::new(), |acc, row| {
+                simulations_results.read().values().fold(String::new(), |acc, row| {
                     acc + row + "\n"
                 })
             );
@@ -929,7 +929,7 @@ impl Pedigrees {
 
         // ---- Write simulation results to file...
         info!("Writing simulation results to output file...");
-        writer.write_iter(simulations_results.read().iter()).loc(loc_msg)?;
+        writer.write_iter(simulations_results.read().values()).loc(loc_msg)?;
 
         // --- Write per-class SVM probability results to output file.
         if matches!(assign_method, RelAssignMethod::SVM) {
@@ -943,7 +943,7 @@ impl Pedigrees {
             let svm_output_file = output_file.strip_suffix("result").unwrap().to_owned() + "probs";
             let mut svm_writer = GenericWriter::new(Some(svm_output_file)).loc(loc_msg)?;
             svm_writer
-                .write_iter([svm_results_header].into_iter().chain(svm_results.read().clone()))
+                .write_iter([svm_results_header].into_iter().chain(svm_results.read().values().cloned()))
                 .loc(loc_msg)?;
         }
 

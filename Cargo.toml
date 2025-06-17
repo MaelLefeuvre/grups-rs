@@ -95,11 +95,12 @@
   tikv-jemallocator = "0.5"
 
 [dev-dependencies]
-  tempfile       = {workspace = true}
-  itertools      = {workspace = true}
-  rand           = "0.8.5"
-  nanorand       = "0.7.0"
-  criterion      = "0.3"
+  tempfile          = {workspace = true}
+  itertools         = {workspace = true}
+  rand              = "0.8.5"
+  nanorand          = "0.7.0"
+  criterion         = "0.3"
+  pretty_assertions = "1.4.1"
 
 
 [[bench]]

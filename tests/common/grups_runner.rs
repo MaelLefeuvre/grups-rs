@@ -271,6 +271,10 @@ pub struct GrupsRunner {
 
 impl GrupsRunner {
     pub fn run(&self) {
+        match logger::Logger::init(0) {
+            Ok(()) | Err(logger::LoggerError::DoubleLogInitialization(_)) => {},
+            other => panic!("LoggerError {other:?}")
+        };
         let args = self.args.join(" ");
         let cli = parser::Cli::parse_from(args.split_whitespace());
         grups_rs::run(cli).expect("Failed to run grups using stringified CLI Args");

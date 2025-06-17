@@ -1,5 +1,6 @@
 mod common;
 use common::GrupsRunnerBuilder;
+#[cfg(test)] use pretty_assertions::assert_eq;
 
 #[test]
 fn test_grups_run_vcf_autosomes() {

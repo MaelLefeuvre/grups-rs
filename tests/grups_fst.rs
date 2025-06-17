@@ -3,6 +3,7 @@ mod common;
 use common::GrupsRunnerBuilder;
 
 use anyhow::Result;
+#[cfg(test)] use pretty_assertions::assert_eq;
 
 #[test]
 fn test_grups_fst() -> Result<()> {
