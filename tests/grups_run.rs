@@ -14,6 +14,7 @@ fn test_grups_run_vcf_autosomes() {
         .set_contam_pop("AFR")
         .set_samples("0-2")
         .set_mode(parser::Mode::Vcf)
+        .set_seed(42)
         .overwrite()
         .build()
         .unwrap();
@@ -36,6 +37,7 @@ fn test_grups_run_fst_autosomes() {
         .set_contam_pop("AFR")
         .set_samples("0-2")
         .set_mode(parser::Mode::Fst)
+        .set_seed(42)
         .overwrite()
         .build()
         .unwrap();
@@ -113,6 +115,7 @@ fn test_grups_run_sex_specific_mode() {
         .set_contam_pop("AFR")
         .set_samples("0-1")
         .set_mode(parser::Mode::FstMmap)
+        .set_seed(42)
         .sex_specific_mode()
         .overwrite()
         .build()

@@ -63,6 +63,7 @@ pub struct Pedigrees {
     pedigree_pop: String,
     genetic_map: GeneticMap,
     previous_positions: HashMap<String, Arc<RwLock<Position>>>,
+    rng : fastrand::Rng,
 }
 
 /// @TODO! : Right now we're reading the pedigree definition file for each replicate. Which isn't very efficient.
@@ -97,12 +98,14 @@ impl Pedigrees {
             previous_positions.insert(key.to_owned(), Arc::new(RwLock::new(Position(0))));
         }
         // --------------------- Initialize RNG
+        let rng = fastrand::Rng::new();
         let pedigree_pop = pedigree_pop.to_string();
         Ok(Pedigrees {
             pedigrees,
             pedigree_pop,
             previous_positions,
             genetic_map,
+            rng
         })
     }
 
@@ -156,7 +159,6 @@ impl Pedigrees {
 
             // ---- Assign contaminating individuals to the pedigree vector.
             pedigree_reps.set_contaminants(&samples_contam_tags, pair_indices);
-
             // ---- Debug print.
             debug!(
                 "Contaminant set for {comparison_label}:\n{}",
@@ -388,15 +390,15 @@ impl Pedigrees {
             )?
             .tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾");
 
-        let mut rng = fastrand::Rng::new();
         let (tx, rx) = std::sync::mpsc::channel();
-        pool.scope(|scope| {
+        let ori_rng = Arc::new(RwLock::new(fastrand::Rng::with_seed(self.rng.get_seed()))); // TEMP WORKAROUND (just to check that changes in test files is only due to seeding)
+        pool.in_place_scope_fifo(|scope| {
             'comparison: for comparison in comparisons.iter() {
                 let tx = tx.clone();
-                let rng = rng.fork();
-                scope.spawn( |_| {
+                scope.spawn_fifo( |_| {
                     let tx = tx;
-                    let mut rng = rng;
+                    let mut rng = ori_rng.read().clone();
+                    
                     let pair_name = comparison.get_pair();
                     let mut fst_reader = fst_reader.clone();
                     let mut missing_snps: u32 = 0; //MODIFIED
@@ -464,10 +466,14 @@ impl Pedigrees {
                             .write()
                             .add_non_informative_snps(missing_snps);
                     }
-                    multiprogress.remove(&progress_bar)
+                    multiprogress.remove(&progress_bar);
+
+                    *ori_rng.write() = rng; // TEMP WORKAROUND (just to check that changes in test files is only due to seeding)
                 })
+                
             }
         });
+        self.rng = ori_rng.write().clone(); // TEMP WORKAROUND (just to check that changes in test files is only due to seeding)
         drop(tx);
         while let Some(e) = rx.try_iter().next() {
             println!("{e:?}");
@@ -544,7 +550,7 @@ impl Pedigrees {
             i += 1;
 
             // --------------------- Loop across comparisons.
-            let mut rng = fastrand::Rng::new();
+            let mut rng = fastrand::Rng::with_seed(self.rng.get_seed()); // TEMP WORKAROUND (just to check that changes in test files is only due to seeding)
             'comparison: for comparison in comparisons.iter() {
                 let key = comparison.get_pair();
                 // --------------------- Skip if the current position is not a valid candidate.
@@ -602,6 +608,8 @@ impl Pedigrees {
                     }
                 }
             }
+
+            self.rng = rng; // TEMP WORKAROUND (just to check that changes in test files is only due to seeding)
             // ---- Reset line if we never parsed genotypes.
             vcf_reader.next_line().with_loc(|| loc_coord(&coordinate))?;
         }
@@ -821,9 +829,9 @@ impl Pedigrees {
         // ---- Set Threadpool
         let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
         // ---- loop across our pileup comparisons and assign a most-likely relationship, using our simulations.
-        pool.scope(|scope| {
+        pool.in_place_scope_fifo(|scope| {
             for comparison in comparisons.iter() {
-                scope.spawn(|_| {
+                scope.spawn_fifo(|_| {
                     let observed_avg_pwd = comparison.get_avg_pwd();
                     let comparison_label = comparison.get_pair();
                     // ---- Set progress bar prefix
@@ -855,9 +863,8 @@ impl Pedigrees {
 
                         // ---- Print SVM results to shell if debug mode...
                         if log::log_enabled!(log::Level::Debug) {
-                            debug!("{}\n{}\n{}",
-                                format!("SVM results for {comparison_label}"),
-                                format!("  {:<20}{:>12}{:>20}", "Label", "Z-score", "per-class SVM prob"),
+                            debug!("SVM results for {comparison_label}\n  {:<20}{:>12}{:>20}\n{}",
+                                "Label", "Z-score", "per-class SVM prob",
                                 (0..ordered_rels.len()).fold(String::new(), |acc, i| {
                                     acc + &format!("  {:<20}{:>12.7}{:>20.7}\n",
                                         ordered_rels[i], z_scores[i], svm_probs[i]
@@ -872,7 +879,7 @@ impl Pedigrees {
                     }
 
                     let assigned_rel = most_likely_rel.unwrap_or_else(|| {
-                        warn!("Failed to assign a most likely relationship for {}", comparison.to_string());
+                        warn!("Failed to assign a most likely relationship for {}", comparison.get_pair());
                         String::from("None")
                     });
 

@@ -23,7 +23,7 @@ use mockall::{automock, predicate::*};
 // using it in pedigree_sims::pedigrees::contaminants, for testing purposes, I'm having trouble making MockGenotypeReader visible.
 //#[cfg_attr(test, automock)]
 #[automock]       
-pub trait GenotypeReader : {
+pub trait GenotypeReader {
     /// Extract the alleles from the GenotypeReader, given a SampleTag
     fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2]>;
 
