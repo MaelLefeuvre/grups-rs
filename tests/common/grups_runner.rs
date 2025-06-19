@@ -1,7 +1,6 @@
 use anyhow::{Result, bail};
 use clap::Parser;
-use std::collections::HashMap;
-use std::path::Path;
+use std::{path::Path, collections::HashMap};
 
 use super::Fixture;
 

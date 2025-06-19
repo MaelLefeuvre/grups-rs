@@ -1,5 +1,5 @@
 mod error;
-use std::{fmt::{Display, Debug}, str::FromStr, borrow::Borrow};
+use std::{fmt::{self, Display, Formatter}, str::FromStr, borrow::Borrow};
 
 pub use error::ParseAlleleError;
 
@@ -49,7 +49,7 @@ impl FromStr for Allele {
 }
 
 impl Display for Allele {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&char::from(self) , f)
     }
 }

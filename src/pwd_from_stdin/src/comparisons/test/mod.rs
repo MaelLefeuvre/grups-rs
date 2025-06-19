@@ -32,7 +32,7 @@ pub mod common{
         let mut rng = fastrand::Rng::new();
     
         let nucleotides = ['A', 'C', 'G', 'T'];
-        let quals: Vec<char> = std::str::from_utf8( &(min_qual+33..33+33).collect::<Vec<u8>>())?.chars().collect();
+        let quals: Vec<char> = str::from_utf8( &(min_qual+33..33+33).collect::<Vec<u8>>())?.chars().collect();
     
         let mut bases = String::new();
         let mut scores = String::new();

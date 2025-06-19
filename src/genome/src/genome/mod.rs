@@ -153,11 +153,11 @@ impl Default for Genome {
 mod tests {
     use super::*;
     use tempfile::tempdir;
-    use std::fs::File;
-    use std::io::Write;
+    use std::{io::Write, fs::File};
+    use anyhow::Result;
 
     #[test]
-    fn from_fasta_index_fai() -> anyhow::Result<()> {
+    fn from_fasta_index_fai() -> Result<()> {
         // Create a directory inside of `std::env::temp_dir()`
         let tmpdir = tempdir()?;
 
@@ -186,7 +186,7 @@ mod tests {
     }
 
     #[test]
-    fn from_fasta_index_fa() -> anyhow::Result<()> {
+    fn from_fasta_index_fa() -> Result<()> {
         // Create a directory inside of `std::env::temp_dir()`
         let tmpdir = tempdir()?;
 
@@ -204,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn from_fasta_index_fasta() -> anyhow::Result<()> {
+    fn from_fasta_index_fasta() -> Result<()> {
         // Create a directory inside of `std::env::temp_dir()`
         let tmpdir = tempdir()?;
 
@@ -222,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn skip_chrs() -> anyhow::Result<()> {
+    fn skip_chrs() -> Result<()> {
         // Create a directory inside of `std::env::temp_dir()`
         let tmpdir = tempdir()?;
         let fai_path = tmpdir.path().join("genome.fa.fai");
@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn file_not_found() -> anyhow::Result<()> {
+    fn file_not_found() -> Result<()> {
         let tmpdir        = tempdir()?;
         let fai_path      = tmpdir.path().join("genome.fa.fai");
         let provided_path = fai_path.to_str().expect("Invalid path");
@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_ext() -> anyhow::Result<()> {
+    fn invalid_ext() -> Result<()> {
         let tmpdir        = tempdir()?;
         let fai_path      = tmpdir.path().join("genome.txt");
         let provided_path = fai_path.to_str().expect("Invalid path");
@@ -255,7 +255,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_ext() -> anyhow::Result<()> {
+    fn missing_ext() -> Result<()> {
         let tmpdir        = tempdir()?;
         let fai_path      = tmpdir.path().join("genome");
         let provided_path = fai_path.to_str().expect("Invalid path");

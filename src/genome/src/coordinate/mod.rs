@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::{self, Formatter, Display}, str::FromStr};
 
 pub mod chr_index;
 pub use chr_index::{ChrIdx, ChrIdxError};
@@ -108,7 +108,7 @@ impl GenomeCoordinate for Coordinate {
 }
 
 impl Display for Coordinate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&format!("[{: <CHR_FORMAT_LEN$} {: >POS_FORMAT_LEN$}]", self.chromosome, self.position), f)
     }
 }

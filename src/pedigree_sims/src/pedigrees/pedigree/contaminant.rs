@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::{ops::{Deref, DerefMut}, fmt::{self, Formatter, Display}};
 
 use grups_io::read::{ SampleTag, genotype_reader::GenotypeReader };
 use located_error::prelude::*;
@@ -80,8 +80,8 @@ impl Contaminant {
     }
 }
 
-impl std::fmt::Display for Contaminant {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Contaminant {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.iter().try_fold((), |_, contaminants| {
             write!(f, "- [")?;
             contaminants.iter().try_fold((), |_, contaminant| {

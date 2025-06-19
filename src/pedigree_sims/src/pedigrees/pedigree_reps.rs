@@ -5,7 +5,8 @@ use crate::pedigrees::constants::REPLICATE_ID_FORMAT_LEN;
 use std::{
     collections::HashMap,
     path::Path,
-    ops::{Deref, DerefMut}
+    ops::{Deref, DerefMut},
+    fmt::{self, Formatter, Display}
 };
 
 use grups_io::read::PanelReader;
@@ -61,8 +62,6 @@ impl PedigreeReps {
             .with_loc(|| format!("While attempting to read the pedigree definition file {}", pedigree_path.display()))?;
         for i in 0..self.inner.capacity() {
             let pedigree = pedigree_builder.build().with_loc(||loc_msg("parse", i))?;
-            //pedigree.set_tags(panel, pop, self.contaminants.as_ref()).with_loc(||loc_msg("set population tags of", i))?;
-            //pedigree.assign_offspring_strands().with_loc(||loc_msg("assign offspring strands of", i))?;
             self.inner.push(pedigree);
         }
         Ok(())
@@ -153,8 +152,8 @@ impl DerefMut for PedigreeReps {
     }
 }
 
-impl std::fmt::Display for PedigreeReps {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl Display for PedigreeReps {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         self.inner.iter().enumerate().try_fold((), |_, (idx, pedigree)| {
             pedigree.comparisons.iter().try_fold((), |_, comparison| {
                 writeln!(f, "{idx: <REPLICATE_ID_FORMAT_LEN$} - {comparison}")

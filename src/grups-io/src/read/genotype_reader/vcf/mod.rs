@@ -1,4 +1,4 @@
-use std::{io::{BufRead, BufReader, Read}, path::{Path, PathBuf}, fs::File};
+use std::{io::{self, BufRead, BufReader, Read}, path::{Path, PathBuf}, fs::File};
 
 mod info;
 use info::InfoField;
@@ -121,7 +121,7 @@ impl<'a> VCFReader<'a> {
         self.source.read_until(b'\t', &mut self.buf).map_err(FillBuffer).loc(loc_msg)?;
         self.buf.pop();
         self.idx += 1;
-        std::str::from_utf8(&self.buf).map_err(InvalidField).loc(loc_msg)
+        str::from_utf8(&self.buf).map_err(InvalidField).loc(loc_msg)
     }
 
     /// Fill `self.buffer` until an EOL is encountered and reset the `self.idx` counter to 0.
@@ -220,7 +220,7 @@ impl<'a> VCFReader<'a> {
     }
 
     /// Returns `true` if the file has not yet encountered an EOF.
-    pub fn has_data_left(&mut self) -> std::io::Result<bool> {
+    pub fn has_data_left(&mut self) -> io::Result<bool> {
         self.source.fill_buf().map(|b| ! b.is_empty())
     }
 

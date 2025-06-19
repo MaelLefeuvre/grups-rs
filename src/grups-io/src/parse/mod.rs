@@ -110,7 +110,7 @@ pub fn fetch_input_files(input_dir: &Path, extensions: &[&str] ) -> Result<Vec<P
     use ParseError::MissingInput;
     // Fetch any file matching the provided extensions. Note that we don't use the '.extension()'
     // method, since we want to target chained-ext file, as in '.vcf.gz'.
-    let mut files: Vec<PathBuf> = std::fs::read_dir(input_dir)?.filter_map(|file| {
+    let mut files: Vec<PathBuf> = fs::read_dir(input_dir)?.filter_map(|file| {
         let Ok(file) = file else {
             return None
         };

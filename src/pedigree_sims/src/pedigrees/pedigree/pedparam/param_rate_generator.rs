@@ -1,6 +1,5 @@
 use rand::distributions::uniform::SampleUniform;
-use std::cmp::PartialOrd;
-use std::fmt::{Debug, Display};
+use std::{fmt::{self, Formatter, Debug, Display}, cmp::PartialOrd};
 
 use super::PedParam;
 
@@ -19,7 +18,7 @@ pub struct ParamRateGenerator<T>{
 }
 
 impl<T: Display> Display for ParamRateGenerator<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{} vs. {}", self.inner[0], self.inner[1])
     }
 }

@@ -1,4 +1,4 @@
-use std::{collections::{BTreeMap, HashMap}, mem::ManuallyDrop, path::Path, sync::Arc};
+use std::{collections::{BTreeMap, HashMap}, mem::ManuallyDrop, path::Path, sync::{Arc, mpsc}, time::Duration};
 
 use grups_io::{
     read::genotype_reader::{fst::SetRead, FSTReader, GenotypeReader, VCFReader},
@@ -390,7 +390,7 @@ impl Pedigrees {
             )?
             .tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾");
 
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = mpsc::channel();
         let ori_rng = Arc::new(RwLock::new(fastrand::Rng::with_seed(self.rng.get_seed()))); // TEMP WORKAROUND (just to check that changes in test files is only due to seeding)
         pool.in_place_scope_fifo(|scope| {
             'comparison: for comparison in comparisons.iter() {
@@ -823,7 +823,7 @@ impl Pedigrees {
         let progress_bar = multiprogress.insert(0, 
             ProgressBar::new(comparisons.len() as u64).with_style(pb_style.clone())
         );
-        progress_bar.enable_steady_tick(std::time::Duration::from_millis(500));
+        progress_bar.enable_steady_tick(Duration::from_millis(500));
         if ! log::log_enabled!(log::Level::Info) { progress_bar.set_draw_target(ProgressDrawTarget::hidden())}
 
         // ---- Set Threadpool

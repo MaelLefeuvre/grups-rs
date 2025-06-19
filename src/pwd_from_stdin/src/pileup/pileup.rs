@@ -1,6 +1,5 @@
 use genome::{Nucleotide, SNPCoord, snp::Allele, Phred} ;
 use std::{iter::Peekable, collections::HashMap};
-//use std::error::Error;
 use located_error::prelude::*;
 
 use super::PileupError;

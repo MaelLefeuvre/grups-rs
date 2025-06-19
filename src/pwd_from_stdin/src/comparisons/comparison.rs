@@ -1,4 +1,4 @@
-use std::{fmt, collections::BTreeSet};
+use std::{fmt::{self, Formatter, Display}, collections::BTreeSet};
 
 use genome::jackknife::{JackknifeBlocks, JackknifeEstimates};
 use genome::Genome;
@@ -193,8 +193,8 @@ impl Comparison {
 
 }
 
-impl fmt::Display for Comparison {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Comparison {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f,
             "{: <PAIRS_FORMAT_LEN$}{DISPL_SEP}\
              {: <COUNT_FORMAT_LEN$}{DISPL_SEP}\

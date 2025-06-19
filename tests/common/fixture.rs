@@ -1,9 +1,5 @@
-use std::path::Path;
-use std::fs;
-use std::io;
-
-use tempfile::{self};
-use tempfile::TempDir;
+use std::{io, env, fs, path::{Path, PathBuf}, ops::Deref, fmt::{self, Formatter, Display}};
+use tempfile::{self, TempDir};
 
 pub const TEST_DATA_DIR: &str = "./tests/test-data";
 
@@ -16,8 +12,8 @@ pub struct Fixture {
 impl Fixture {
     pub fn blank(fixture_filename: &str) -> Self {
         // First, figure out the right file in `tests/fixtures/`:
-        let root_dir = &std::env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR");
-        let mut source = std::path::PathBuf::from(root_dir);
+        let root_dir = &env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR");
+        let mut source = PathBuf::from(root_dir);
         source.push(TEST_DATA_DIR);
         source.push(fixture_filename);
 
@@ -25,7 +21,7 @@ impl Fixture {
         let tempdir = tempfile::tempdir().expect("Failed to generate temp directory");
 
         // Check if the given path is absolute... match only the filename if so. (allows recursion.)
-        let mut path = std::path::PathBuf::from(&tempdir.path());
+        let mut path = PathBuf::from(&tempdir.path());
         let fixture_path = Path::new(&fixture_filename);
         match fixture_path.is_absolute() {
             true  => path.push(fixture_path.file_name().expect("Invalid filename")), // PathBuf overwrites buffer when path is absolute.
@@ -42,8 +38,8 @@ impl Fixture {
         if fixture.source.is_dir() {
             copy_dir_all(&fixture.source, &fixture.path).expect("Failed to copy directory");
         } else {
-            std::fs::create_dir_all(fixture.path.parent().expect("No parent directory")).expect("Failed to create directory");
-            std::fs::copy(&fixture.source, &fixture.path).expect("Failed to copy Fixture files.");
+            fs::create_dir_all(fixture.path.parent().expect("No parent directory")).expect("Failed to create directory");
+            fs::copy(&fixture.source, &fixture.path).expect("Failed to copy Fixture files.");
         }
         fixture
     }
@@ -63,16 +59,16 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> 
     Ok(())
 }
 
-impl std::ops::Deref for Fixture {
-    type Target = std::path::Path;
+impl Deref for Fixture {
+    type Target = Path;
 
     fn deref(&self) -> &Self::Target {
         self.path.deref()
     }
 }
 
-impl std::fmt::Display for Fixture {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Fixture {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.path.to_str().expect("Invalid path (non UTF8 characters ?)"))
     }
 }

@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read, path::{Path, PathBuf}, sync::Arc};
+use std::{str, fs::{self, File}, io::Read, path::{Path, PathBuf}, sync::Arc};
 
 use crate::{
     parse,
@@ -50,7 +50,7 @@ impl SetRead<Vec<u8>> for Vec<u8> {
         use FSTReaderError::{OpenFST, LoadFST, BuildFST};
         info!("Loading in memory : {path}");
         // ---- Get file size
-        let size = std::fs::metadata(path).map_err(OpenFST).with_loc(loc_msg)?.len();
+        let size = fs::metadata(path).map_err(OpenFST).with_loc(loc_msg)?.len();
         debug!("File size (bytes): {size}");
         // ---- Open FST file in ro mode.
         let mut file_handle = File::open(path).map_err(OpenFST).with_loc(loc_msg)?;
@@ -143,7 +143,7 @@ impl<T: AsRef<[u8]> + SetRead<T>>FSTReader<T> {
     /// @TODO: This should be a macro ?
     #[inline]
     fn format_coordinate_pattern(coord_bytes: &[u8; 5]) -> StartsWith<Str> {
-        let regex = unsafe { std::str::from_utf8_unchecked(coord_bytes) };
+        let regex = unsafe { str::from_utf8_unchecked(coord_bytes) };
         Str::new(regex).starts_with()
     }
     

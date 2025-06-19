@@ -1,6 +1,8 @@
 use std::{
     cmp::{Ord, Ordering, PartialOrd},
+    fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
+    borrow::Borrow,
     sync::Arc,
 };
 
@@ -58,8 +60,8 @@ pub struct Individual {
     pub sex                  : Option<Sex>,
 }
 
-impl std::fmt::Display for Individual {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl Display for Individual {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let parents = match &self.parents {
             None => "None".to_string(),
             Some(parents) => format!("{parents}")
@@ -86,7 +88,7 @@ impl Hash for Individual {
     }
 }
 
-impl std::borrow::Borrow<String> for Individual {
+impl Borrow<String> for Individual {
     fn borrow(&self) -> &String {
         self.label.borrow()
     }
@@ -342,6 +344,7 @@ impl Individual {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use crate::pedigrees::pedigree::tests::common;
 
     fn perform_allele_asignment(offspring: &mut Individual, parents_alleles: [[u8;2];2], recombination_prob: f64) -> Result<()> {
@@ -586,7 +589,7 @@ mod tests {
         // We're ok here, given that The Hash implementation of Individual only uses the `label` field
         // which is not mutable.
         #[allow(clippy::mutable_key_type)]
-        let mut ind_set = std::collections::HashSet::new();
+        let mut ind_set = HashSet::new();
         let n_iters: u32 = 10_000;
         for i in 0..n_iters {
             let  new_ind = common::mock_founder(&i.to_string());

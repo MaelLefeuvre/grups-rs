@@ -5,7 +5,7 @@ pub use allele::ParseAlleleError;
 
 use anyhow::Result;
 use located_error::LocatedError;
-use std::error::Error;
+use std::{fmt::{self, Formatter, Display}, error::Error};
 
 use crate::coordinate::{Coordinate, ChrIdx, Position, derive::*};
 
@@ -26,8 +26,8 @@ pub struct SNPCoord {
     pub alternate  : Allele,
 }
 
-impl std::fmt::Display for SNPCoord {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for SNPCoord {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {} {}", 
             self.coordinate(),
             self.reference,
@@ -64,9 +64,10 @@ impl SNPCoord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use  crate::jackknife::JackknifeBlock;
+    use std::collections::HashSet;
     use fastrand::Rng;
     use anyhow::Result;
+    use crate::jackknife::JackknifeBlock;
     const N_ITERS: u32 = 1_000_000;
 
     #[test]
@@ -142,7 +143,7 @@ mod tests {
     fn hash_block() -> Result<()> {
         let mut rng = Rng::new();
         let nucleotides = ['A', 'C', 'G', 'T'];
-        let mut test_hashset = std::collections::HashSet::new();
+        let mut test_hashset = HashSet::new();
         for chromosome in 1..22 {
             for position in (1..N_ITERS).step_by(1000) {
                 let random_nucl = rng.choose_multiple(nucleotides.iter(), 2);//.to_vec().choose_multiple(&mut rng, 2);

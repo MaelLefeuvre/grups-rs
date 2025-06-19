@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{cmp::Ordering, str::FromStr};
 
 use log::debug;
 use located_error::LocatedError;
@@ -39,13 +39,13 @@ impl PartialEq for Chromosome {
 impl Eq for Chromosome {}
 
 impl PartialOrd for Chromosome {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for Chromosome {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         (self.name).cmp(&other.name)
     }
 }

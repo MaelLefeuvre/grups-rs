@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{io, collections::BTreeMap, sync::Arc};
 
 use located_error::prelude::*;
 use grups_io::read::{
@@ -184,8 +184,8 @@ impl Pedigree {
     ///
     /// # Errors: 
     /// - returns `std::io::result::InvalidInput` If any of the parents cannot be found within `self.individuals`
-    pub fn add_individual(&mut self, label: &str, parents: Option<(&str, &str)>, sex: Option<Sex>) -> std::io::Result<()>{
-        use std::io::ErrorKind::InvalidInput;
+    pub fn add_individual(&mut self, label: &str, parents: Option<(&str, &str)>, sex: Option<Sex>) -> io::Result<()>{
+        use io::ErrorKind::InvalidInput;
         let parents = match parents {
             None => None,
             Some((parent1, parent2)) => {
@@ -208,8 +208,8 @@ impl Pedigree {
     /// # Errors
     /// - returns `std::io::result::InvalidInput` If any individual used for the comparison can't 
     ///   be found within `self.individuals`
-    pub fn add_comparison(&mut self, label: &str, pair: (&str, &str)) -> std::io::Result<()> {
-        use std::io::ErrorKind::InvalidInput;
+    pub fn add_comparison(&mut self, label: &str, pair: (&str, &str)) -> io::Result<()> {
+        use io::ErrorKind::InvalidInput;
         let pair0 = self.individuals.get(pair.0).ok_or(InvalidInput)?;
         let pair1 = self.individuals.get(pair.1).ok_or(InvalidInput)?;
         self.comparisons.push(PedComparison::new(label, [pair0, pair1], *pair0.read() == *pair1.read()));
@@ -224,8 +224,8 @@ impl Pedigree {
     /// # Errors 
     /// - returns `std::io::result::InvalidInput` If the target individual, or any of the parents cannot be found 
     ///   within `self.individuals`
-    pub fn set_relationship(&mut self, ind: &str, parents: (&str, &str)) -> std::io::Result<()>{
-        use std::io::ErrorKind::InvalidInput;
+    pub fn set_relationship(&mut self, ind: &str, parents: (&str, &str)) -> io::Result<()>{
+        use io::ErrorKind::InvalidInput;
         let parent0 = &self.individuals.get(parents.0).ok_or(InvalidInput)?.clone();
         let parent1 = &self.individuals.get(parents.1).ok_or(InvalidInput)?.clone();
 
@@ -241,8 +241,8 @@ impl Pedigree {
     /// # Arguments:
     /// - `label`: name of the target individual;
     #[cfg(test)]
-    pub fn get_mutind(&mut self, label: &String) -> Result<RwLockWriteGuard<Individual>, std::io::Error>{
-        use std::io::ErrorKind::InvalidInput;
+    pub fn get_mutind(&mut self, label: &String) -> Result<RwLockWriteGuard<Individual>, io::Error>{
+        use io::ErrorKind::InvalidInput;
         Ok(self.individuals.get_mut(label)
             .ok_or(InvalidInput)?
             .write()
@@ -323,7 +323,7 @@ impl Default for Pedigree {
 mod test {
     use super::*;
 
-    fn test_pedigree_set() -> std::io::Result<Pedigree> {
+    fn test_pedigree_set() -> io::Result<Pedigree> {
         let mut pedigree = Pedigree::new();
         pedigree.add_individual("father", None, None)?;
         pedigree.add_individual("mother", None, None)?;
@@ -343,7 +343,7 @@ mod test {
 
     type TestPedDef = Vec<(&'static str, Option<(&'static str, &'static str)>)>;
     
-    fn test_pedigree_random(def: Option<TestPedDef>) -> std::io::Result<Pedigree> {
+    fn test_pedigree_random(def: Option<TestPedDef>) -> io::Result<Pedigree> {
         let mut pedigree = Pedigree::new();
         if let Some(map) = def {
             for (label, parents) in map {

@@ -1,6 +1,4 @@
-use std::{
-    ops::Deref, sync::Arc
-};
+use std::{ops::Deref, sync::Arc, fmt::{self, Formatter, Display}};
 
 use parking_lot::RwLock;
 
@@ -34,8 +32,8 @@ impl Deref for Parents {
     }
 }
 
-impl std::fmt::Display for Parents {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl Display for Parents {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{} <-> {}", 
             &self[0].read().label,
             &self[1].read().label

@@ -70,6 +70,7 @@ impl Borrow<Range<u32>> for RecombinationRange {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use float_cmp::approx_eq;
     const ULPS: i64 = 2;
 
@@ -154,7 +155,7 @@ mod tests {
 
     #[test]
     fn borrow_range() {
-        let mut test_hashset = std::collections::HashSet::new();
+        let mut test_hashset = HashSet::new();
         let ranges: Vec<u32> = (0..N_ITERS).step_by(1000).collect();
         for step in ranges.windows(2)  {
             let (start, end) = (step[0], step[1]);

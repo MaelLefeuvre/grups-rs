@@ -1,4 +1,4 @@
-use std::{fmt::{self, Display}, str::FromStr};
+use std::{fmt::{self, Formatter, Display}, str::FromStr, result::Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sex {
@@ -16,7 +16,7 @@ impl Sex {
 impl FromStr for Sex {
     type Err = String;
 
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s.to_lowercase().as_str() {
             "male" | "1"   => Self::Male,
             "female" | "2" => Self::Female,
@@ -26,7 +26,7 @@ impl FromStr for Sex {
 }
 
 impl Display for Sex {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
             Self::Female => "female",
             Self::Male   => "male",

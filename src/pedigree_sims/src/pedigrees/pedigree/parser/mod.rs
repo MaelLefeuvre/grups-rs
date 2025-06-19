@@ -1,6 +1,6 @@
 use std::{
     path::Path,
-    io::{BufRead, BufReader},
+    io::{self, BufRead, BufReader},
     fs::File, fmt::{Display, self},
 };
 
@@ -390,13 +390,13 @@ impl PedigreeBuilder {
             match current_parse_mode {
                 PedigreeSection::Individual => {
                     let split = contents.split_ascii_whitespace().collect::<Vec<&str>>();
-                    let iid = split.first().ok_or(anyhow!(std::io::ErrorKind::InvalidData))?;
+                    let iid = split.first().ok_or(anyhow!(io::ErrorKind::InvalidData))?;
                     let sex: Option<Sex> = split.get(1).and_then(|s| s.parse().ok());
                     // If None: No specified sex field => Continue on.
                     // If Some(Sex::Unknown) emit a warning.
                     if sex.is_some_and(|s| s == Sex::Unknown) {
                         warn!("Unknown sex for individual {iid}: '{}'",
-                            split.get(1).ok_or(anyhow!(std::io::ErrorKind::InvalidData))?
+                            split.get(1).ok_or(anyhow!(io::ErrorKind::InvalidData))?
                         )
                     }
                     pedigree.add_individual(iid, None, sex)
@@ -432,8 +432,8 @@ impl PedigreeBuilder {
     /// 
     /// # @ TODO:
     /// - return error if `values.len()` > 2
-    fn parse_legacy_pedline (line: & str, regex: &str) -> std::io::Result<(String, String, String)> {
-        use std::io::ErrorKind::InvalidData;
+    fn parse_legacy_pedline (line: & str, regex: &str) -> io::Result<(String, String, String)> {
+        use io::ErrorKind::InvalidData;
 
         // ---- Split line across the provided regex and create a <String> iterator.
         let mut temp=line.trim()

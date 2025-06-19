@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fs::File, io::{BufRead, BufWriter}, path::Path};
+use std::{process, collections::BTreeMap, fs::File, io::{BufRead, BufWriter}, path::Path};
 
 use genome::coordinate::Coordinate;
 
@@ -201,7 +201,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
         self.reader.source.read_until(b'\t', &mut pos_buffer).with_loc(||ReadField { c: self.coordinate_buffer.clone() })?;
         pos_buffer.pop();
 
-        let chr: u8 = std::str::from_utf8(&chr_buffer).ok()
+        let chr: u8 = str::from_utf8(&chr_buffer).ok()
             .and_then(|c| {
                 match c.parse::<u8>() {
                     Ok(b) => Some(b),
@@ -214,7 +214,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
                 }
             }).with_loc(||EncodeChr {c: self.coordinate_buffer.clone() })?;
 
-        let pos: [u8; 4] = std::str::from_utf8(&pos_buffer).ok().and_then(|c| c.parse::<u32>().ok()).map(|p| p.to_be_bytes())
+        let pos: [u8; 4] = str::from_utf8(&pos_buffer).ok().and_then(|c| c.parse::<u32>().ok()).map(|p| p.to_be_bytes())
             .with_loc(||EncodePos { c: self.coordinate_buffer.clone() })?;
 
         self.coordinate_buffer.push(chr);
@@ -356,7 +356,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
             trace!("  - {} | {}:{}",
                 self.current_coordinate().loc("While parsing keys")?,
                 sample_tag.id(),
-                std::str::from_utf8(sample_genotype).loc("While parsing keys")?
+                str::from_utf8(sample_genotype).loc("While parsing keys")?
             );
 
             let (left, right) = match sample_genotype.len() {
@@ -525,13 +525,13 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
 
                 if let Err(e) = setbuilder.build_fst(&frequency_strategy) {
                     error!("{:?}", e);
-                    std::process::exit(1);
+                    process::exit(1);
                 };
 
                 // -------------------------- Finish the construction of our `.fst` and `.fst.frq` sets.
                 if let Err(e) = setbuilder.finish_build() {
                     error!("{:?}", e);
-                    std::process::exit(1);
+                    process::exit(1);
                 };
             });
         }

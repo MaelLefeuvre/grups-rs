@@ -1,6 +1,4 @@
-use std::{
-    error::Error, ffi::OsStr, fmt::{self, Display, Formatter}, fs::File, io::IsTerminal, ops::{Add, Range}, path::{Path, PathBuf}, str::FromStr
-};
+use std::{error::Error, ffi::OsStr, fmt::{self, Display, Formatter}, fs::{self, File}, io::{self, IsTerminal}, ops::{Add, Range}, path::{Path, PathBuf}, str::FromStr};
 
 use located_error::*;
 
@@ -83,7 +81,7 @@ impl Cli{
         };
 
         // Write arguments
-        match std::fs::write(&output_file, serialized) {
+        match fs::write(&output_file, serialized) {
             Err(e) => Err(format!("Unable to serialize arguments into {output_file}: [{e}]").into()),
             Ok(()) => Ok(()),
         }
@@ -657,7 +655,7 @@ impl Common {
     /// # Errors
     /// - if the user did not provide an input file, neither from stdin, nor through the `--pileup` argument.
     pub fn check_input(&self) -> Result<(), ParserError> {
-        if self.pileup.is_none() && std::io::stdin().is_terminal() {
+        if self.pileup.is_none() && io::stdin().is_terminal() {
             return Err(ParserError::MissingPileupInput)
         }
         Ok(())
@@ -764,7 +762,7 @@ fn valid_input_file(s: &OsStr) -> Result<PathBuf> {
 
 fn valid_output_dir(s: &OsStr) -> Result<PathBuf> {
     if ! Path::new(s).exists() {
-        std::fs::create_dir(s)?;
+        fs::create_dir(s)?;
     }
     assert_filesystem_entity_is_valid(s, &FileEntity::Directory)
         .loc("While checking for directory validity")?;

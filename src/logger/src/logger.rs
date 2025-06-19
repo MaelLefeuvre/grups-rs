@@ -3,8 +3,7 @@ use indicatif_log_bridge::LogWrapper;
 use log::LevelFilter;
 use log::Level;
 use env_logger::{Builder, Env, fmt::Color};
-use std::io::Write;
-use std::sync::OnceLock;
+use std::{io::Write, sync::OnceLock};
 use thiserror::Error;
 
 static INSTANCE: OnceLock<Logger> = OnceLock::new();

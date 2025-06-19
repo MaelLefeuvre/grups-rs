@@ -1,9 +1,7 @@
 
 use crate::snp::SNPCoord;
 use crate::coordinate::{ChrIdx, Position, Coordinate};
-use std::hash::{Hash, Hasher};
-use std::ops::Range;
-use std::fmt::{self, Display, Formatter};
+use std::{hash::{Hash, Hasher}, ops::Range, fmt::{self, Display, Formatter}};
 
 use super::{CHROM_FORMAT_LEN, COUNT_FORMAT_LEN, RANGE_FORMAT_LEN};
 
@@ -128,6 +126,7 @@ impl Hash for JackknifeBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use anyhow::Result;
     const N_ITERS: u32 = 1_000_000;
 
@@ -217,7 +216,7 @@ mod tests {
 
     #[test]
     fn hash_block() {
-        let mut test_hashset = std::collections::HashSet::new();
+        let mut test_hashset = HashSet::new();
         let ranges: Vec<u32> = (1000..N_ITERS).step_by(1000).collect();
         let chr = 10;
 

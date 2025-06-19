@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::{ops::{Deref, DerefMut}, fmt::{self, Formatter, Display}};
 
 mod comparison;
 pub use comparison::PedComparison;
@@ -23,8 +23,8 @@ impl DerefMut for PedComparisons {
     }
 }
 
-impl std::fmt::Display for PedComparisons {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl Display for PedComparisons {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         self.0.iter().try_fold((), |_, comparison| writeln!(f, "{comparison}"))
     }
 }

@@ -1,4 +1,4 @@
-use std::{fs::File, io::{Write, BufWriter}, path::Path};
+use std::{io, fmt::Display, fs::File, io::{Write, BufWriter}, path::Path};
 use anyhow::Result;
 use regex::Regex;
 use lazy_static::lazy_static;
@@ -31,7 +31,7 @@ impl<'a> GenericWriter<'a>{
                 BufWriter::new(Box::new(file))
             },
             None => {
-                BufWriter::new(Box::new(std::io::stdout()))
+                BufWriter::new(Box::new(io::stdout()))
             }
         }})
     }
@@ -53,7 +53,7 @@ impl<'a> GenericWriter<'a>{
     /// 
     pub fn write_iter<T, I>(&mut self, iter: T) -> Result<()>
     where   T: IntoIterator<Item = I>,
-            I: std::fmt::Display,
+            I: Display,
     {
         // Remove pretty print trailing and leading whitespace
         lazy_static! {
@@ -83,7 +83,7 @@ mod tests {
         let test_vec = vec![Coordinate::new(10, 10000)];
         writer.write_iter(&test_vec)?;
 
-        let got = std::io::read_to_string(File::open(path)?)?;
+        let got = io::read_to_string(File::open(path)?)?;
         assert_eq!(got.replace('\n', ""), test_vec[0].to_string());
         Ok(())
     }

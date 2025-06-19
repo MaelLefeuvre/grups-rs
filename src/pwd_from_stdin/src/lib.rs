@@ -1,4 +1,4 @@
-use std::{fs, collections::HashMap, io::{BufReader, BufRead}};
+use std::{io, fs::File, collections::HashMap, io::{BufReader, BufRead}};
 
 use ahash::AHashSet;
 
@@ -94,8 +94,8 @@ pub fn run<'a>(
     // ---------------------------- Choose between file handle or standard input
     info!("Opening pileup...");   
     let pileup_reader: Box<dyn BufRead> = match &com_cli.pileup {
-        None => Box::new(BufReader::new(std::io::stdin())),
-        Some(filename) => Box::new(BufReader::new(fs::File::open(filename)?))
+        None => Box::new(BufReader::new(io::stdin())),
+        Some(filename) => Box::new(BufReader::new(File::open(filename)?))
     };
 
     // ---------------------------- Read Pileup

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, fmt::{self, Formatter, Display}};
 use parking_lot::RwLock;
 
 use super::super::Individual;
@@ -159,8 +159,8 @@ impl PedComparison {
     }
 
 }
-impl std::fmt::Display for PedComparison {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl Display for PedComparison {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let default_tag=SampleTag::new("None", None, None);
         // <Comparison-Label> <Ind1-label> <Ind2-label> <Ind1-reference> <Ind2-reference> <Sum.PWD> <Overlap> <Avg.PWD>
         let ind1 = self.pair[0].read();
