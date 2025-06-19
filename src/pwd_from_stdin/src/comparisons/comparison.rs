@@ -81,6 +81,7 @@ impl Variance {
 #[derive(Debug)]
 pub struct Comparison {
     pair            : [Individual; 2],
+    label           : String,
     self_comparison : bool,
     variance        : Variance,
     pub blocks      : JackknifeBlocks,
@@ -89,18 +90,18 @@ pub struct Comparison {
 
 impl Comparison {
     pub fn new(mut pair: [Individual; 2], self_comparison: bool, genome: &Genome, blocksize: u32) -> Comparison {
+        let label = format!("{}-{}", &pair[0].name, &pair[1].name);
         if self_comparison {
-            let pair_name = format!("{}-{}", pair[0].name, pair[1].name);
             for individual in &mut pair {
                 if individual.min_depth < 2 {
-                    warn!("[{pair_name}]: A minimal depth of 2 is required for self comparisons, while {} has min_depth = {}.\n
+                    warn!("[{label}]: A minimal depth of 2 is required for self comparisons, while {} has min_depth = {}.\n
                         Rescaling said value to 2 (for this specific comparison)...", individual.name, individual.min_depth
                     );
                     individual.min_depth = 2;
                 }
             }
         }
-        Comparison {pair, self_comparison, variance: Variance::new(), blocks: JackknifeBlocks::new(genome, blocksize), positions: BTreeSet::new()}
+        Comparison {pair, label, self_comparison, variance: Variance::new(), blocks: JackknifeBlocks::new(genome, blocksize), positions: BTreeSet::new()}
     }
 
     pub fn get_pair_indices(&self) -> [usize; 2] {
@@ -160,9 +161,13 @@ impl Comparison {
         self.get_sum_phred() / self.positions.len() as f64
     }
 
-    // Return a formated string representing our pair of individuals. 
-    pub fn get_pair (&self,)-> String {
-        format!("{}-{}", &self.pair[0].name, &self.pair[1].name)
+    /// Return a formated string representing our pair of individuals. 
+    //pub fn get_pair (&self,)-> String {
+    //    format!("{}-{}", &self.pair[0].name, &self.pair[1].name)
+    //}
+    /// Return a formated str representing our pair of individuals. 
+    pub fn get_pair (&self,)-> &str {
+        &self.label
     }
 
     /// Obtain the jacknife estimates of the avg. PWD's standard deviation at each block.

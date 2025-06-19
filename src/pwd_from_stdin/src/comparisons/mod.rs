@@ -128,7 +128,7 @@ impl Comparisons {
             );
             for comparison in self.iter() {
                 let pair = comparison.get_pair();
-                let mut block_writer = GenericWriter::new(Some(output_files[&pair].clone()))?;
+                let mut block_writer = GenericWriter::new(Some(output_files[pair].clone()))?;
                 block_writer.write_iter(vec![&blk_header])?;
                 block_writer.write_iter(vec![&comparison.blocks])?;
             }
@@ -156,7 +156,7 @@ impl Comparisons {
 
     #[must_use]
     pub fn get_pairs(&self) -> Vec<String> {
-        self.0.iter().map(Comparison::get_pair).collect()
+        self.0.iter().map(Comparison::get_pair).map(|s| s.to_string()).collect()
     }
 
     pub fn update_variance_unbiased(&mut self) {

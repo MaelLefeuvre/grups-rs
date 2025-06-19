@@ -226,7 +226,7 @@ impl Pedigrees {
             let pair_indices = comparison.get_pair_indices();
             let pair_label = comparison.get_pair();
             let mut pedigree_reps = self.pedigrees
-                .get_mut(&pair_label)
+                .get_mut(pair_label)
                 .ok_or_else(|| MissingPedVec(pair_label.to_string()))
                 .loc(loc_msg)?.write();
 
@@ -291,7 +291,7 @@ impl Pedigrees {
         &self,
         reader: &dyn GenotypeReader,
         coordinate: &Coordinate,
-        comparison_label: &String,
+        comparison_label: &str,
         pileup_error_probs: &[f64; 2],
         rng: &mut fastrand::Rng
     ) -> Result<()> {
@@ -450,7 +450,7 @@ impl Pedigrees {
 
                         let pileup_error_probs = pairwise_diff.error_probs();
                         // --------------------- Parse genotype fields and start updating dynamic simulations.
-                        if let Err(e) = self.update_pedigrees(&fst_reader, &coordinate, &key, &pileup_error_probs, &mut rng){
+                        if let Err(e) = self.update_pedigrees(&fst_reader, &coordinate, key, &pileup_error_probs, &mut rng){
                             tx.send(Some(e)).expect("MPSC Channel Receiver disconnected");
                         }
 
@@ -461,7 +461,7 @@ impl Pedigrees {
                     if missing_snps > 0 {
                         info!("[{}] {missing_snps} missing SNPs within the simulation dataset. Counting those as non-informative overlap.", comparison.get_pair());
                         self.pedigrees
-                            .get(&comparison.get_pair())
+                            .get(comparison.get_pair())
                             .unwrap()
                             .write()
                             .add_non_informative_snps(missing_snps);
@@ -497,7 +497,7 @@ impl Pedigrees {
     ) {
         info!("Filtering out unwanted alleles from comparisons.");
         for comparison in comparisons.iter_mut() {
-            let key = comparison.get_pair();
+            let key = comparison.get_pair().to_string();
             let pre_filtered_n = comparison.positions.len();
             comparison.positions.retain(|pwd| {
                 !positions_to_delete
@@ -600,7 +600,7 @@ impl Pedigrees {
                         self.update_pedigrees(
                             &vcf_reader,
                             &coordinate,
-                            &comparison.get_pair().to_owned(),
+                            comparison.get_pair(),
                             &pileup_error_probs,
                             &mut rng
                         )
@@ -674,11 +674,11 @@ impl Pedigrees {
             let comparison_label = comparison.get_pair();
 
             // ---- Extract Vector of pedigrees
-            let pedigree_vec = self.get_pedigree_vec(&comparison_label).loc(loc_msg)?;
+            let pedigree_vec = self.get_pedigree_vec(comparison_label).loc(loc_msg)?;
 
 
             let mut writer =
-                GenericWriter::new(Some(output_files[&comparison_label].clone())).loc(loc_msg)?;
+                GenericWriter::new(Some(output_files[comparison_label].clone())).loc(loc_msg)?;
             writer.write_iter(vec![&simulations_header])?;
             writer.write_iter(vec![&pedigree_vec])?;
 
@@ -835,11 +835,11 @@ impl Pedigrees {
                     let observed_avg_pwd = comparison.get_avg_pwd();
                     let comparison_label = comparison.get_pair();
                     // ---- Set progress bar prefix
-                    progress_bar.set_prefix(comparison_label.clone());
+                    progress_bar.set_prefix(comparison_label.to_string());
             
                     // ---- Gain access to pedigree vector.
                     //      @TODO: This error handling is performed multiple times. Stay DRY & wrap this in a public method.
-                    let pedigree_vec = self.get_pedigree_vec(&comparison_label).loc(loc_msg).unwrap();
+                    let pedigree_vec = self.get_pedigree_vec(comparison_label).loc(loc_msg).unwrap();
                     // ---- Aggregate the sum of avg. PWD for each relatedness scenario.
                     let stats = pedigree_vec.compute_sum_simulated_stats().unwrap();
                     let ordered_rels: Vec<&String> = stats.iter().rev().map(|(rel, _)| rel).collect();
@@ -858,7 +858,7 @@ impl Pedigrees {
                         for i in 0..ordered_rels.len() {
                             svm_indexer.write()
                                 .entry(ordered_rels[i].clone())
-                                .or_insert(BTreeMap::new()).insert(comparison_label.clone(), svm_probs[i]);
+                                .or_insert(BTreeMap::new()).insert(comparison_label, svm_probs[i]);
                         }
 
                         // ---- Print SVM results to shell if debug mode...
