@@ -191,7 +191,7 @@ impl Pedigree {
             Some((parent1, parent2)) => {
                 let parent1 = self.individuals.get(parent1).ok_or(InvalidInput)?;
                 let parent2 = self.individuals.get(parent2).ok_or(InvalidInput)?;
-                Some([parent1, parent2])
+                Some([parent1, parent2].into())
             },
         };
         let ind = Arc::new(RwLock::new(Individual::new(label, parents, sex)));
@@ -232,7 +232,7 @@ impl Pedigree {
         self.individuals.get_mut(ind)
             .ok_or(InvalidInput)?
             .write()
-            .set_parents([parent0, parent1]);
+            .set_parents([parent0, parent1].into());
             Ok(())
 
     }

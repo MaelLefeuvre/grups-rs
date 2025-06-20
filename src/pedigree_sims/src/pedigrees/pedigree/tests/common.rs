@@ -20,7 +20,7 @@ pub fn mock_offspring(label: &str, parents_labels: Option<[&str; 2]>) -> Individ
 
     let father = Arc::new(RwLock::new(mock_founder(parents_labels[0])));
     let mother = Arc::new(RwLock::new(mock_founder(parents_labels[1])));
-    let parents = Some([&father, &mother]);
+    let parents = Some([&father, &mother].into());
     Individual::new(label, parents, None)
 }
 

@@ -20,6 +20,10 @@
   description            = "An ancient DNA genetic relatedness estimation software relying on pedigree simulations"
   keywords               = ["cli", "terminal", "bioinformatics", "genomics", "biology", "simulator"]
 
+[[bin]]
+  name = "grups-rs"
+  path = "src/bin/main.rs"
+
 [profile.release]
   opt-level       = 3
   overflow-checks = false
@@ -45,10 +49,20 @@
     "src/grups-io",
   ]
 
+[workspace.lints.clippy]
+  cargo_common_metadata = "warn"
+  pedantic = { level = "warn", priority = -1 }
+  # ------ Contextual warns ------ #
+  doc_markdown             = "allow"
+  doc_link_with_quotes     = "warn"
+  missing_errors_doc       = "allow"
+  missing_panics_doc       = "allow"
+  too_many_lines           = "allow"
+  # ------ Definite allows  ------ #
+  similar_names            = "allow" 
+  cast_precision_loss      = "allow" # We can handle precision loss from usize -> f64
+  match_bool               = "allow" 
 
-[[bin]]
-  name = "grups-rs"
-  path = "src/bin/main.rs"
 
 [workspace.dependencies]
   coordinate-derive    = {path = "src/genome/src/coordinate-derive"}
@@ -105,7 +119,6 @@
   criterion         = "0.3"
   pretty_assertions = "1.4.1"
 
-
 [[bench]]
   name    = "pedigree_sims_bench"
   harness = false
@@ -117,18 +130,3 @@
 [[bench]]
   name    = "bench_fst"
   harness = false
-
-[workspace.lints.clippy]
-  cargo_common_metadata = "warn"
-  pedantic = { level = "warn", priority = -1 }
-  # ------ Contextual warns ------ #
-  doc_markdown             = "allow"
-  doc_link_with_quotes     = "warn"
-  missing_errors_doc       = "allow"
-  missing_panics_doc       = "allow"
-  too_many_lines           = "allow"
-  # ------ Definite allows  ------ #
-  similar_names            = "allow" 
-  cast_precision_loss      = "allow" # We can handle precision loss from usize -> f64
-  match_bool               = "allow" 
-

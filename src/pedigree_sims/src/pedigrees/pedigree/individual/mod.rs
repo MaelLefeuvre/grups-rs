@@ -1,12 +1,10 @@
 use std::{
     cmp::{Ord, Ordering, PartialOrd},
     fmt::{self, Display, Formatter},
-    hash::{Hash, Hasher},
-    borrow::Borrow,
-    sync::Arc,
 };
 
-use parking_lot::RwLock;
+#[cfg(test)] 
+use std::hash::{Hash, Hasher};
 
 use grups_io::read::SampleTag;
 use genome::Sex;
@@ -82,17 +80,13 @@ impl PartialEq for Individual {
 
 impl Eq for Individual {}
 
+#[cfg(test)]
 impl Hash for Individual {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.label.hash(state);
     }
 }
 
-impl Borrow<String> for Individual {
-    fn borrow(&self) -> &String {
-        self.label.borrow()
-    }
-}
 
 impl Ord for Individual {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -106,15 +100,13 @@ impl PartialOrd for Individual {
     }
 }
 
-type ParentsRef<'a> = [&'a Arc<RwLock<Individual>>; 2];
-
 impl Individual {
     /// Instantiate a new individual.
     /// # Arguments
     /// - `label`  : User-defined name of the individual (e.g. "father", "mother", "child", etc.)
     /// - `parents`: Size-two array of `&Arc<RwLock<Individual>>`, representing the individual's parents. 
-    pub fn new(label: &str, parents: Option<ParentsRef>, sex: Option<Sex> ) -> Individual {
-        let parents = parents.map(Self::format_parents);
+    pub fn new(label: &str, parents: Option<Parents>, sex: Option<Sex> ) -> Individual {
+        //let parents = parents.map(Self::format_parents);
         Individual {tag: None, label: label.to_string(), parents, strands: None, currently_recombining: [false, false], alleles: None, sex}
     }
 
@@ -188,13 +180,8 @@ impl Individual {
     /// Manually set the Individuals parents.
     /// # Arguments
     /// - `parents`: Size-two array of `&Arc<RwLock<Individual>>`, representing the individual's parents. 
-    pub fn set_parents(&mut self, parents: ParentsRef) {
-        self.parents = Some(Self::format_parents(parents));
-    }
-
-    /// Rc::clone() the provided pair of of parents during instantiation. (see. `Individual::new()`)
-    fn format_parents(parents:  [&Arc<RwLock<Individual>>; 2]) -> Parents {
-        Parents::new([Arc::clone(parents[0]), Arc::clone(parents[1])])
+    pub fn set_parents(&mut self, parents: Parents) {
+        self.parents = Some(parents);
     }
 
     /// Check whether or not this individual is a founder individual. Returns `true` if `self.parents == None`

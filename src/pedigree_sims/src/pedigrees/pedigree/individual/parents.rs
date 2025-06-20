@@ -18,6 +18,12 @@ impl Parents{
     }
 }
 
+impl From<[&Arc<RwLock<Individual>>; 2]> for Parents {
+    fn from(ref_parents: [&Arc<RwLock<Individual>>; 2]) -> Parents {
+        Parents::new([Arc::clone(ref_parents[0]), Arc::clone(ref_parents[1])])
+    }    
+}
+
 impl PartialEq for Parents {
     fn eq(&self, other: &Self) -> bool {
         *self.0[0].read() == *other.0[0].read() && 
