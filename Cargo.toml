@@ -4,18 +4,21 @@
   description       = "GRUPS-rs: Get Relatedness Using Pedigree Simulations"
   edition           = "2021"
   readme            = "README.md"
+  license           = "GPL-3.0-or-later"
+  repository        = "https://github.com/MaelLefeuvre/grups-rs"
   publish           = false
 
 [package]
-  name              = "grups-rs"
-  edition.workspace = true 
-  version.workspace = true
-  authors.workspace = true
-  publish.workspace = true
-  rust-version      = "1.70.0"  # io::IsTerminal trait.
-
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+  name                   = "grups-rs"
+  rust-version           = "1.70.0"  # io::IsTerminal trait.
+  edition.workspace      = true 
+  version.workspace      = true
+  authors.workspace      = true
+  publish.workspace      = true
+  license.workspace      = true
+  repository.workspace   = true
+  description            = "An ancient DNA genetic relatedness estimation software relying on pedigree simulations"
+  keywords               = ["cli", "terminal", "bioinformatics", "genomics", "biology", "simulator"]
 
 [profile.release]
   opt-level       = 3
@@ -114,3 +117,18 @@
 [[bench]]
   name    = "bench_fst"
   harness = false
+
+[workspace.lints.clippy]
+  cargo_common_metadata = "warn"
+  pedantic = { level = "warn", priority = -1 }
+  # ------ Contextual warns ------ #
+  doc_markdown             = "allow"
+  doc_link_with_quotes     = "warn"
+  missing_errors_doc       = "allow"
+  missing_panics_doc       = "allow"
+  too_many_lines           = "allow"
+  # ------ Definite allows  ------ #
+  similar_names            = "allow" 
+  cast_precision_loss      = "allow" # We can handle precision loss from usize -> f64
+  match_bool               = "allow" 
+

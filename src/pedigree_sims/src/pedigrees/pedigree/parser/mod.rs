@@ -135,12 +135,11 @@ impl TryFrom<&str> for PedFormatField {
 impl Display for PedFormatField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
-            Self::FamId => "Family Id",
-            Self::Iid   => "Individual Id",
-            Self::Fid   => "Parent Id",
-            Self::Mid   => "Parent Id",
-            Self::Sex   => "Sex",
-            Self::Aff   => "Phenotype"
+            Self::FamId           => "Family Id",
+            Self::Iid             => "Individual Id",
+            Self::Fid | Self::Mid => "Parent Id",
+            Self::Sex             => "Sex",
+            Self::Aff             => "Phenotype"
         })
     }
 }
@@ -219,9 +218,8 @@ impl TryFrom<&[&str]> for PedFormatFieldOrder {
     type Error = PedFormatFieldOrderError;
 
     fn try_from(value: &[&str]) -> Result<Self, Self::Error> {
-        Ok(Self::Custom(Vec::from_iter(
-            value.iter().flat_map(|field| PedFormatField::try_from(*field))
-        )))
+        let format_fields = value.iter().flat_map(|field| PedFormatField::try_from(*field)).collect::<Vec<_>>();
+        Ok(Self::Custom(format_fields))
     }
 }
 /// Parse a pedigree definition file and return a `Pedigree` struct.
@@ -264,19 +262,19 @@ impl PedigreeBuilder {
                 .with_loc(loc_msg)?;
 
             // ---- Remove comments and empty lines
-            if line.starts_with('#') || line.is_empty() { continue };
+            if line.starts_with('#') || line.is_empty() { continue }
 
             // ---- Remove inline comments 
             let line = match line.split_once('#') {
                 Some((contents, _)) => contents.to_owned(),
                 None                => line
             };
-            lines.push(PedigreeLine{lineno: i+1, contents: line})
+            lines.push(PedigreeLine{lineno: i+1, contents: line});
         }
 
         // ---- Decide on the appropriate parsing  by checking the existence
         // of legacy 'section' labels (i.e. 'INDIVIDUALS', 'RELATIONSHIPS', 'COMPARISONS')
-        let format = match lines.iter().any(|line| line.is_legacy_section()) {
+        let format = match lines.iter().any(PedigreeLine::is_legacy_section) {
             true  => PedigreeFormat::Legacy,
             false => PedigreeFormat::Ped
         };
@@ -330,7 +328,7 @@ impl PedigreeBuilder {
             // If None: No specified sex field => Continue on.
             // If Some(Sex::Unknown) emit a warning.
             if sex.is_some_and(|s| s == Sex::Unknown) {
-                warn!("Unknown sex for individual {iid}: '{}'", line.get_field(PedFormatField::Sex, &field_order)?)
+                warn!("Unknown sex for individual {iid}: '{}'", line.get_field(PedFormatField::Sex, &field_order)?);
             }
             pedigree.add_individual(iid, None, sex).with_loc(||
                 PedigreeBuilderError::AddIndividual(iid.to_string(), i)
@@ -376,7 +374,7 @@ impl PedigreeBuilder {
         let mut current_parse_mode = PedigreeSection::Content;
         let mut pedigree = Pedigree::new();
         let loc_msg = |ctxt: &str, i: usize| format!("{ctxt} while parsing line n°{i} in the pedigree definition file");
-        for line in self.lines.iter() {
+        for line in &self.lines {
             let (i, contents) = (line.lineno, &line.contents);
             // ---- Switch to the relevant ParseMode if the corresponding pattern has been found
             // and skip the current line if we've just switched to a different mode.
@@ -397,7 +395,7 @@ impl PedigreeBuilder {
                     if sex.is_some_and(|s| s == Sex::Unknown) {
                         warn!("Unknown sex for individual {iid}: '{}'",
                             split.get(1).ok_or(anyhow!(io::ErrorKind::InvalidData))?
-                        )
+                        );
                     }
                     pedigree.add_individual(iid, None, sex)
                         .with_loc(|| PedigreeBuilderError::AddIndividual(contents.to_string(), i))?;
@@ -415,8 +413,8 @@ impl PedigreeBuilder {
                         .with_loc(||loc_msg(&format!("Failed to set a valid comparison for {label}"), i))?;
 
                 },
-                PedigreeSection::Content => continue
-            };
+                PedigreeSection::Content => ()
+            }
         }
         Ok(pedigree)
     }
@@ -440,7 +438,7 @@ impl PedigreeBuilder {
             .strip_suffix(')') 
             .ok_or(InvalidData)?
             .split(regex)
-            .map(|s| s.to_string());
+            .map(ToString::to_string);
 
         // ---- Extract the individual/comparison label.
         let key = temp.next().ok_or(InvalidData)?;
@@ -449,9 +447,9 @@ impl PedigreeBuilder {
         let values: Vec<String> = temp.next()
             .ok_or(InvalidData)?
             .split(',')
-            .map(|s| s.to_string())
+            .map(ToString::to_string)
             .collect();
-        Ok((key, values[0].to_owned(), values[1].to_owned()))
+        Ok((key, values[0].clone(), values[1].clone()))
     }
 
 }

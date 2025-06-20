@@ -8,8 +8,9 @@ pub enum Sex {
 }
 
 impl Sex {
+    #[must_use]
     pub fn random() -> Self {
-        [Self::Female, Self::Male][fastrand::bool() as usize]
+        [Self::Female, Self::Male][usize::from(fastrand::bool())]
     }
 }
 

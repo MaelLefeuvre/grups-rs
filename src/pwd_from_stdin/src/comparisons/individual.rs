@@ -36,7 +36,7 @@ impl Individual {
     pub fn satisfiable_depth(&self, pileups: &[Pileup]) -> Result<bool, ComparisonError> {
         pileups.get(self.index)
             .map(|pileup| pileup.depth >= self.min_depth)
-            .ok_or(ComparisonError::InvalidPileupIndex(self.index, self.name.to_owned()))
+            .ok_or(ComparisonError::InvalidPileupIndex(self.index, self.name.clone()))
     }
 }
 
@@ -51,18 +51,19 @@ mod tests {
     fn new_undefined_name() {
         let index = 0;
         let ind = Individual::new(None, 0, 0);
-        assert_eq!(ind.name, format!("{UNDEFINED_LABEL_PREFIX}{index}"))
+        assert_eq!(ind.name, format!("{UNDEFINED_LABEL_PREFIX}{index}"));
     }
 
     #[test]
     fn new_defined_name() {
         let test_name = "Test_name_label-01".to_string();
         let ind = Individual::new(Some(&test_name) , 0, 0);
-        assert_eq!(ind.name, test_name)
+        assert_eq!(ind.name, test_name);
     }
 
     #[test]
     fn satisfiable_depth() -> Result<(), Box<dyn Error>>{
+        #![allow(clippy::cast_possible_truncation)]
         let (bases, scores) = ("AATA", "JEEJ");
         let pileup = [Pileup::new(Allele::N, bases.len() as u16, bases, scores, true)?];
 

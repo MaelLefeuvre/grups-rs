@@ -46,8 +46,8 @@ impl SetRead<Mmap> for Mmap {
 /// Implementation for the in-RAM memory model of FSTReader
 impl SetRead<Vec<u8>> for Vec<u8> {
     fn get_fst_memory(path: &str) -> Result<Set<Vec<u8>>> {
-        let loc_msg = || format!("While attempting to set the memory of {path}");
         use FSTReaderError::{OpenFST, LoadFST, BuildFST};
+        let loc_msg = || format!("While attempting to set the memory of {path}");
         info!("Loading in memory : {path}");
         // ---- Get file size
         let size = fs::metadata(path).map_err(OpenFST).with_loc(loc_msg)?.len();
@@ -56,6 +56,7 @@ impl SetRead<Vec<u8>> for Vec<u8> {
         let mut file_handle = File::open(path).map_err(OpenFST).with_loc(loc_msg)?;
 
         // ---- Load FST set into memory.
+        #[allow(clippy::cast_possible_truncation)]
         let mut bytes = Vec::with_capacity(size as usize);
         Read::read_to_end(&mut file_handle, &mut bytes).map_err(LoadFST).with_loc(loc_msg)?;
         Set::new(bytes).map_err(BuildFST).with_loc(loc_msg)
@@ -108,9 +109,9 @@ impl<T: AsRef<[u8]> + SetRead<T>> GenotypeReader for FSTReader<T> {
     fn fetch_input_files(input_dir: &Path) -> Result<Vec<PathBuf>> {
         let mut fsts = parse::fetch_input_files(input_dir, &[FST_EXT]).loc("While searching for candidate .fst files.")?;
         fsts.dedup();
-        debug!("Found the following fst file candidates: {:#?}", fsts);
+        debug!("Found the following fst file candidates: {fsts:#?}");
         // Ensure there's a matching 'fst.frq' file for each found '.fst' file
-        for fst in fsts.iter() {
+        for fst in &fsts {
             Self::match_input_frq(fst).with_loc(|| format!("While fetching for .fst files in {}", input_dir.display()))?;
         }
         Ok(fsts)
@@ -134,7 +135,7 @@ impl<T: AsRef<[u8]> + SetRead<T>>FSTReader<T> {
     pub fn find_chromosomes(&self) -> Result<Vec<u8>> {
         let set = self.genotypes_set.read();
         let root = set.as_fst().root();
-        let mut chromosomes = Vec::from_iter( root.transitions().map(|transition| transition.inp) );
+        let mut chromosomes = root.transitions().map(|transition| transition.inp).collect::<Vec<_>>();
         chromosomes.sort_unstable();
         chromosomes.dedup();
         Ok(chromosomes)
@@ -214,6 +215,7 @@ impl<T: AsRef<[u8]> + SetRead<T>>FSTReader<T> {
     }
 
     /// Check if the `self.genotypes` field has been filled.
+    #[must_use]
     pub fn has_genotypes(&self) -> bool {
        ! self.genotypes.is_empty()
     }
@@ -280,8 +282,8 @@ mod tests {
 
     #[test]
     fn test_get_pop_allele_frequency() {
-        let mut reader = fake_fst();
-        
+        #![allow(clippy::float_cmp)]
+        let mut reader = fake_fst(); 
         reader.search_coordinate_frequencies(&Coordinate::new(1, 50_000));
         assert!(reader.get_pop_allele_frequency("EUR").is_ok_and(|freq| freq == 0.5));
         assert!(reader.get_pop_allele_frequency("AFR").is_ok_and(|freq| freq == 0.0));

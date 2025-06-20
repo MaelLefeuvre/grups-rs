@@ -61,27 +61,27 @@ impl JackknifeBlocks {
     pub fn compute_unequal_delete_m_pseudo_values(&self, sum_pwd: f64, sum_overlap: u32) -> JackknifeEstimates {
         let mut theta_jk: f64 = 0.0;
         for chromosome_blocks in self.blocks.values() {
-            for block in chromosome_blocks.iter() {
+            for block in chromosome_blocks {
                 let pseudo_value = block.compute_unequal_delete_m_pseudo_value(sum_pwd, sum_overlap);
                 if pseudo_value.hj.is_finite() {
                     theta_jk += pseudo_value.weigthed_pseudovalue();
-                };
+                }
             }
         }
 
         // Compute Jackknife variance estimate 
         let mut var_jk  : f64 = 0.0;
         for chromosome_blocks in self.blocks.values() {
-            for block in chromosome_blocks.iter() {
+            for block in chromosome_blocks {
                 let pseudo_value = block.compute_unequal_delete_m_pseudo_value(sum_pwd, sum_overlap);
                 if pseudo_value.hj.is_finite() {
                     var_jk += f64::powf(pseudo_value.weigthed_pseudovalue() - theta_jk, 2.0) / (pseudo_value.hj - 1.0);
                 }
             }
         }
-
-        let g = self.blocks.values().map(Vec::len).sum::<usize>() as u32; // Casting to u32 because usize -> f64 conversion
-        let var_jk = var_jk / g as f64;                                   // can generate precision loss on x64 architectures.
+        #[allow(clippy::cast_possible_truncation)] // Don't think we're going to be facing truncation (we're not working with Z.mays)
+        let g = self.blocks.values().map(Vec::len).sum::<usize>() as u32;
+        let var_jk = var_jk / f64::from(g);                                
 
         JackknifeEstimates{estimate: theta_jk, variance: var_jk}
     }
@@ -92,8 +92,8 @@ impl JackknifeBlocks {
 // Good Stuff: https://github.com/apolitical/impl-display-for-vec
 impl Display for JackknifeBlocks {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.blocks.keys().sorted().try_fold((), |_result, chr  | {
-            self.blocks[chr].iter().try_fold((), |_, block| {
+        self.blocks.keys().sorted().try_fold((), |(), chr  | {
+            self.blocks[chr].iter().try_fold((), |(), block| {
                 writeln!(f, "{block}")
             })
         })
@@ -109,14 +109,14 @@ mod tests{
 
     #[test]
     fn jackknife_blocks_check_len_unequal() {
-       let genome = Genome::from(&[Chromosome::new(1, 249250621)]);
+       let genome = Genome::from(&[Chromosome::new(1, 249_250_621)]);
        let blocks = JackknifeBlocks::new(&genome, 1000);
-       assert_eq!(blocks.blocks[&genome[&ChrIdx::from(1)].name].len(),249251);
+       assert_eq!(blocks.blocks[&genome[&ChrIdx::from(1)].name].len(),249_251);
     }
     
     #[test]
     fn jackknife_blocks_check_len_equal () {
-       let genome = Genome::from(&[Chromosome::new(1, 2000001)]);
+       let genome = Genome::from(&[Chromosome::new(1, 2_000_001)]);
        let blocks = JackknifeBlocks::new(&genome, 1000);
        assert_eq!(blocks.blocks[&genome[&ChrIdx::from(1)].name].len(), 2000);
     }
@@ -133,7 +133,7 @@ mod tests{
         // Expected output
         let mut expected_output = String::new();
         for chr in genome.values() {
-            let expected_ranges: Vec<u32> = (1..chr.length+1).step_by(blocksize as usize).collect();
+            let expected_ranges: Vec<u32> = (1..=chr.length).step_by(blocksize as usize).collect();
             for step in expected_ranges.windows(2)  {
                 let (start, end) = (step[0], step[1]);
 

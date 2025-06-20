@@ -34,7 +34,7 @@ struct PedigreeSimulatorBuilder<'a> {
     contam_rates         : Option<Vec<Vec<f64>>>,    
 }
 
-impl<'a> PedigreeSimulatorBuilder<'a> {
+impl PedigreeSimulatorBuilder<'_> {
     fn new() -> Self {
         Self::default()
     }

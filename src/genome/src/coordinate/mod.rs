@@ -10,7 +10,7 @@ mod error;
 pub use error::CoordinateError;
 // import for internal use 
 extern crate coordinate_derive;
-use coordinate_derive::*;
+use coordinate_derive::{CoordBlockEq, CoordEq, CoordHash, CoordOrd};
 
 // Derive macro prelude.
 pub mod derive {
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn from_str_ok() {
         let chr=ChrIdx(22);
-        let pos=Position(123456);
+        let pos=Position(123_456);
         let coord = Coordinate::from_str(&format!("{chr}:{pos}"));
         assert!(coord.as_ref().is_ok_and(|c| c.chromosome == chr));
         assert!(coord.as_ref().is_ok_and(|c| c.position   == pos));
@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn try_from_tuple_string(){
-        assert!(Coordinate::try_from(("22", "123456")).is_ok())
+        assert!(Coordinate::try_from(("22", "123456")).is_ok());
     }
 
     #[test]
@@ -214,13 +214,13 @@ mod tests {
         let bytes = [17, 7, 91, 205, 21]; // 123456789 u32
 
         let coord = Coordinate::from(bytes);
-        assert!(coord.chromosome == ChrIdx(17) && coord.position == Position(123456789))
+        assert!(coord.chromosome == ChrIdx(17) && coord.position == Position(123_456_789));
     }
 
     #[test]
     fn genome_coordinate_matches(){
         let coordinate = Coordinate::new(ChrIdx(10), Position(20));
         let my_ref     = SNPCoord{coordinate, reference: Allele::A, alternate: Allele::C};
-        assert!(my_ref.matches(&coordinate))
+        assert!(my_ref.matches(&coordinate));
     }
 }

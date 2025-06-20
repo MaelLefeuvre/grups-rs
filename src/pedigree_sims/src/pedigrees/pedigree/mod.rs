@@ -107,7 +107,7 @@ impl Pedigree {
 
         // ---- Perform allele fixation at random, according to this pedigrees af_downsampling_rate
         if rng.f64() < af_downsampling_rate {
-            self.founders_mut().for_each(|mut founder| founder.alleles = Some([0, 0]))
+            self.founders_mut().for_each(|mut founder| founder.alleles = Some([0, 0]));
         } else {
             // ---- Fetch and assign the 'true' alleles for all founder individuals. 
             for mut founder in self.founders_mut() {
@@ -116,7 +116,7 @@ impl Pedigree {
                 let founder_tag = founder.get_tag().loc(loc_msg)?;
 
                 // ---- Fetch and assign the individual's allele from our reader.
-                founder.alleles = Some(reader.get_alleles(founder_tag)?)
+                founder.alleles = Some(reader.get_alleles(founder_tag)?);
             }
         }
         Ok(())
@@ -274,7 +274,7 @@ impl Pedigree {
             .map(|x| x.write())
     }
 
-    /// Set the population tags, and assign random SampleTag for each founder individual within this pedigree.
+    /// Set the population tags, and assign random `SampleTag` for each founder individual within this pedigree.
     /// # Arguments:
     /// - `panel`: input samples panel definition, in the form of a `PanelReader`.
     /// - `pop`  : (super-)population id requested for this pedigree's founder individuals.
@@ -303,7 +303,7 @@ impl Pedigree {
     /// Set all individual allele's to `None` within this pedigree.
     pub fn clear_alleles(&mut self){
         for ind in self.individuals.values_mut(){
-            ind.write().clear_alleles()
+            ind.write().clear_alleles();
         }
     }
 
@@ -350,9 +350,9 @@ mod test {
                 println!("{label}, {parents:?}");
                 pedigree.add_individual(label, parents, None)?;
             }
-            for (_label, ind) in pedigree.individuals.iter_mut() {
+            for ind in pedigree.individuals.values_mut() {
                 if ind.read().is_founder() {
-                    ind.write().set_alleles([fastrand::bool() as u8, fastrand::bool() as u8]);
+                    ind.write().set_alleles([u8::from(fastrand::bool()), u8::from(fastrand::bool())]);
                 }
             }
         } else {
@@ -369,7 +369,7 @@ mod test {
 
 
     #[test]
-    #[should_panic]
+    #[should_panic = "Failed to assign alleles"]
     fn meiosis_assign_alleles_empty_strands(){
         let mut pedigree = test_pedigree_set().expect("Cannot generate test pedigree");
         let mut offspr = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
@@ -396,7 +396,7 @@ mod test {
         let mut offspr   = pedigree.get_mutind(&"offspr".to_string()).expect("Cannot extract offspr");
         offspr.strands   = Some([0, 0]);
         offspr.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false).expect("Failed to assign alleles");
-        assert_eq!(offspr.alleles, Some([0, 1]))
+        assert_eq!(offspr.alleles, Some([0, 1]));
     }
 
     #[test]
@@ -447,7 +447,7 @@ mod test {
         for _ in 0..1000 {
             let mut pedigree = test_pedigree_random(Some(def.clone())).unwrap();//.expect("Cannot generate test pedigree");
             pedigree.assign_random_sex()?;
-            for (_label, ind) in pedigree.individuals.iter() {
+            for ind in pedigree.individuals.values() {
                 assert!(ind.read().sex.is_some());
             }
         }

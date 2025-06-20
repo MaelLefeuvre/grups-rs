@@ -24,6 +24,7 @@ pub enum LoggerError {
 }
 
 impl Logger {
+    /// Initialize a static env_logger, along with a thread-safe `indicatif::Multiprogress' progress bar.
     pub fn init(verbosity: u8) -> Result<(), LoggerError>{
         let log_level = Self::u8_to_loglevel(verbosity);
         let env = Env::default()
@@ -38,9 +39,9 @@ impl Logger {
                     traceback = format!("(@ {}:{}) ", record.file().unwrap_or("unknown"), record.line().unwrap_or(0));
                     set_intensity = true;
                 } else {
-                    traceback = String::from("");
+                    traceback = String::new();
                     set_intensity = false;
-                };
+                }
 
                 let mut arg_style = buf.style();
                 arg_style.set_intense(set_intensity);
@@ -89,6 +90,12 @@ impl Logger {
         log::set_max_level(Self::u8_to_loglevel(verbosity));
     }
 
+    /// Obtain a static reference to a globally initiated `indicatif::Multiprogress` progress bar.
+    /// 
+    /// # Panics
+    /// 
+    /// The progress bar is initialized when calling `Logger::init()`. This function will thus
+    /// panic if the Logger was not first initialized.
     pub fn multi() -> &'static MultiProgress {
         &INSTANCE.get().expect("Unitialized").multi_pg
     }

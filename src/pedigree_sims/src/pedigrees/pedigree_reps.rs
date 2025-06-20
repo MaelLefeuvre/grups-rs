@@ -27,6 +27,7 @@ impl PedigreeReps {
     /// Instantiate an empty vector of pedigrees with a preset capacity.
     /// # Arguments:
     /// - `n`: allocated size of the `self.inner` vector.
+    #[must_use]
     pub fn with_capacity(n: usize) -> Self {
         Self{inner: Vec::with_capacity(n), contaminants: None}
     }
@@ -92,7 +93,7 @@ impl PedigreeReps {
         for pedigree in self.iter() {
             // Sum the avg pwd of each replicate.
             for comparison in pedigree.comparisons.iter() {
-                sum_simulated_stats.entry(comparison.label.to_owned()).or_insert((0.0, 0.0)).0 += comparison.get_avg_pwd()
+                sum_simulated_stats.entry(comparison.label.clone()).or_insert((0.0, 0.0)).0 += comparison.get_avg_pwd();
             }
         }
 
@@ -129,13 +130,13 @@ impl PedigreeReps {
     /// Apply `add_n_overlap` to every comparison of every contained pedigree.
     #[inline]
     pub fn add_non_informative_snps(&mut self, n: u32) {
-        for pedigree in self.inner.iter_mut() {
+        for pedigree in &mut self.inner {
             pedigree.comparisons.iter_mut().for_each(|comp| comp.add_n_overlaps(n));
         }
     }
 
     pub fn all_sex_assigned(&self) -> bool {
-        self.inner.iter().all(|ped| ped.all_sex_assigned())
+        self.inner.iter().all(Pedigree::all_sex_assigned)
     }
 }
 
@@ -154,8 +155,8 @@ impl DerefMut for PedigreeReps {
 
 impl Display for PedigreeReps {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.inner.iter().enumerate().try_fold((), |_, (idx, pedigree)| {
-            pedigree.comparisons.iter().try_fold((), |_, comparison| {
+        self.inner.iter().enumerate().try_fold((), |(), (idx, pedigree)| {
+            pedigree.comparisons.iter().try_fold((), |(), comparison| {
                 writeln!(f, "{idx: <REPLICATE_ID_FORMAT_LEN$} - {comparison}")
             })
         })

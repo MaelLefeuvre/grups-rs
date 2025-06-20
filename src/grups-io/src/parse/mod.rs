@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::{Path, PathBuf}};
 
-use located_error::*;
+use located_error::LocatedError;
 
 use log::trace;
 use anyhow::Result;

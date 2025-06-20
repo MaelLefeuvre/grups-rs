@@ -58,7 +58,7 @@ impl Contaminant {
             let mut alt_allele_count = 0.0;
 
             // ---- For each individual contaminating our compared individual...
-            for tag in contaminant.iter() { 
+            for tag in contaminant { 
                 // ---- Extract the alleles of the contaminant from the reader, and dynamically compute the allele frequency.
                 let contaminant_alleles = reader.get_alleles(tag).loc(loc_msg)?;
 
@@ -82,9 +82,9 @@ impl Contaminant {
 
 impl Display for Contaminant {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.iter().try_fold((), |_, contaminants| {
+        self.0.iter().try_fold((), |(), contaminants| {
             write!(f, "- [")?;
-            contaminants.iter().try_fold((), |_, contaminant| {
+            contaminants.iter().try_fold((), |(), contaminant| {
                 write!(f, " {contaminant} ")
             })?;
             writeln!(f, "]")
@@ -126,6 +126,7 @@ mod tests {
 
     #[test]
     fn local_cont_af(){
+        #![allow(clippy::float_cmp)]
         let tag_numbers = [2,2];
         let contaminant = Contaminant::new(dummy_sample_tags(tag_numbers));
         let mut mock_reader = MockGenotypeReader::default();
@@ -148,6 +149,6 @@ mod tests {
         let got = contaminant.compute_local_cont_af(&mock_reader)
             .expect("Failed to obtain contaminant allele frequencies.");
 
-        assert_eq!(want, got)
+        assert_eq!(want, got);
     }
 }

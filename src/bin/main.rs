@@ -25,15 +25,15 @@ fn main() -> Result<()> {
     
     // ----------------------------- Serialize command line arguments
     if let Err(e) = cli.serialize() {
-        error!("{:?}", e);
+        error!("{e:?}");
         process::exit(1);
-    };
+    }
     
     // ----------------------------- unpack Cli and run the appropriate modules.
-    if let Err(e) = grups_rs::run(cli) {
-        error!("{:?}", e);
+    if let Err(e) = grups_rs::run(&cli) {
+        error!("{e:?}");
         process::exit(1);
-    };
+    }
 
     Ok(())
 }

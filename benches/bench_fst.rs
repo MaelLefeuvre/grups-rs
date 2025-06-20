@@ -8,11 +8,11 @@ fn bench_search_genotypes(c: &mut Criterion) {
     let mut reader = FSTReader::<Vec<u8>>::new(fst_path).unwrap();
     let coordinate = Coordinate::new(1, 10411523);
     group.bench_function("search_fst_genotypes_ram", |b| b.iter(|| {
-            reader.search_coordinate_genotypes(&coordinate)
+            reader.search_coordinate_genotypes(&coordinate);
     }));
 
     group.bench_function("search_fst_frequencies_ram", |b| b.iter(|| {
-        reader.search_coordinate_frequencies(&coordinate)
+        reader.search_coordinate_frequencies(&coordinate);
     }));
 }
 

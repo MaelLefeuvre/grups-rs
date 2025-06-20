@@ -1,11 +1,14 @@
 [package]
-  name              = "pedigree_sims"
-  version.workspace = true
-  authors.workspace = true
-  publish.workspace = true
-  edition.workspace = true
+  name                 = "pedigree_sims"
+  version.workspace    = true
+  authors.workspace    = true
+  publish.workspace    = true
+  edition.workspace    = true
+  license.workspace    = true
+  repository.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lints]
+  workspace = true
 
 [dependencies]
   parser               = {workspace = true}

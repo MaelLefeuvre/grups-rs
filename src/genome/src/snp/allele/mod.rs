@@ -26,7 +26,7 @@ impl TryFrom<char> for Allele {
     type Error = ParseAlleleError;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
-        use self::Allele::*;
+        use self::Allele::{A, C, D, G, N, T};
         match value {
             'A'       => Ok(A),
             'C'       => Ok(C),
@@ -68,6 +68,7 @@ impl Borrow<char> for Allele {
 }
 
 impl Allele {
+    #[must_use]
     pub fn is_known(&self) -> bool {
         !matches!{self, Self::N | Self::D}
     }
@@ -106,9 +107,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic = ": ParseAlleleError"]
     fn panic_try_from_char_panic() {
-        Allele::try_from('x').expect("");
+        Allele::try_from('x').unwrap();
     }
 
     #[test]
@@ -124,7 +125,7 @@ mod tests {
             assert_eq!(allele.is_known(), match allele {
                 Allele::A | Allele::C | Allele::G | Allele::T => true,
                 Allele::D | Allele::N                         => false
-            })
+            });
         }
     }
 }

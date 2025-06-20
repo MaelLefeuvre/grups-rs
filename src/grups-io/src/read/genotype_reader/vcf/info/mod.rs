@@ -21,12 +21,12 @@ impl InfoField {
     /// # Arguments:
     /// - `field`: raw, unparsed `INFO` vcf column string slice.
     pub fn new(field: &str) -> Self {
-        Self(Some(field.split(';').map(|s| s.to_string()).collect::<Vec<String>>()))
+        Self(Some(field.split(';').map(ToString::to_string).collect::<Vec<String>>()))
     }
 
     /// Clear-out the structs content.
     pub fn clear(&mut self) {
-        self.0 = None
+        self.0 = None;
     }
 
     /// return `true` if InfoField contains the "MULTI_ALLELIC" tag. (i.e. is multiallelic.) 

@@ -55,14 +55,14 @@ impl FromStr for Chromosome {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use ChromosomeError::*;
+        use ChromosomeError::{ParseChrIdx, ParseLength};
         let split_line: Vec<&str> = s.split('\t').collect();
         let name = ChrIdx::from_str(split_line[0])
             .with_loc(|| ParseChrIdx)?;
         let length = split_line[1].parse::<u32>()
             .with_loc(||ParseLength)?;
 
-        debug!("Chromosome: {: <10} {: <12}", name, length);
+        debug!("Chromosome: {name: <10} {length: <12}");
         Ok(Self::new(name, length))
     }
 }
@@ -108,7 +108,7 @@ mod tests {
     fn from_str_ok() {
         for i in 1..=22 {
             let chr = Chromosome::from_str(&format!("{i}\t555555"));
-            assert!(chr.is_ok())
+            assert!(chr.is_ok());
         }
     }
 
@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn from_str_xchr() {
-        for label in ["X", "chrX"].iter() {
+        for label in &["X", "chrX"] {
             let chr = Chromosome::from_str(&format!("{label}\t123456789"));
             assert!(chr.is_ok_and(|c| c.name == ChrIdx(88)));
         }

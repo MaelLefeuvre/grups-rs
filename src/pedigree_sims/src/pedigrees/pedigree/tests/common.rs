@@ -14,7 +14,7 @@ pub fn mock_founder(label: &str) -> Individual {
 /// Mock an offspring individual, with two parents.
 /// # Arguments:
 ///  - `label` : raw string slice defining the individual's name (e.g. "child")
-/// - `parents`: sice two array, defining the parents names (e.g. ["mother", "father"])
+/// - `parents`: sice two array, defining the parents names (e.g. `["mother", "father"]``)
 pub fn mock_offspring(label: &str, parents_labels: Option<[&str; 2]>) -> Individual {
     let parents_labels = parents_labels.unwrap_or(["father", "mother"]);
 

@@ -1,6 +1,6 @@
 use std::{fs::File, io::{self, BufRead, BufReader, Read}, str::FromStr};
 use genome::{coordinate::ChrIdx, snp::Allele, SNPCoord};
-use located_error::*;
+use located_error::LocatedError;
 use anyhow::Result;
 use log::info;
 
@@ -52,13 +52,13 @@ pub struct SNPReader<'a> {
     sep: char
 }
 
-impl<'a> Read for SNPReader<'a> {
+impl Read for SNPReader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.source.read(buf)
     }
 }
 
-impl<'a> BufRead for SNPReader<'a> {
+impl BufRead for SNPReader<'_> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         self.source.fill_buf()
     }
@@ -122,6 +122,7 @@ impl<'a> SNPReader<'a> {
     /// # @TODO: 
     ///  - This should take a &self reference.
     pub fn hash_target_positions(self, exclude_transitions: bool) -> Result<AHashSet<SNPCoord>> {
+        use genome::snp::Allele::{A, C, G, T};
         let mut target_positions : AHashSet<SNPCoord> = AHashSet::new(); // Output
         let context = || "While hashing target positions";
         for line in self.source.lines() {
@@ -134,8 +135,8 @@ impl<'a> SNPReader<'a> {
             let alternate : Allele     = split_line[self.columns[3]].parse().with_loc(context)?;
 
             if chromosome == ChrIdx(23) && self.mode == SNPReaderMode::Snp {
-                chromosome = ChrIdx(b'X')
-            };
+                chromosome = ChrIdx(b'X');
+            }
             let coordinate: SNPCoord     = SNPCoord::try_new(chromosome, position, reference, alternate)?;
             if exclude_transitions && !coordinate.has_known_alleles() {
                 return Err(SNPReaderError::UnknownAlleles).with_loc(context)
@@ -144,7 +145,6 @@ impl<'a> SNPReader<'a> {
             target_positions.insert(coordinate);
         }
 
-        use genome::snp::Allele::*;
         let transitions = [[A, G], [G, A], [C, T], [T, C]];
         if exclude_transitions {
             info!("Filtering transitions from targets file.");
@@ -211,9 +211,9 @@ mod tests {
         let reader        = SNPReader::new(provided_path)?;
         let positions = reader.hash_target_positions(false)?;
 
-        assert!(positions.contains(&SNPCoord::new(14, 1565489, Allele::A, Allele::C)));
-        assert!(positions.contains(&SNPCoord::new(15, 1500000, Allele::G, Allele::T)));
-        assert!(positions.contains(&SNPCoord::new(b'X', 17000, Allele::G, Allele::A)));
+        assert!(positions.contains(&SNPCoord::new(14, 1_565_489, Allele::A, Allele::C)));
+        assert!(positions.contains(&SNPCoord::new(15, 1_500_000, Allele::G, Allele::T)));
+        assert!(positions.contains(&SNPCoord::new(b'X',  17_000, Allele::G, Allele::A)));
         Ok(())
     }
 
@@ -231,9 +231,9 @@ mod tests {
         let reader        = SNPReader::new(provided_path)?;
         let positions = reader.hash_target_positions(false)?;
 
-        assert!(positions.contains(&SNPCoord::new(14, 1565489, Allele::A, Allele::C)));
-        assert!(positions.contains(&SNPCoord::new(15, 1500000, Allele::G, Allele::T)));
-        assert!(positions.contains(&SNPCoord::new(b'X', 15000, Allele::A, Allele::G)));
+        assert!(positions.contains(&SNPCoord::new(14, 1_565_489, Allele::A, Allele::C)));
+        assert!(positions.contains(&SNPCoord::new(15, 1_500_000, Allele::G, Allele::T)));
+        assert!(positions.contains(&SNPCoord::new(b'X',  15_000, Allele::A, Allele::G)));
         Ok(())
     }
 
@@ -251,9 +251,9 @@ mod tests {
         let reader        = SNPReader::new(provided_path)?;
         let positions = reader.hash_target_positions(false)?;
 
-        assert!(positions.contains(&SNPCoord::new(14, 1565489, Allele::A, Allele::C)));
-        assert!(positions.contains(&SNPCoord::new(15, 1500000, Allele::G, Allele::T)));
-        assert!(positions.contains(&SNPCoord::new(b'X', 18000, Allele::A, Allele::C)));
+        assert!(positions.contains(&SNPCoord::new(14, 1_565_489, Allele::A, Allele::C)));
+        assert!(positions.contains(&SNPCoord::new(15, 1_500_000, Allele::G, Allele::T)));
+        assert!(positions.contains(&SNPCoord::new(b'X',  18_000, Allele::A, Allele::C)));
         Ok(())
     }
 
@@ -293,9 +293,9 @@ mod tests {
         let reader        = SNPReader::new(provided_path)?;
         let positions = reader.hash_target_positions(false)?;
 
-        assert!(positions.contains(&SNPCoord::new(1, 752566, Allele::G, Allele::A)));
-        assert!(positions.contains(&SNPCoord::new(16, 155344, Allele::G, Allele::A)));
-        assert!(positions.contains(&SNPCoord::new(88, 2779345, Allele::C, Allele::T)));
+        assert!(positions.contains(&SNPCoord::new(1,    752_566, Allele::G, Allele::A)));
+        assert!(positions.contains(&SNPCoord::new(16,   155_344, Allele::G, Allele::A)));
+        assert!(positions.contains(&SNPCoord::new(88, 2_779_345, Allele::C, Allele::T)));
         Ok(())
     }
 

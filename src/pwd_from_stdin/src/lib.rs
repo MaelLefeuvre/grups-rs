@@ -47,7 +47,7 @@ pub fn run<'a>(
         &mut com_cli.get_file_prefix(None)?,  // extract the user requested file prefix
         com_cli.overwrite,                    // Should we allow file overwriting ?
         FileKey::Ext,                         // What key are we using to hash these files ?
-        &["".to_string()],                    // Vector of filename suffixes.
+        &[String::new()],                    // Vector of filename suffixes.
         &["pwd"]                              // Vector of file extensions.
     )?;
 
@@ -61,7 +61,7 @@ pub fn run<'a>(
             &["blk"]
         )?);
 
-    debug!("Output files: {:#?}", output_files);
+    debug!("Output files: {output_files:#?}");
 
 
     // ----------------------------- Parse target_positions
@@ -80,7 +80,7 @@ pub fn run<'a>(
 
     // ----------------------------- Parse requested Chromosomes
     let valid_chromosomes : Vec<u8> = match com_cli.chr.clone() {
-        None         => genome.keys().copied().map(|x| x.into()).collect(),
+        None         => genome.keys().copied().map(Into::into).collect(),
         Some(vector) => {
             let vec: Vec<String> = vector.into_iter().map(|c| match c.as_ref() {
                 "X" | "chrX" => "88".to_string(),
@@ -89,7 +89,7 @@ pub fn run<'a>(
             parser::parse_user_ranges(&vec, "chr")?
         }
     };
-    info!("Valid chromosomes: {:?}", valid_chromosomes);
+    info!("Valid chromosomes: {valid_chromosomes:?}");
 
     // ---------------------------- Choose between file handle or standard input
     info!("Opening pileup...");   

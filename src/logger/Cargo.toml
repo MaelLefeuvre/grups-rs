@@ -1,13 +1,18 @@
 [package]
-  name              = "logger"
-  version.workspace = true
-  authors.workspace = true
-  publish.workspace = true
-  edition.workspace = true
+  name                 = "logger"
+  version.workspace    = true
+  authors.workspace    = true
+  publish.workspace    = true
+  edition.workspace    = true
+  license.workspace    = true
+  repository.workspace = true
 
 [lib]
   name = "logger"
   path = "src/logger.rs"
+
+[lints]
+  workspace = true
 
 [dependencies]
   log                  = {workspace = true}

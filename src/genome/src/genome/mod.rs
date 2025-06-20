@@ -65,7 +65,7 @@ impl Genome {
     /// - returns `FastaIndexReaderError::ParseInt` if there is an invalid length value at column 1
     pub fn from_fasta_index(path: &str) -> Result<Genome,FastaIndexReaderError> {
         use FastaIndexReaderError::{InvalidExt, FileNotFound, ParseLine};
-        info!("Parsing reference genome: {}", path);
+        info!("Parsing reference genome: {path}");
 
         // ---- Extract the  file extention of `path` and format the expected `.fai` file if necessary.
         let Some(ext) = Path::new(path).extension().map(|ext| ext.to_string_lossy().to_string()) else {
@@ -77,7 +77,7 @@ impl Genome {
             "fasta" | "fa" => format!("{}{}", path, ".fai"), // Append '.fai' if it is not there
             other          => return Err(InvalidExt{ext: other.to_owned()})
         };
-        debug!("Matching fasta.fai file : {}", fai);
+        debug!("Matching fasta.fai file : {fai}");
 
         let mut genome = Self::new();
         let file = BufReader::new(match File::open(fai.clone()) {
@@ -97,11 +97,11 @@ impl Genome {
                     genome.add_chromosome(chr);
                     debug!("Chromosome: {: <10} {: <12}", chr.name, chr.length);
                 }            
-            };
+            }
         }
         
         if !skipped_chrs.is_empty(){
-            warn!("\nSome chromosomes were skipped while parsing {}:\n{:?}", fai, skipped_chrs);
+            warn!("\nSome chromosomes were skipped while parsing {fai}:\n{skipped_chrs:?}");
         }
         Ok(genome)
     }
@@ -174,14 +174,14 @@ mod tests {
 
         let genome = Genome::from_fasta_index(file_path.to_str().expect("Invalid path")).expect("Failed to generate genome");
         for chr in [1,2,3,4,5] {
-            println!("{chr} {}", genome.0.contains_key(&ChrIdx(chr)))
+            println!("{chr} {}", genome.0.contains_key(&ChrIdx(chr)));
         }
 
-        assert_eq!(genome.0.get(&ChrIdx(1)).expect("Chr 1 not found").length, 249250621);
-        assert_eq!(genome.0.get(&ChrIdx(2)).expect("Chr 2 not found").length, 243199373);
-        assert_eq!(genome.0.get(&ChrIdx(3)).expect("Chr 3 not found").length, 198022430);
-        assert_eq!(genome.0.get(&ChrIdx(4)).expect("Chr 4 not found").length, 191154276);
-        assert_eq!(genome.0.get(&ChrIdx(5)).expect("Chr 5 not found").length, 180915260);
+        assert_eq!(genome.0.get(&ChrIdx(1)).expect("Chr 1 not found").length, 249_250_621);
+        assert_eq!(genome.0.get(&ChrIdx(2)).expect("Chr 2 not found").length, 243_199_373);
+        assert_eq!(genome.0.get(&ChrIdx(3)).expect("Chr 3 not found").length, 198_022_430);
+        assert_eq!(genome.0.get(&ChrIdx(4)).expect("Chr 4 not found").length, 191_154_276);
+        assert_eq!(genome.0.get(&ChrIdx(5)).expect("Chr 5 not found").length, 180_915_260);
         Ok(())
     }
 
@@ -199,7 +199,7 @@ mod tests {
         let genome = Genome::from_fasta_index(provided_path);
 
         let genome = genome.expect("Failed to generate genome");
-        assert_eq!(genome.0.get(&ChrIdx(1)).expect("Chr 1 not found").length, 249250621);
+        assert_eq!(genome.0.get(&ChrIdx(1)).expect("Chr 1 not found").length, 249_250_621);
         Ok(())
     }
 
@@ -217,7 +217,7 @@ mod tests {
         let genome = Genome::from_fasta_index(provided_path);
 
         let genome = genome.expect("Failed to generate genome");
-        assert_eq!(genome.0.get(&ChrIdx(1)).expect("Chr 1 not found").length, 249250621);
+        assert_eq!(genome.0.get(&ChrIdx(1)).expect("Chr 1 not found").length, 249_250_621);
         Ok(())
     }
 

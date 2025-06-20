@@ -42,7 +42,7 @@ impl Variance {
     pub fn dynamic_update(&mut self, pwd: f64) {
         if self.n == 0 {
             self.meansum = pwd;
-        };
+        }
         self.n += 1;
         let stepsum = pwd - self.meansum;
         let stepmean = ((self.n - 1) as f64 * stepsum) / self.n as f64;
@@ -82,6 +82,7 @@ impl Variance {
 pub struct Comparison {
     pair            : [Individual; 2],
     label           : String,
+    #[allow(clippy::struct_field_names)]
     self_comparison : bool,
     variance        : Variance,
     pub blocks      : JackknifeBlocks,
@@ -89,7 +90,8 @@ pub struct Comparison {
 }
 
 impl Comparison {
-    pub fn new(mut pair: [Individual; 2], self_comparison: bool, genome: &Genome, blocksize: u32) -> Comparison {
+    #[must_use]
+    pub fn new(mut pair: [Individual; 2], self_comparison: bool, genome: &Genome, blocksize: u32) -> Self {
         let label = format!("{}-{}", &pair[0].name, &pair[1].name);
         if self_comparison {
             for individual in &mut pair {
@@ -104,6 +106,7 @@ impl Comparison {
         Comparison {pair, label, self_comparison, variance: Variance::new(), blocks: JackknifeBlocks::new(genome, blocksize), positions: BTreeSet::new()}
     }
 
+    #[must_use]
     pub fn get_pair_indices(&self) -> [usize; 2] {
         [self.pair[0].index, self.pair[1].index]
     }
@@ -142,11 +145,13 @@ impl Comparison {
             .sum::<f64>()
     }
 
-    // Getter for the average pairwise difference across our overlapping snps.
+    /// Getter for the average pairwise difference across our overlapping snps.
+    #[must_use]
     pub fn get_avg_pwd(&self) -> f64 {
         self.get_sum_pwd() / self.positions.len() as f64
     }
 
+    #[must_use]
     pub fn get_overlap(&self) -> usize {
         self.positions.len()
     }
@@ -156,26 +161,27 @@ impl Comparison {
             .map(Pwd::compute_avg_phred)
             .sum::<f64>()
     }
-    // Getter for the average pairwise phred score across our overlapping snps.
+    /// Getter for the average pairwise phred score across our overlapping snps.
+    #[must_use]
     pub fn get_avg_phred(&self) -> f64 {
         self.get_sum_phred() / self.positions.len() as f64
     }
 
-    /// Return a formated string representing our pair of individuals. 
-    //pub fn get_pair (&self,)-> String {
-    //    format!("{}-{}", &self.pair[0].name, &self.pair[1].name)
-    //}
     /// Return a formated str representing our pair of individuals. 
+    #[must_use]
     pub fn get_pair (&self,)-> &str {
         &self.label
     }
 
     /// Obtain the jacknife estimates of the avg. PWD's standard deviation at each block.
+    #[must_use]
     pub fn get_jackknife_estimates(&self) -> JackknifeEstimates {
+        #[allow(clippy::cast_possible_truncation)] // Sample definitly has less than 4_294_967_295 positions...
         self.blocks.compute_unequal_delete_m_pseudo_values(self.get_sum_pwd(), self.positions.len() as u32)
     }
 
     /// Optain the 95% confidence interval for the observed avg. PWD
+    #[must_use]
     pub fn get_confidence_interval(&self) -> f64 {
         self.variance.confidence_interval()
     }
@@ -214,6 +220,7 @@ impl Display for Comparison {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
     use genome::SNPCoord;
 
     use crate::pileup;
@@ -225,7 +232,7 @@ mod tests {
     #[test]
     fn pair_indices_getter() {
         let comparison = common::mock_comparison(false);
-        assert_eq!(comparison.get_pair_indices(), common::MOCK_IND_INDICES)
+        assert_eq!(comparison.get_pair_indices(), common::MOCK_IND_INDICES);
     }
 
     #[test]
@@ -334,9 +341,9 @@ mod tests {
             expected_sum_phred += avg_test_qual; 
 
             // Ensure comparison.sum_phred represent the sum average of two given nucleotide's scores
-            assert_eq!(mock_comparison.get_sum_phred(), expected_sum_phred as f64);
+            assert_eq!(mock_comparison.get_sum_phred(), f64::from(expected_sum_phred));
 
-            assert_eq!(mock_comparison.get_avg_phred(), avg_test_qual as f64); // Avg. pwd should stay the same. 
+            assert_eq!(mock_comparison.get_avg_phred(), f64::from(avg_test_qual)); // Avg. pwd should stay the same. 
         }
         Ok(())
     }
@@ -362,7 +369,7 @@ mod tests {
         assert_eq!(mock_comparison.get_sum_phred(), 118.5);       // (J + A)
         assert_eq!(mock_comparison.get_avg_phred(), 118.5 / 3.0);
         assert_eq!(mock_comparison.get_sum_pwd(), 1.0);           // (T <-> C) *2
-        assert_eq!(mock_comparison.get_avg_pwd(), 0.3333333333333333);
+        assert_eq!(mock_comparison.get_avg_pwd(), 0.333_333_333_333_333_3);
         assert_eq!(mock_comparison.positions.len(), 3);
 
         Ok(())

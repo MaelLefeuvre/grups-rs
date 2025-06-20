@@ -61,7 +61,7 @@ pub fn run(
         &mut com_cli.get_file_prefix(None)?, // extract the user requested file prefix
         com_cli.overwrite,                   // Should we allow file overwriting ?
         FileKey::Ext,                        // What key are we using to hash these files ?
-        &["".to_string()],                   // Vector of filename suffixes.
+        &[String::new()],                   // Vector of filename suffixes.
         &["result"]                          // Vector of file extensions.
     )?;
 
@@ -75,7 +75,7 @@ pub fn run(
             &["sims"]
         )?);
 
-    debug!("Output files: {:#?}", output_files);
+    debug!("Output files: {output_files:#?}");
 
     // --------------------- Fetch the input panel.
     let mut panel = match ped_cli.panel.as_ref() {
@@ -125,7 +125,7 @@ pub fn run(
 
     // --------------------- Randomly assign chromosomal sex of samples if requested
     if ped_cli.sex_specific_mode {
-        pedigrees.assign_random_sex().loc("While attempting to randomly assign sexes of all pedigrees")?
+        pedigrees.assign_random_sex().loc("While attempting to randomly assign sexes of all pedigrees")?;
     }
 
     // -------------------- Fetch and assign reference sample tags in panel for all founders

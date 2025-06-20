@@ -7,7 +7,7 @@ use anyhow::Result;
 use located_error::LocatedError;
 use std::{fmt::{self, Formatter, Display}, error::Error};
 
-use crate::coordinate::{Coordinate, ChrIdx, Position, derive::*};
+use crate::coordinate::{Coordinate, ChrIdx, Position, derive::{Coord, CoordBlockEq, CoordBorrow, CoordEq, CoordHash, CoordOrd}};
 
 //pub use crate::snp::Allele;
 
@@ -72,6 +72,7 @@ mod tests {
 
     #[test]
     fn snpcoord_ordering() -> Result<()> {
+        #![allow(clippy::cast_possible_wrap,clippy::cast_sign_loss,clippy::cast_possible_truncation)]
         let (chromosome, position) = (10, 100_000);
         let coord = SNPCoord::try_new(chromosome, position, 'A', 'C')?;
         let deviations: [i32; 3] = [-1, 0, 1];
@@ -80,7 +81,7 @@ mod tests {
             let (reference, alternate) = (nucleotides.0, nucleotides.1);
             for chromosome_deviation in deviations {
                 for position_deviation in deviations {
-                    let chromosome = chromosome as i32 + chromosome_deviation;
+                    let chromosome = i32::from(chromosome) + chromosome_deviation;
                     let position   = position   as i32 + position_deviation;
 
                     let other_coord = SNPCoord::try_new(chromosome as u8, position as u32, reference, alternate)?;
@@ -92,9 +93,9 @@ mod tests {
                             -1 => assert!(other_coord < coord),
                              1 => assert!(other_coord > coord),
                              0 => assert_eq!(other_coord, coord),
-                             _ => continue
+                             _ => ()
                          }
-                         _ => continue
+                         _ => ()
                     }
                 }
             }
@@ -104,16 +105,16 @@ mod tests {
 
     #[test]
     fn snpcoord_full_equality() -> Result<()> {
-        let coord1 = SNPCoord::try_new(1, 100510, 'A', 'C')?;
-        let coord2 = SNPCoord::try_new(1, 100510, 'A', 'C')?;
+        let coord1 = SNPCoord::try_new(1, 100_510, 'A', 'C')?;
+        let coord2 = SNPCoord::try_new(1, 100_510, 'A', 'C')?;
         assert_eq!(coord1, coord2);
         Ok(())
     }
 
     #[test]
     fn snpcoord_partial_equality() -> Result<()> {
-        let coord1 = SNPCoord::try_new(2, 16541561, 'T', 'G')?;
-        let coord2 = SNPCoord::try_new(2, 16541561, 'A', 'C')?;
+        let coord1 = SNPCoord::try_new(2, 16_541_561, 'T', 'G')?;
+        let coord2 = SNPCoord::try_new(2, 16_541_561, 'A', 'C')?;
         assert_eq!(coord1, coord2);
         Ok(())
     }

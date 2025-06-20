@@ -198,6 +198,7 @@ impl Individual {
     }
 
     /// Check whether or not this individual is a founder individual. Returns `true` if `self.parents == None`
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     pub fn is_founder(&self) -> bool {
         self.parents.is_none()
@@ -213,7 +214,7 @@ impl Individual {
     /// Set the Individual's `self.alleles` field to `None`. 
     /// This method is most likely called when switching from one simulated SNP coordinate to another.
     pub fn clear_alleles(&mut self){
-        self.alleles = None
+        self.alleles = None;
     }
     
     /// Set the individual's alleles, given a recombination probability. 
@@ -361,9 +362,9 @@ mod tests {
         let valid_alleles = [[0,0], [0,1], [1,0], [1,1]];
         let mut valid_strands = [[0,0], [0,1], [1,0], [1,1]];
 
-        for parent_0_alleles in valid_alleles.iter(){
-            for parent_1_alleles in valid_alleles.iter() {
-                for strands in valid_strands.iter_mut() {
+        for parent_0_alleles in &valid_alleles{
+            for parent_1_alleles in &valid_alleles {
+                for strands in &mut valid_strands {
                     offspring.strands = Some(*strands);
                     perform_allele_asignment(&mut offspring, [*parent_0_alleles, *parent_1_alleles], recombination_prob)?;
 
@@ -448,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic = "Trying to perform meiosis within an empty genome!"]
     fn meiosis_empty_alleles() {
         let ind = common::mock_founder("parent");
         ind.meiosis(0, false);
@@ -472,7 +473,7 @@ mod tests {
     fn strand_setter_founder() {
         let mut ind = common::mock_founder("parent");
         let result = ind.assign_strands();
-        assert!(result.is_err())
+        assert!(result.is_err());
     }
 
     #[test]
@@ -498,7 +499,7 @@ mod tests {
     fn get_set_sampletag() {
         let mut ind = common::mock_founder("parent");
         let tag = SampleTag::new("HG00096", Some(0), None);
-        ind.set_tag(tag.to_owned());
+        ind.set_tag(tag.clone());
         assert_eq!(ind.get_tag(), Some(&tag));
         
     }
@@ -538,14 +539,14 @@ mod tests {
     fn alleles_assignment_founder() {
         let mut ind = common::mock_founder("parent");
         let result = ind.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false);
-        assert!(result.is_err())
+        assert!(result.is_err());
     }
 
     #[test]
     fn alleles_assignments_unnassigned_parent_alleles(){
         let mut ind = common::mock_offspring("offspring", None);
         let result = ind.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false);
-        assert!(result.is_err())
+        assert!(result.is_err());
     }
 
     #[test]
@@ -574,14 +575,14 @@ mod tests {
     fn ind_equality() {
         let  ind1 = common::mock_founder("parent");
         let  ind2 = common::mock_founder("parent");
-        assert_eq!(ind1, ind2)
+        assert_eq!(ind1, ind2);
     }
 
     #[test]
     fn ind_inequality() {
         let  ind1 = common::mock_founder("ind1");
         let  ind2 = common::mock_founder("ind2");
-        assert_ne!(ind1, ind2)
+        assert_ne!(ind1, ind2);
     }
 
     #[test]

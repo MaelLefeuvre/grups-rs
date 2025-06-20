@@ -1,6 +1,6 @@
 use std::{error::Error, ffi::OsStr, fmt::{self, Display, Formatter}, fs::{self, File}, io::{self, IsTerminal}, ops::{Add, Range}, path::{Path, PathBuf}, str::FromStr};
 
-use located_error::*;
+use located_error::LocatedError;
 
 use clap::{Parser, Subcommand, Args, ArgEnum};
 use serde::{Serialize, Deserialize};
@@ -57,7 +57,7 @@ impl Cli{
         let serialized = serde_yaml::to_string(&self)
             .map_err(|err| format!("Failed to serialize command line arguments. got [{err}]"))?;
         
-        debug!("\n---- Command line args ----\n{}\n---", serialized);
+        debug!("\n---- Command line args ----\n{serialized}\n---");
 
         // Fetch the appropriate output-directory and parse the name of the output file.
         let current_time = chrono::offset::Local::now().format("%Y-%m-%dT%H%M%S").to_string();
@@ -76,9 +76,8 @@ impl Cli{
                 format!("{dir_string}/{current_time}-fst-index.yaml")
             },
 
-            Commands::FromYaml {yaml: _} => return Ok(()),
-            Commands::Cite => return Ok(())
-        };
+            Commands::FromYaml {yaml: _} | Commands::Cite => return Ok(()),
+            };
 
         // Write arguments
         match fs::write(&output_file, serialized) {
@@ -716,7 +715,7 @@ impl Display for FileEntity {
 }
 
 impl FileEntity {
-    fn validate(&self, path: &Path) -> Result<(), ParserError> {
+    fn validate(self, path: &Path) -> Result<(), ParserError> {
         use ParserError::InvalidFileEntity;
         let valid = match self {
             Self::File      => path.is_file(),
@@ -726,16 +725,16 @@ impl FileEntity {
         if valid {
             Ok(())
         } else {
-            Err(InvalidFileEntity(*self, path.display().to_string()))
+            Err(InvalidFileEntity(self, path.display().to_string()))
         }
     }
 }
 
-fn assert_filesystem_entity_is_valid(s: &OsStr, entity: &FileEntity) -> Result<()> {
+fn assert_filesystem_entity_is_valid(s: &OsStr, entity: FileEntity) -> Result<()> {
     use ParserError::MissingFileEntity;
     let path = Path::new(s);
     if ! path.exists() {
-        return Err(MissingFileEntity(*entity, path.display().to_string()))
+        return Err(MissingFileEntity(entity, path.display().to_string()))
             .loc("While parsing arguments.")
     }
 
@@ -749,13 +748,13 @@ fn expand_tilde(s: &OsStr) -> Result<PathBuf> {
 }
 
 fn valid_input_directory(s: &OsStr) -> Result<PathBuf> {
-    assert_filesystem_entity_is_valid(s, &FileEntity::Directory)
+    assert_filesystem_entity_is_valid(s, FileEntity::Directory)
         .loc("While checking for directory validity")?;
     expand_tilde(s)
 }
 
 fn valid_input_file(s: &OsStr) -> Result<PathBuf> {
-    assert_filesystem_entity_is_valid(s, &FileEntity::File)
+    assert_filesystem_entity_is_valid(s, FileEntity::File)
         .loc("While checking for file validity")?;
     expand_tilde(s)
 }
@@ -764,7 +763,7 @@ fn valid_output_dir(s: &OsStr) -> Result<PathBuf> {
     if ! Path::new(s).exists() {
         fs::create_dir(s)?;
     }
-    assert_filesystem_entity_is_valid(s, &FileEntity::Directory)
+    assert_filesystem_entity_is_valid(s, FileEntity::Directory)
         .loc("While checking for directory validity")?;
     expand_tilde(s)
 }
@@ -816,7 +815,7 @@ fn parse_pedigree_param(s: &str) -> Result<Vec<f64>> {
 ///  - Input will most likely stem from the command line parser, where users are not expected
 ///    to write every single value they would like to input.
 /// 
-///     --> ["1-6", "8"] for the user, becomes [1, 2, 3, 4, 5, 6, 8] for our program.
+///     --> `["1-6", "8"]` for the user, becomes [1, 2, 3, 4, 5, 6, 8] for our program.
 /// 
 ///  - Return a vector of generic integers, boxed within a Result.
 ///

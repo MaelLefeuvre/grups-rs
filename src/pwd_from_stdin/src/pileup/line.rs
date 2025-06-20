@@ -57,7 +57,7 @@ impl Line {
     /// Apply base quality filtering on each individual pileup, according to a given treshold
     /// See: `Pileup::filter_base_quality()`
     pub fn filter_base_quality(&mut self, phred_treshold: u8) {
-        self.individuals.iter_mut().for_each(|ind| ind.filter_base_quality(phred_treshold.into()) )
+        self.individuals.iter_mut().for_each(|ind| ind.filter_base_quality(phred_treshold.into()));
     }
 
     /// Apply `known_variant` filtering on each individual pileup, according to a given treshold.
@@ -123,7 +123,7 @@ mod tests {
         let raw_line="2\t21303470\tN\t0\t*\t*\t8\tTTcTTtt^Ft\tEEJEEEEE\t0\t*\t*";
         let mut line = pileup::Line::new(raw_line, true)?;
 
-        let known_variant = SNPCoord::try_new(2, 21303470, 'C', 'A')?;
+        let known_variant = SNPCoord::try_new(2, 21_303_470, 'C', 'A')?;
         line.filter_known_variants(&known_variant)?;
         assert_eq!(line.individuals[1].get_nucleotides(), String::from('C'));
         assert_eq!(line.individuals[1].get_scores_ascii(), String::from('J'));
@@ -137,7 +137,7 @@ mod tests {
         let raw_line="2\t21303470\tT\t0\t*\t*\t8\t..c..,,^F,\tEEJEEEEE\t0\t*\t*";
         let mut line = pileup::Line::new(raw_line, true)?;
 
-        let known_variant = SNPCoord::try_new(2, 21303470, 'T', 'A')?;
+        let known_variant = SNPCoord::try_new(2, 21_303_470, 'T', 'A')?;
         line.filter_known_variants(&known_variant)?;
         assert_eq!(line.individuals[1].get_nucleotides(),  String::from("TTTTTTT"));
         assert_eq!(line.individuals[1].get_scores_ascii(), String::from("EEEEEEE"));

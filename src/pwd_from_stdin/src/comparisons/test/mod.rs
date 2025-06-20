@@ -36,7 +36,7 @@ pub mod common{
     
         let mut bases = String::new();
         let mut scores = String::new();
-        for _ in 0..depth+1 {
+        for _ in 0..=depth {
             bases.push(*rng.choice(nucleotides.iter()).ok_or_else(||anyhow!("Empty nucleotide vector in 'mock_pileup_strings'"))?);
             scores.push(*rng.choice(quals.iter()).ok_or_else(||anyhow!("Empty quals vector in 'mock_pileup_strings'"))?);
         }

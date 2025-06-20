@@ -1,4 +1,4 @@
-use std::{collections::{BTreeMap, HashMap}, mem::ManuallyDrop, path::Path, sync::{Arc, mpsc}, time::Duration};
+use std::{collections::{BTreeMap, HashMap}, mem::ManuallyDrop, path::Path, sync::{Arc, mpsc}, time::Duration, fmt::Write};
 
 use grups_io::{
     read::genotype_reader::{fst::SetRead, FSTReader, GenotypeReader, VCFReader},
@@ -59,7 +59,7 @@ use crate::svm::LibSvmBuilder;
 ///  - `previous_position` is not fit to handle multiple chromosomes at this state... This could cause bugs if one of the input files
 ///    contains multiple chromosomes...
 pub struct Pedigrees {
-    pedigrees: HashMap<String, Arc<RwLock<PedigreeReps>>>,
+    inner: HashMap<String, Arc<RwLock<PedigreeReps>>>,
     pedigree_pop: String,
     genetic_map: GeneticMap,
     previous_positions: HashMap<String, Arc<RwLock<Position>>>,
@@ -67,8 +67,8 @@ pub struct Pedigrees {
 }
 
 /// @TODO! : Right now we're reading the pedigree definition file for each replicate. Which isn't very efficient.
-///          This is because simply using clone() on a pedigree_template will merely clone() the Arc<RwLock>.
-///          ==> This is NOT what we want. What we want is to create new instances of Rc<RefCell> from these values.
+///          This is because simply using `clone()` on a pedigree_template will merely `clone()`` the `Arc<RwLock>`.
+///          ==> This is NOT what we want. What we want is to create new instances of `Arc<RwLock>` from these values.
 impl Pedigrees {
     /// Initialize a pedigree simulator.
     /// # Arguments:
@@ -101,23 +101,23 @@ impl Pedigrees {
         let rng = fastrand::Rng::new();
         let pedigree_pop = pedigree_pop.to_string();
         Ok(Pedigrees {
-            pedigrees,
+            inner: pedigrees,
             pedigree_pop,
-            previous_positions,
             genetic_map,
+            previous_positions,
             rng
         })
     }
 
     pub fn set_founder_tags(&mut self, panel: &PanelReader) -> Result<()> {
-        self.pedigrees.iter_mut().try_for_each(|(label, ped_rep)|{
+        self.inner.iter_mut().try_for_each(|(label, ped_rep)|{
             ped_rep.write().set_founder_tags(panel, &self.pedigree_pop)
                 .with_loc(||format!("While attempting to set founder tags in pedigree vector of comparison '{label}'"))
         })
     }
 
     pub fn assign_offspring_strands(&mut self) -> Result<()> {
-        self.pedigrees.iter_mut().try_for_each(|(label, ped_rep)|{
+        self.inner.iter_mut().try_for_each(|(label, ped_rep)|{
             ped_rep.write().assign_offspring_strands()
                 .with_loc(||format!("While attempting to randomly assign offspring strands in pedigree vector of comparison '{label}'"))
 
@@ -130,7 +130,7 @@ impl Pedigrees {
     /// - `panel`         : input samples panel definition file.
     /// - `reps`          : user-defined number of pedigree simulation replicates.
     /// - `pedigree_path` : path leading to the pedigree definition file
-    /// - contam_pop`     : user-defined name of the (super-)population-id requested to simulate modern human contamination
+    /// - `contam_pop`    : user-defined name of the (super-)population-id requested to simulate modern human contamination
     /// - `contam_num_ind`: vector of user-requested contaminating individuals `contam_num_ind[i] is tied to pileup `sample[i]`
     pub fn populate(
         &mut self,
@@ -178,20 +178,21 @@ impl Pedigrees {
                         comparison.get_pair()
                     )
                 })?;
-            self.pedigrees
+            self.inner
                 .insert(comparison_label.to_owned(), Arc::new(RwLock::new(pedigree_reps)));
         }
         Ok(())
     }
 
+    #[must_use]
     pub fn all_sex_assigned(&self) -> bool {
-        self.pedigrees
+        self.inner
             .values()
             .all(|ped_rep| ped_rep.read().all_sex_assigned())
     }
 
     pub fn assign_random_sex(&mut self) -> Result<()> {
-        self.pedigrees.iter_mut().try_for_each(|(label, ped_rep)| {
+        self.inner.iter_mut().try_for_each(|(label, ped_rep)| {
             ped_rep.write().assign_random_sex().with_loc(|| {
                 format!("While assigning sexes in pedigree replicate vector of comparison {label}")
             })
@@ -225,7 +226,7 @@ impl Pedigrees {
             use PedigreeError::MissingPedVec;
             let pair_indices = comparison.get_pair_indices();
             let pair_label = comparison.get_pair();
-            let mut pedigree_reps = self.pedigrees
+            let mut pedigree_reps = self.inner
                 .get_mut(pair_label)
                 .ok_or_else(|| MissingPedVec(pair_label.to_string()))
                 .loc(loc_msg)?.write();
@@ -249,7 +250,7 @@ impl Pedigrees {
                     "  - seq-error-rate for pair {}: pileup",
                     comparison.get_pair()
                 ),
-            };
+            }
             debug!(
                 "  - contam-rate    for pair {}: {contam_rate_gen}",
                 comparison.get_pair()
@@ -260,13 +261,13 @@ impl Pedigrees {
             pedigree_reps.iter_mut().for_each(|ped| {
                 let seq_error_rate = seq_error_rate_gen
                     .as_mut()
-                    .map(|generator| generator.gen_random_values());
+                    .map(ParamRateGenerator::gen_random_values);
                 ped.set_params(
                     snp_downsampling_rate,
                     af_downsampling_rate,
                     seq_error_rate,
                     contam_rate_gen.gen_random_values(),
-                )
+                );
             });
         }
         Ok(())
@@ -290,7 +291,7 @@ impl Pedigrees {
     fn update_pedigrees(
         &self,
         reader: &dyn GenotypeReader,
-        coordinate: &Coordinate,
+        coordinate: Coordinate,
         comparison_label: &str,
         pileup_error_probs: &[f64; 2],
         rng: &mut fastrand::Rng
@@ -303,7 +304,7 @@ impl Pedigrees {
             .with_loc(|| InvalidCoordinate)?.write();
         let interval_prob_recomb = self
             .genetic_map
-            .compute_recombination_prob(coordinate, *previous_position);
+            .compute_recombination_prob(&coordinate, *previous_position);
         trace!("SNP candidate for {comparison_label} - {coordinate} - recomb_prob: {interval_prob_recomb:<8.6}");
 
         // ---- Extract the vector of pedigrees that'll get updated.
@@ -450,7 +451,7 @@ impl Pedigrees {
 
                         let pileup_error_probs = pairwise_diff.error_probs();
                         // --------------------- Parse genotype fields and start updating dynamic simulations.
-                        if let Err(e) = self.update_pedigrees(&fst_reader, &coordinate, key, &pileup_error_probs, &mut rng){
+                        if let Err(e) = self.update_pedigrees(&fst_reader, coordinate, key, &pileup_error_probs, &mut rng){
                             tx.send(Some(e)).expect("MPSC Channel Receiver disconnected");
                         }
 
@@ -460,7 +461,7 @@ impl Pedigrees {
                     // ---- Count missing SNPs as non-informative positions. i.e. an overlap.
                     if missing_snps > 0 {
                         info!("[{}] {missing_snps} missing SNPs within the simulation dataset. Counting those as non-informative overlap.", comparison.get_pair());
-                        self.pedigrees
+                        self.inner
                             .get(comparison.get_pair())
                             .unwrap()
                             .write()
@@ -469,7 +470,7 @@ impl Pedigrees {
                     multiprogress.remove(&progress_bar);
 
                     *ori_rng.write() = rng; // TEMP WORKAROUND (just to check that changes in test files is only due to seeding)
-                })
+                });
                 
             }
         });
@@ -501,7 +502,7 @@ impl Pedigrees {
             let pre_filtered_n = comparison.positions.len();
             comparison.positions.retain(|pwd| {
                 !positions_to_delete
-                    .entry(key.to_owned())
+                    .entry(key.clone())
                     .or_default()
                     .contains(&pwd.coordinate)
             });
@@ -514,7 +515,7 @@ impl Pedigrees {
     /// - `comparisons`   : pileup Comparisons of our real samples.
     /// - `input_vcf_path`: path leading to the target VCF file, containing genotype information for founder individuals. (`.vcf` or `.vcf.gz`).
     /// - `maf`           : user-defined minor-allele-frequency treshold.
-    /// - `threads`       : user-requested number of decompression threads for our VCFReader (this is only relevant when reading BGZF-compressed `.vcf.gz` files)
+    /// - `threads`       : user-requested number of decompression threads for our `VCFReader` (this is only relevant when reading BGZF-compressed `.vcf.gz` files)
     ///
     /// # Panics:
     /// - when failing to convert `input_vcf_path` to a string slice.
@@ -551,61 +552,57 @@ impl Pedigrees {
 
             // --------------------- Loop across comparisons.
             let mut rng = fastrand::Rng::with_seed(self.rng.get_seed()); // TEMP WORKAROUND (just to check that changes in test files is only due to seeding)
-            'comparison: for comparison in comparisons.iter() {
+            for comparison in comparisons.iter() {
                 let key = comparison.get_pair();
                 // --------------------- Skip if the current position is not a valid candidate.
-                let relevant_position = comparison.positions.get(&coordinate);
-                match relevant_position {
-                    None => continue 'comparison,
-                    Some(pairwise_diff) => {
-                        if !vcf_reader.genotypes_filled {
-                            // ---- Go to INFO field.
-                            vcf_reader
-                                .parse_info_field()
-                                .with_loc(|| loc_coord(&coordinate))?;
+                if let Some(relevant_position) = comparison.positions.get(&coordinate){
+                    if !vcf_reader.genotypes_filled {
+                        // ---- Go to INFO field.
+                        vcf_reader
+                            .parse_info_field()
+                            .with_loc(|| loc_coord(&coordinate))?;
 
-                            // ---- Check if this coordinate is a biallelic SNP and skip line if not.
-                            let not_an_snp =
-                                !vcf_reader.is_snp().with_loc(|| loc_coord(&coordinate))?;
-                            if vcf_reader.is_multiallelic() || not_an_snp {
-                                vcf_reader.next_line().with_loc(|| loc_coord(&coordinate))?;
-                                continue 'line;
-                            }
-
-                            // ---- Extract population allele frequency.
-                            let pop_af = vcf_reader
-                                .get_pop_allele_frequency(&self.pedigree_pop)
-                                .with_loc(|| loc_coord(&coordinate))?;
-
-                            // ---- Skip line if allele frequency is < maf
-                            //      [WARN]: Note that {POP}_AF entries in the INFO field relate to the REF allele frequency, not MAF.
-                            //              ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
-                            if pop_af < maf || pop_af > (1.0 - maf) {
-                                trace!("Skip allele at {coordinate}: pop_af: {pop_af:<8.5} --maf: {maf}");
-                                positions_to_delete
-                                    .entry(key.to_owned())
-                                    .or_default()
-                                    .push(pairwise_diff.coordinate);
-                                vcf_reader.next_line().with_loc(|| loc_coord(&coordinate))?;
-                                continue 'line;
-                            }
-
-                            // ---- Parse genotypes.
-                            vcf_reader
-                                .fill_genotypes()
-                                .with_loc(|| loc_coord(&coordinate))?;
+                        // ---- Check if this coordinate is a biallelic SNP and skip line if not.
+                        let not_an_snp =
+                            !vcf_reader.is_snp().with_loc(|| loc_coord(&coordinate))?;
+                        if vcf_reader.is_multiallelic() || not_an_snp {
+                            vcf_reader.next_line().with_loc(|| loc_coord(&coordinate))?;
+                            continue 'line;
                         }
-                        // ---- Parse genotype fields and start updating dynamic simulations.
-                        let pileup_error_probs = pairwise_diff.error_probs();
-                        self.update_pedigrees(
-                            &vcf_reader,
-                            &coordinate,
-                            comparison.get_pair(),
-                            &pileup_error_probs,
-                            &mut rng
-                        )
-                        .with_loc(|| loc_coord(&coordinate))?;
+
+                        // ---- Extract population allele frequency.
+                        let pop_af = vcf_reader
+                            .get_pop_allele_frequency(&self.pedigree_pop)
+                            .with_loc(|| loc_coord(&coordinate))?;
+
+                        // ---- Skip line if allele frequency is < maf
+                        //      [WARN]: Note that {POP}_AF entries in the INFO field relate to the REF allele frequency, not MAF.
+                        //              ==> for maf = 0.05, we must also filter out alleles with AF > 0.95.
+                        if pop_af < maf || pop_af > (1.0 - maf) {
+                            trace!("Skip allele at {coordinate}: pop_af: {pop_af:<8.5} --maf: {maf}");
+                            positions_to_delete
+                                .entry(key.to_owned())
+                                .or_default()
+                                .push(relevant_position.coordinate);
+                            vcf_reader.next_line().with_loc(|| loc_coord(&coordinate))?;
+                            continue 'line;
+                        }
+
+                        // ---- Parse genotypes.
+                        vcf_reader
+                            .fill_genotypes()
+                            .with_loc(|| loc_coord(&coordinate))?;
                     }
+                    // ---- Parse genotype fields and start updating dynamic simulations.
+                    let pileup_error_probs = relevant_position.error_probs();
+                    self.update_pedigrees(
+                        &vcf_reader,
+                        coordinate,
+                        comparison.get_pair(),
+                        &pileup_error_probs,
+                        &mut rng
+                    )
+                    .with_loc(|| loc_coord(&coordinate))?;
                 }
             }
 
@@ -621,14 +618,14 @@ impl Pedigrees {
 
     fn get_pedigree_vec(&self, comparison_label: &str) -> Result<RwLockReadGuard<PedigreeReps>, PedigreeError> {
        use PedigreeError::MissingPedVec;
-        Ok(self.pedigrees 
+        Ok(self.inner
             .get(comparison_label)
             .ok_or_else(|| MissingPedVec(comparison_label.to_string()))?.read())
     }
 
     fn get_pedigree_vec_mut(&self, comparison_label: &str) -> Result<RwLockWriteGuard<PedigreeReps>, PedigreeError> {
        use PedigreeError::MissingPedVec;
-        Ok(self.pedigrees 
+        Ok(self.inner
             .get(comparison_label)
             .ok_or_else(|| MissingPedVec(comparison_label.to_string()))?.write())
     }
@@ -636,7 +633,7 @@ impl Pedigrees {
     /// Log pedigree simulation results and write them into a set of output files.
     /// # Arguments
     /// - `comparisons`   : pileup Comparisons of our real samples.
-    /// - `output_files`  : HashMap of target output files. Key = comparison label | value = target output path.
+    /// - `output_files`  : `HashMap` of target output files. Key = comparison label | value = target output path.
     pub fn write_simulations(
         &self,
         comparisons: &PileupComparisons,
@@ -690,7 +687,6 @@ impl Pedigrees {
     }
 
     fn get_most_likely_relationship_zscore(
-        &self,
         observed_avg_pwd: f64,
         stats: &[(String, (f64, f64))],
     ) -> (Option<String>, f64, Vec<f64>) {
@@ -715,7 +711,6 @@ impl Pedigrees {
     }
 
     fn get_most_likely_relationship_svm(
-        &self,
         comparison: &Comparison,
         pedigree_vec: &PedigreeReps,
         ordered_rels: &[&String],
@@ -739,7 +734,7 @@ impl Pedigrees {
             };
 
             predictors.push(ManuallyDrop::new(
-                svm_builder.labels(pedigree_vec, &i).build()?,
+                svm_builder.labels(pedigree_vec, i).build()?,
             ));
             let prediction = predictors[i]
                 .predict_probs(comparison.get_avg_pwd())
@@ -755,7 +750,7 @@ impl Pedigrees {
         unsafe {
             predictors
                 .iter_mut()
-                .for_each(|svm| ManuallyDrop::drop(svm))
+                .for_each(|svm| ManuallyDrop::drop(svm));
         };
         drop(svm_builder);
 
@@ -846,12 +841,12 @@ impl Pedigrees {
 
                     // ---- Select the scenario having the least amount of Z-score with our observed avg.PWD
                     let (mut most_likely_rel, most_likely_avg_pwd, z_scores) =
-                        self.get_most_likely_relationship_zscore(observed_avg_pwd, &stats);
+                        Self::get_most_likely_relationship_zscore(observed_avg_pwd, &stats);
 
                     // ---- Get svm probabilities if this was assigned.
                     if matches!(assign_method, RelAssignMethod::SVM) {
                         let (most_likely_rel_svm, svm_probs) =
-                            self.get_most_likely_relationship_svm(comparison, &pedigree_vec, &ordered_rels).unwrap();
+                            Self::get_most_likely_relationship_svm(comparison, &pedigree_vec, &ordered_rels).unwrap();
                         most_likely_rel = most_likely_rel_svm;
 
                         // ---- Insert label wise svm probabilities for that comparison.
@@ -887,7 +882,7 @@ impl Pedigrees {
                     let mut min_z_score = f64::NAN;
 
                     if let Some(min_z_score_index) = ordered_rels.iter().position(|&r| r == &assigned_rel) {
-                        min_z_score = z_scores[min_z_score_index]
+                        min_z_score = z_scores[min_z_score_index];
                     }
 
                     // ---- Get the "corrected" observed pwd summary statistics.
@@ -914,7 +909,7 @@ impl Pedigrees {
                     simulations_results.write().insert(comparison_label.to_owned(), simulation_result);
                     for (_, map) in svm_indexer.read().iter() {
                         let prob = map.get(&comparison_label).unwrap();
-                        svm_row.push_str(&format!(" - {prob:>12.6}"));
+                        write!(svm_row, " - {prob:>12.6}").unwrap();
                     }
                     svm_results.write().insert(comparison_label.to_owned(), svm_row);
 
@@ -945,7 +940,7 @@ impl Pedigrees {
             svm_indexer
                 .read()
                 .keys()
-                .for_each(|rel| svm_results_header += &format!(" - {rel: <10}"));
+                .for_each(|rel| write!(svm_results_header, " - {rel: <10}").unwrap());
 
             let svm_output_file = output_file.strip_suffix("result").unwrap().to_owned() + "probs";
             let mut svm_writer = GenericWriter::new(Some(svm_output_file)).loc(loc_msg)?;

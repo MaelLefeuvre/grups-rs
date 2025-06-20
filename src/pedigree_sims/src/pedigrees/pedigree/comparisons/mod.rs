@@ -25,7 +25,7 @@ impl DerefMut for PedComparisons {
 
 impl Display for PedComparisons {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.0.iter().try_fold((), |_, comparison| writeln!(f, "{comparison}"))
+        self.0.iter().try_fold((), |(), comparison| writeln!(f, "{comparison}"))
     }
 }
 

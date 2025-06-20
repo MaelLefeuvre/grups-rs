@@ -223,7 +223,7 @@ impl <'a> GrupsRunnerBuilder<'a> {
             }
 
             if self.x_chromosome_mode {
-                args.push("--x-chromosome-mode".to_string())
+                args.push("--x-chromosome-mode".to_string());
             }
         }
 
@@ -276,7 +276,7 @@ impl GrupsRunner {
         };
         let args = self.args.join(" ");
         let cli = parser::Cli::parse_from(args.split_whitespace());
-        grups_rs::run(cli).expect("Failed to run grups using stringified CLI Args");
+        grups_rs::run(&cli).expect("Failed to run grups using stringified CLI Args");
     }
 
     pub fn get_fixture(&self, key: &str) -> &Fixture {

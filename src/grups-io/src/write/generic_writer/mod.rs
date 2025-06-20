@@ -1,7 +1,7 @@
-use std::{io, fmt::Display, fs::File, io::{Write, BufWriter}, path::Path};
+use std::{fmt::Display, fs::File, io::{self, BufWriter, Write}, path::Path, sync::LazyLock};
+
 use anyhow::Result;
 use regex::Regex;
-use lazy_static::lazy_static;
 
 use located_error::LocatedError;
 
@@ -56,9 +56,8 @@ impl<'a> GenericWriter<'a>{
             I: Display,
     {
         // Remove pretty print trailing and leading whitespace
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r"[ ]+-[ ]+").expect("Failed to parse regex.");
-        }
+        static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[ ]+-[ ]+").expect("Failed to parse regex."));
+        
         iter.into_iter()
             .map(|obj| self.source.write(RE.replace_all(&format!("{obj}\n"), WRITER_SEPARATOR).as_bytes()))
             .collect::<Result<Vec<usize>, _>>()

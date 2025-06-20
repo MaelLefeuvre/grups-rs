@@ -25,7 +25,7 @@ const GENOTYPES_START_IDX: usize = 9;  /// 0-based expected column index where g
 const VCF_EXT: [&str; 2] = ["vcf", "vcf.gz"];
 
 
-impl<'a> GenotypeReader for VCFReader<'a> {
+impl GenotypeReader for VCFReader<'_> {
     // Return the alleles for a given SampleTag. Search is performed using `sample_tag.idx()`;
     fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2]> {
         use GenotypeReaderError::{MissingAlleles, InvalidSampleIndex};
@@ -69,14 +69,14 @@ impl<'a> GenotypeReader for VCFReader<'a> {
 
     fn fetch_input_files(input_dir: &Path) -> Result<Vec<PathBuf>> {
         let vcfs = parse::fetch_input_files(input_dir, &VCF_EXT).loc("While searching for candidate vcf files.")?;
-        debug!("Found the following vcf file candidates as input for the pedigree simulations: {:#?}", vcfs);
+        debug!("Found the following vcf file candidates as input for the pedigree simulations: {vcfs:#?}");
         Ok(vcfs)
     }
 }
 
 /// GenotypeReader using a `.vcf`, of `.vcf.gz` file.
 /// # Description 
-/// Reader tries to be as efficient as possible, and will read lines as lazily as possible.  
+/// Reader tries to be as efficient as possible, and will read lines as lazily as possible.
 /// Thus, lines are actually read field by field, as conservatively as possible, making various checks along the way
 /// (e.g. 'is this chromosome coordinate relevant', 'is this line actually a bi-allelic SNP?', etc.) and skipped as soon as
 /// a discrepancy is found out. 
@@ -146,6 +146,7 @@ impl<'a> VCFReader<'a> {
     }
 
     /// Return `true` if the `INFO` field of the current line contains a `MULTI_ALLELIC` tag.
+    #[must_use]
     pub fn is_multiallelic(&self) -> bool {
         self.info.is_multiallelic()
     }
@@ -225,6 +226,7 @@ impl<'a> VCFReader<'a> {
     }
 
     /// Clone and return the contents of `self.samples`
+    #[must_use]
     pub fn samples(&self) -> Vec<String> {
         self.samples.clone()
     }
@@ -262,7 +264,7 @@ impl<'a> VCFReader<'a> {
             let split_line: Vec<&str> = line.split('\t').collect();
             if split_line[0] == "#CHROM" {
                 samples.reserve(split_line.len());
-                samples.extend(split_line.iter().map(|ind| ind.to_string()));
+                samples.extend(split_line.iter().map(ToString::to_string));
                 return Ok(samples)
             }
         }
@@ -397,7 +399,7 @@ mod tests {
             for (want, sample) in allele_row.iter().zip(samples.iter().enumerate().map(|(i, s)| SampleTag::new(s, Some(i), None))) {
                 let got = reader.get_alleles(&sample)?;
                 println!("{sample} ({want:?}) {got:?}");
-                assert_eq!(*want, got)
+                assert_eq!(*want, got);
             }
             reader.next_line()?;
         }
@@ -429,7 +431,7 @@ mod tests {
             for (want, sample) in allele_row.iter().zip(samples.iter().enumerate().map(|(i, s)| SampleTag::new(s, Some(i), None))) {
                 let got = reader.get_alleles(&sample)?;
                 println!("{sample} ({want:?}) {got:?}");
-                assert_eq!(*want, got)
+                assert_eq!(*want, got);
             }
             reader.next_line()?;
         }

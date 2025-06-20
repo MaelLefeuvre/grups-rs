@@ -64,7 +64,7 @@ impl PedComparison {
     /// Compute the average pairwise differences between the two individuals.
     /// i.e. `self.pwd / self.overlap` 
     pub fn get_avg_pwd(&self) -> f64 {
-        self.pwd as f64 / self.overlap as f64
+        f64::from(self.pwd) / f64::from(self.overlap)
     }
     
     /// Rc::clone() the provided pair of pedigree individuals during instantiation. (see. `PedComparison::new()`)
@@ -115,6 +115,7 @@ impl PedComparison {
     /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
     #[inline]
     fn simulate_observed_read(rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<u8> {
+        const SEQ_ERROR_CHOICES: [[u8; 3]; 4] = [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
         use ComparisonError::{SampleAllele, SimSeqError};
         // ---- Simulate modern human contamination. 
         let chosen_base: u8 = match rng.f64() < contam_rate {
@@ -127,7 +128,6 @@ impl PedComparison {
 
         // ---- Simulate sequencing error rate.
         // @ TODO: Find a smarter way to simulate error rates.
-        const SEQ_ERROR_CHOICES: [[u8; 3]; 4] = [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
         if rng.f64() < seq_error_rate {
             let wrong_base: u8 = *SEQ_ERROR_CHOICES[chosen_base as usize].get(rng.usize(0..3)).with_loc(||SimSeqError)?;
             Ok(wrong_base)
@@ -153,7 +153,7 @@ impl PedComparison {
         // ---- Simulate n pileup observations.
         let mut reads = Vec::with_capacity(n as usize);
         for _ in 0..n {
-            reads.push(Self::simulate_observed_read(rng, contam_rate, contam_pop_af, seq_error_rate, alleles)?)
+            reads.push(Self::simulate_observed_read(rng, contam_rate, contam_pop_af, seq_error_rate, alleles)?);
         }
         Ok(reads)
     }
@@ -184,8 +184,8 @@ impl Display for PedComparison {
             self.pwd,
             self.overlap,
             self.get_avg_pwd(),
-            ind1.sex.map(|s| s.to_string()).unwrap_or("None".to_string()),
-            ind2.sex.map(|s| s.to_string()).unwrap_or("None".to_string())
+            ind1.sex.map_or(String::from("None"), |s| s.to_string()),
+            ind2.sex.map_or(String::from("None"), |s| s.to_string())
         )
     }
 }
@@ -197,6 +197,7 @@ mod tests {
     use itertools::izip;
 
     fn get_expected_simulated_allele(haplo: u8, contam_rate: f64, contam_pop_af: f64) -> u8 {
+        #![allow(clippy::cast_sign_loss,clippy::cast_possible_truncation)]
         (haplo + (contam_rate as u8 * (haplo + contam_pop_af as u8))) % 2
     }
 
@@ -218,13 +219,14 @@ mod tests {
 
     #[test]
     fn avg_pwd(){
+        #![allow(clippy::float_cmp)]
         let n_iters = 10;
         let mut comp = common::mock_pedcomparison();
         for pwd in 0..n_iters {
             comp.add_pwd();
             for overlap in 0..n_iters {
                 comp.add_overlap();
-                let want = (pwd+1) as f64 / (overlap + (pwd*10) +1) as f64;
+                let want = f64::from(pwd + 1) / f64::from(overlap + (pwd*10) + 1);
                 assert_eq!(comp.get_avg_pwd(), want);
             }
         }
@@ -281,7 +283,7 @@ mod tests {
     #[test]
     fn display() {
         let comp = common::mock_pedcomparison();
-        println!("{comp}")
+        println!("{comp}");
     }
 
 

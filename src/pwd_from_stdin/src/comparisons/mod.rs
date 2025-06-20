@@ -40,7 +40,7 @@ pub struct Comparisons (Vec<Comparison>);
 
 impl Display for Comparisons {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-        self.0.iter().try_fold((), |_, comparison| {
+        self.0.iter().try_fold((), |(), comparison| {
             writeln!(f, "{comparison}")
         })
     }
@@ -156,7 +156,7 @@ impl Comparisons {
 
     #[must_use]
     pub fn get_pairs(&self) -> Vec<String> {
-        self.0.iter().map(Comparison::get_pair).map(|s| s.to_string()).collect()
+        self.0.iter().map(Comparison::get_pair).map(ToString::to_string).collect()
     }
 
     pub fn update_variance_unbiased(&mut self) {
@@ -173,7 +173,7 @@ mod tests {
     fn factorial(n: u32 ) -> u32 {
         match n {
             0   => 1,
-            1.. => (1..n+1).product(),
+            1.. => (1..=n).product(),
         }
     }
     fn permutations_sample(n: u32) -> u32 {
@@ -192,7 +192,8 @@ mod tests {
 
     #[test]
     fn comparisons_length_self_allowed() {
-        for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
+        #![allow(clippy::cast_possible_truncation)]
+        for ind_set in &(1..10).powerset().collect::<Vec<_>>() {
             let comparisons = mock_comparisons(ind_set, true);
             let len = ind_set.len() as u32;
             assert_eq!(comparisons.len() as u32, permutations_sample(len)+len); 
@@ -201,7 +202,8 @@ mod tests {
 
     #[test]
     fn comparisons_length_no_self_allowed() {
-        for ind_set in (1..10).powerset().collect::<Vec<_>>().iter() {
+        #![allow(clippy::cast_possible_truncation)]
+        for ind_set in &(1..10).powerset().collect::<Vec<_>>() {
             let comparisons = mock_comparisons(ind_set, false);
             let len = ind_set.len() as u32;
             assert_eq!(comparisons.len() as u32, permutations_sample(len)); 
