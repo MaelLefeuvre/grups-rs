@@ -95,14 +95,14 @@ impl PedigreeReps {
         let mut sum_simulated_stats = HashMap::new();
         for pedigree in &self.inner {
             // Sum the avg pwd of each replicate.
-            for comparison in pedigree.comparisons.inner.values() {
+            for comparison in pedigree.comparisons.iter() {
                 sum_simulated_stats.entry(comparison.label.clone()).or_insert((0.0, 0.0)).0 += comparison.get_avg_pwd();
             }
         }
 
         // ---- Compute the sum-squared for sample variance for each comparison.
         for pedigree in &self.inner {
-            for comparison in pedigree.comparisons.inner.values() {
+            for comparison in pedigree.comparisons.iter() {
                 // ---- Access summary statistics 
                 let summary_statistics = sum_simulated_stats.get_mut(&comparison.label)
                     .with_loc(|| format!("While computing simulation summary statistics:\
@@ -134,7 +134,7 @@ impl PedigreeReps {
     #[inline]
     pub fn add_non_informative_snps(&mut self, n: u32) {
         for pedigree in &mut self.inner {
-            pedigree.comparisons.inner.values_mut().for_each(|comp| comp.add_n_overlaps(n));
+            pedigree.comparisons.iter_mut().for_each(|comp| comp.add_n_overlaps(n));
         }
     }
 
@@ -160,9 +160,9 @@ impl Display for PedigreeReps {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         self.inner.iter().enumerate().try_fold((), |(), (idx, pedigree)| {
             //pedigree.comparisons.labels.keys().try_fold((), |(), label| {
-            pedigree.comparisons.inner.keys().try_fold((), |(), comp_id| {
+            pedigree.comparisons.iter().try_fold((), |(), comparison| {
                 write!(f, "{idx: <REPLICATE_ID_FORMAT_LEN$} - ")?;
-                pedigree._display_comparison(f, comp_id)
+                pedigree._display_comparison(f, comparison)
             })
         })
     }

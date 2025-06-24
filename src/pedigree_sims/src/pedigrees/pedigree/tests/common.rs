@@ -1,5 +1,5 @@
 
-use crate::pedigrees::pedigree::{comparisons::ComparisonId, Pedigree};
+use crate::pedigrees::pedigree::Pedigree;
 
 use super::super::{
     Individual, IndividualId,
@@ -49,7 +49,7 @@ pub fn mock_offspring_pedigree(label: &str, parents_labels: Option<[&str; 2]>) -
 }
 
 /// Mock a pedigree comparison, using two founder individuals (=> this comparison is always labeled "unrelated")
-pub fn mock_pedcomparison() -> (ComparisonId, Pedigree) {
+pub fn mock_pedcomparison() -> Pedigree {
     //let ind1 = Arc::new(RwLock::new(mock_founder("ind1")));
     //let ind2 = Arc::new(RwLock::new(mock_founder("ind2")));
     //let ind1 = mock_founder("ind1").id;
@@ -59,7 +59,7 @@ pub fn mock_pedcomparison() -> (ComparisonId, Pedigree) {
     let mut pedigree = Pedigree::new();
     let _fid = pedigree.add_individual("ind1", None, None);
     let _mid = pedigree.add_individual("ind2", None, None);
-    let comp_id = pedigree.add_comparison("unrelated", ["ind1", "ind2"]).unwrap();
-    //pedigree.comparisons.get(comp_id).unwrap().clone()
-    (comp_id, pedigree)
+    pedigree.add_comparison("unrelated", ["ind1", "ind2"]).unwrap();
+    //let comp = pedigree.comparisons.get(comp_id).unwrap().clone()
+    pedigree
 }

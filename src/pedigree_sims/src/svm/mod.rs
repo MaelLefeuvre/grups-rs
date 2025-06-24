@@ -42,7 +42,7 @@ impl<'a> LibSvmBuilder<'a> {
         let mut data: Vec<[f64; 1]> = Vec::with_capacity(pedigrees.len());
         data.extend(
             pedigrees.iter()
-            .flat_map(|ped| ped.comparisons.inner.values()
+            .flat_map(|ped| ped.comparisons.iter()
                 .map(|cmp| [cmp.get_avg_pwd(); 1])
             )
         );
@@ -62,7 +62,7 @@ impl<'a> LibSvmBuilder<'a> {
         let mut targets: Vec<f64> = Vec::with_capacity(pedigrees.len());
         targets.extend(
             pedigrees.iter().flat_map(|ped| 
-                ped.comparisons.inner.values().map(|cmp| {
+                ped.comparisons.iter().map(|cmp| {
                     let label_idx = label_order.iter().position(|lab| *lab == &cmp.label )
                         .expect("Invalid Label Found while building SVM labels.");
                     let is_greater_than = label_idx > label_treshold;

@@ -1,5 +1,3 @@
-use slotmap::KeyData;
-
 //use super::super::Individual;
 pub use super::ComparisonError;
 
@@ -12,24 +10,8 @@ use crate::pedigrees::{pedigree::individual::IndividualId};
 
 // ------------------------------------------------------------------ //
 // ----- Comparison
-
-slotmap::new_key_type! {
-    pub struct ComparisonId;
-}
-
-impl ComparisonId {
-    pub fn to_u64(self) -> u64 {
-        self.0.as_ffi()
-    }
-
-    pub fn from_u64(id: u64) -> Self {
-        ComparisonId::from(KeyData::from_ffi(id))
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct PedComparison {
-    id: ComparisonId,
     pub label: String,
     pub pair: [IndividualId; 2],
     pwd: u32,
@@ -37,9 +19,8 @@ pub struct PedComparison {
 }
 
 impl PedComparison {
-    pub fn new(id: ComparisonId, label: &str, pair: [IndividualId; 2]) -> Self {
+    pub fn new(label: &str, pair: [IndividualId; 2]) -> Self {
         Self {
-            id,
             label: label.to_string(),
             pair,
             pwd: 0,
@@ -137,176 +118,6 @@ impl PedComparison {
 
 }
 
-//// Track a pedigree genetic relatedness comparison
-//// # Fields:
-//// - `label`            : User-defined name of the comparison (e.g. "Siblings")
-//// - `pair`             : Size-two array of Pedigree Individual references (w/ interior mutability)
-//// - `pwd`              : number of occurring pairwise differences.
-//// - `overlap`          : number of overlapping SNPs
-//#[derive(Debug, Clone)]
-//pub struct PedComparison {
-//    pub label        : String,
-//    pair             : [Arc<RwLock<Individual>>; 2],
-//    pwd              : u32,
-//    overlap          : u32,
-//    _self_comparison : bool,
-//}
-//
-//impl PedComparison {
-//    /// Instantiate a new comparison between a pair of Pedigree Individuals.
-//    /// # Arguments:
-//    /// - `label`          : User-defined name of the comparison (e.g. "Siblings")
-//    /// - `pair`           : Size-two array of Pedigree Individual references
-//    /// - `self_comparison`: Whether or not the two individuals of the pair are the same.
-//    pub fn new(label: &str, pair: [&Arc<RwLock<Individual>>; 2], self_comparison: bool) -> PedComparison {
-//        let pair = Self::format_pair(pair);
-//        PedComparison{label: label.to_string(), pair, _self_comparison: self_comparison, pwd: 0, overlap: 0 }
-//    }
-//
-//    /// Increment the `self.pwd` field.
-//    pub fn add_pwd(&mut self){
-//        self.pwd += 1;
-//    }
-//
-//    /// Increment the `self.overlap` field.
-//    pub fn add_overlap(&mut self){
-//        self.overlap +=1;
-//    }
-//
-//    pub fn add_n_overlaps(&mut self, n: u32) {
-//        self.overlap += n;
-//    }
-//    
-//    /// Compute the average pairwise differences between the two individuals.
-//    /// i.e. `self.pwd / self.overlap` 
-//    pub fn get_avg_pwd(&self) -> f64 {
-//        f64::from(self.pwd) / f64::from(self.overlap)
-//    }
-//    
-//    /// Rc::clone() the provided pair of pedigree individuals during instantiation. (see. `PedComparison::new()`)
-//    /// # Arguments:
-//    /// - `pair`: Size-two array of Pedigree Individual references.
-//    fn format_pair(pair: [&Arc<RwLock<Individual>>; 2]) ->  [Arc<RwLock<Individual>>; 2] {
-//        [Arc::clone(pair[0]), Arc::clone(pair[1])]
-//    }
-//
-//    /// Simulate observed reads for the two pedigree individuals, and check if there is a pairwise difference between 
-//    /// these randomly sampled simulated data.
-//    /// # Arguments:
-//    /// - `contam_rate`   : Size-two array of the simulated contamination rate. Entry[i] of the array corresponds to `self.pair[i]`.
-//    /// - `contam_pop_af` : Population allele frequency of the contaminating population for the current SNP coordinate.
-//    ///   Entry[i] of the array corresponds to `self.pair[i]`.
-//    /// - `seq_error_rate`: Size-two array of the simulated sequencing error rate.
-//    ///   Entry[i] of the array corresponds to `self.pair[i]`.
-//    pub fn compare_alleles(&mut self, contam_rate: [f64; 2], contam_pop_af: [f64; 2], seq_error_rate: [f64; 2], rng: &mut fastrand::Rng) -> Result<()> {
-//        use ComparisonError::CompareAllele;
-//        self.add_overlap();
-//
-//        let random_sample0 = self.pair[0].read()
-//            .get_alleles()
-//            .and_then(|allele| Self::simulate_observed_read(rng, contam_rate[0], contam_pop_af[0], seq_error_rate[0], allele))
-//            .with_loc(||CompareAllele)?;
-//        let random_sample1 = self.pair[1].read()
-//            .get_alleles()
-//            .and_then(|allele| Self::simulate_observed_read(rng, contam_rate[1], contam_pop_af[1], seq_error_rate[1], allele))
-//            .with_loc(||CompareAllele)?;
-//
-//        if random_sample0 != random_sample1 {
-//            self.add_pwd();
-//        } // else if random_sample0[0] == 1 { // WIP: heterozygocity
-//        //    self.hom_alt_sum += 1;
-//        //}
-//        Ok(())
-//    }
-//
-//    //// WIP: heterozygocity
-//    //pub fn get_heterozygocity_ratio(&self) -> f64 {
-//    //    f64::from(self.pwd) / f64::from(self.hom_alt_sum)
-//    //}
-//    
-//    /// Simulate *one* random sampling from a set of alleles, given the provided contamination and sequencing parameters.
-//    /// - `contam_rate`   : Modern human contamination rate required for the simulation.
-//    /// - `contam_pop_af` : allele frequency of the contaminating population for the current SNP coordinate.
-//    /// - `seq_error_rate`: sequencing error rate required for the simulation.
-//    /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
-//    #[inline]
-//    fn simulate_observed_read(rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<u8> {
-//        const SEQ_ERROR_CHOICES: [[u8; 3]; 4] = [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
-//        use ComparisonError::{SampleAllele, SimSeqError};
-//        // ---- Simulate modern human contamination. 
-//        let chosen_base: u8 = match rng.f64() < contam_rate {
-//            true  => match rng.f64() < contam_pop_af {
-//                true  => 1,  // Becomes the alternative reference allele, if contam_rate * contam_pop_af
-//                false => 0,  // otherwise, pick the reference allele.
-//            }
-//            false => *alleles.get(rng.usize(0..=1)).with_loc(||SampleAllele)?
-//        };
-//
-//        // ---- Simulate sequencing error rate.
-//        // @ TODO: Find a smarter way to simulate error rates.
-//        if rng.f64() < seq_error_rate {
-//            let wrong_base: u8 = *SEQ_ERROR_CHOICES[chosen_base as usize].get(rng.usize(0..3)).with_loc(||SimSeqError)?;
-//            Ok(wrong_base)
-//        }
-//        else {
-//            Ok(chosen_base)
-//        }
-//    }
-//
-//    /// Simulate `n` observed pileup reads from a set of alleles and given the provided contamination and sequencing parameters.
-//    /// # Arguments:
-//    /// - `n`             : Number of pileup observations to simulate.
-//    /// - `contam_rate`   : Modern human contamination rate required for the simulation.
-//    /// - `contam_pop_af` : allele frequency of the contaminating population for the current SNP coordinate.
-//    /// - `seq_error_rate`: sequencing error rate required for the simulation.
-//    /// - `alleles`       : size-two set of alleles of the pedigree individual for the current SNP coordinate.
-//    /// 
-//    /// # Note: 
-//    /// - this is a legacy function, which now wraps around the more performant [[`simulate_observed_read`]].
-//    /// - Keeping this for unit-testing purposes.
-//    #[cfg(test)]
-//    fn _simulate_observed_reads(n: u8, rng: &mut fastrand::Rng, contam_rate: f64, contam_pop_af: f64, seq_error_rate: f64, alleles: [u8; 2]) -> Result<Vec<u8>> {
-//        // ---- Simulate n pileup observations.
-//        let mut reads = Vec::with_capacity(n as usize);
-//        for _ in 0..n {
-//            reads.push(Self::simulate_observed_read(rng, contam_rate, contam_pop_af, seq_error_rate, alleles)?);
-//        }
-//        Ok(reads)
-//    }
-//
-//}
-//impl Display for PedComparison {
-//    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-//        let default_tag=SampleTag::new("None", None, None);
-//        // <Comparison-Label> <Ind1-label> <Ind2-label> <Ind1-reference> <Ind2-reference> <Sum.PWD> <Overlap> <Avg.PWD>
-//        let ind1 = self.pair[0].read();
-//        let ind2 = self.pair[1].read();
-//        write!(f, 
-//            "{: <COMPARISON_LABEL_FORMAT_LEN$} - \
-//            {: <IND_LABEL_FORMAT_LEN$} - \
-//            {: <IND_LABEL_FORMAT_LEN$} - \
-//            {: <IND_TAG_FORMAT_LEN$} - \
-//            {: <IND_TAG_FORMAT_LEN$} - \
-//            {: >PWD_FORMAT_LEN$} - \
-//            {: >OVERLAP_FORMAT_LEN$} - \
-//            {: <AVG_PWD_FORMAT_LEN$.FLOAT_FORMAT_PRECISION$} - \
-//            {: <SEX_FORMAT_LEN$} - \
-//            {: <SEX_FORMAT_LEN$}",
-//            self.label,
-//            ind1.label(),
-//            ind2.label(),
-//            ind1.get_tag().as_ref().unwrap_or(&&default_tag).id(),
-//            ind2.get_tag().as_ref().unwrap_or(&&default_tag).id(),
-//            self.pwd,
-//            self.overlap,
-//            self.get_avg_pwd(),
-//            ind1.sex.map_or(String::from("None"), |s| s.to_string()),
-//            ind2.sex.map_or(String::from("None"), |s| s.to_string())
-//        )
-//    }
-//}
-//
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,8 +131,8 @@ mod tests {
 
     #[test]
     fn pwd_increment(){
-        let (comp_id, mut pedigree) = common::mock_pedcomparison();
-        let comp = pedigree.comparisons.inner.get_mut(comp_id).unwrap();
+        let mut pedigree = common::mock_pedcomparison();
+        let comp = pedigree.comparisons.first_mut().unwrap();
         assert_eq!(comp.pwd, 0);
         comp.add_pwd();
         assert_eq!(comp.pwd, 1);
@@ -329,8 +140,8 @@ mod tests {
 
     #[test]
     fn overlap_increment(){
-        let (comp_id, mut pedigree) = common::mock_pedcomparison();
-        let comp = pedigree.comparisons.inner.get_mut(comp_id).unwrap();
+        let mut pedigree = common::mock_pedcomparison();
+        let comp = pedigree.comparisons.first_mut().unwrap();
         assert_eq!(comp.overlap, 0);
         comp.add_overlap();
         assert_eq!(comp.overlap, 1);
@@ -340,8 +151,8 @@ mod tests {
     fn avg_pwd(){
         #![allow(clippy::float_cmp)]
         let n_iters = 10;
-        let (comp_id, mut pedigree) = common::mock_pedcomparison();
-        let comp = pedigree.comparisons.inner.get_mut(comp_id).unwrap();
+        let mut pedigree = common::mock_pedcomparison();
+        let comp = pedigree.comparisons.first_mut().unwrap();
         for pwd in 0..n_iters {
             comp.add_pwd();
             for overlap in 0..n_iters {
@@ -380,14 +191,14 @@ mod tests {
             for allele_ind_1 in ref_alt {
                 for contam_rate in binary_rates {
                     for contam_pop_af in binary_rates {
-                        let (comp_id, mut pedigree) = common::mock_pedcomparison();
-                        let comp = pedigree.comparisons.inner.get_mut(comp_id).unwrap();
+                        let mut pedigree = common::mock_pedcomparison();
+                        let comp = pedigree.comparisons.first().unwrap();
                         let alleles = [[allele_ind_0, allele_ind_0], [allele_ind_1, allele_ind_1]];
                         comp.pair.into_iter().zip(alleles.iter()).for_each(|(ind, all)| {
                             pedigree.individuals.get_ind_mut(ind).unwrap().set_alleles(*all)
                         });
 
-                        let comp = pedigree.comparisons.inner.get_mut(comp_id).unwrap();
+                        let comp = pedigree.comparisons.first_mut().unwrap();
                         comp.compare_alleles(alleles, contam_rate, contam_pop_af, [0.0,0.0], &mut rng)?;
 
                         let mut want = [0, 0];

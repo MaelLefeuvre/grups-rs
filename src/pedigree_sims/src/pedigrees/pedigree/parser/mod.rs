@@ -284,13 +284,10 @@ impl PedigreeBuilder {
 
     /// Public build method to generate a [`Pedigree`] from this builder.
     pub fn build(&self) -> Result<Pedigree> {
-        let X = match self.format {
+        match self.format {
             PedigreeFormat::Legacy => self.build_legacy_format(),
             PedigreeFormat::Ped    => self.build_ped_format(),
-        }.unwrap();
-        //println!("{X:#?}");
-        //std::process::exit(1);
-        Ok(X) 
+        }
     }
     
     /// Build a [`Pedigree`] from a template pedigree file following the 
