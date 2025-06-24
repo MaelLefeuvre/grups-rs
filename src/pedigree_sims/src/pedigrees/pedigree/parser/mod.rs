@@ -10,7 +10,7 @@ use log::{debug, warn};
 mod error;
 use error::PedigreeBuilderError;
 
-use crate::pedigrees::Pedigree;
+use super::Pedigree;
 
 use genome::Sex;
 
@@ -284,10 +284,13 @@ impl PedigreeBuilder {
 
     /// Public build method to generate a [`Pedigree`] from this builder.
     pub fn build(&self) -> Result<Pedigree> {
-        match self.format {
+        let X = match self.format {
             PedigreeFormat::Legacy => self.build_legacy_format(),
-            PedigreeFormat::Ped => self.build_ped_format(),
-        }
+            PedigreeFormat::Ped    => self.build_ped_format(),
+        }.unwrap();
+        //println!("{X:#?}");
+        //std::process::exit(1);
+        Ok(X) 
     }
     
     /// Build a [`Pedigree`] from a template pedigree file following the 
@@ -330,15 +333,18 @@ impl PedigreeBuilder {
             if sex.is_some_and(|s| s == Sex::Unknown) {
                 warn!("Unknown sex for individual {iid}: '{}'", line.get_field(PedFormatField::Sex, &field_order)?);
             }
-            pedigree.add_individual(iid, None, sex).with_loc(||
-                PedigreeBuilderError::AddIndividual(iid.to_string(), i)
-            )?;
+            let _iid = pedigree.add_individual(iid, None, sex);//.with_loc(||
+                //PedigreeBuilderError::AddIndividual(iid.to_string(), i)
+            //)?;
+
+            //println!("Adding individual: {iid}")
         }
 
         // ---- Add relationships
         for line in self.lines.iter().skip(skip).filter(|line| !line.is_comparison_definition()) {
             let i = line.lineno;
-            let iid = line.get_field(PedFormatField::Iid, &field_order).expect("Invalid Id");
+            let iid = line.get_field(PedFormatField::Iid, &field_order)
+                .expect("Invalid Id");
             let fid = line.get_field(PedFormatField::Fid, &field_order).with_loc(||
                 loc_msg("Failed to retrieve value of fid field", i)
             )?; 
@@ -350,8 +356,16 @@ impl PedigreeBuilder {
             if fid == "0" || mid == "0" {
                 continue 
             }
-            pedigree.set_relationship(iid, (fid, mid))
-                .with_loc(||loc_msg(&format!("Failed to set a valid relationship for {iid}"), i))?;
+            let copy_iid = iid;
+            //println!("While adding relationships ({copy_iid})");
+            
+            let [iid, fid, mid] =[iid, fid, mid].map(|label| {
+                pedigree.get_ind_id(label).unwrap()
+            });
+            //let x = pedigree.get_ind_id(iid);
+            
+            pedigree.set_relationship(iid, [fid, mid]);
+                //.with_loc(||loc_msg(&format!("Failed to set a valid relationship for {iid}"), i))?;
         }
 
         // ---- Add comparisons
@@ -359,7 +373,7 @@ impl PedigreeBuilder {
             let i = line.lineno;
             let fields = line.split().collect::<Vec<&str>>();
             let (label, ind1, ind2) = (fields[1], fields[2], fields[3]);
-            pedigree.add_comparison(label, (ind1, ind2))
+            pedigree.add_comparison(label, [ind1, ind2])
                 .with_loc(||loc_msg(&format!("Failed to set a valid comparison for {label}"), i))?;
         }
         
@@ -397,19 +411,20 @@ impl PedigreeBuilder {
                             split.get(1).ok_or(anyhow!(io::ErrorKind::InvalidData))?
                         );
                     }
-                    pedigree.add_individual(iid, None, sex)
-                        .with_loc(|| PedigreeBuilderError::AddIndividual(contents.to_string(), i))?;
+                    pedigree.add_individual(iid, None, sex);
+                        //.with_loc(|| PedigreeBuilderError::AddIndividual(contents.to_string(), i))?;
                 },
                 PedigreeSection::Relationship => {
                 let (offspring, parent1, parent2) = Self::parse_legacy_pedline(contents, "=repro(")
                     .with_loc(||loc_msg("Failed to parse a valid relationship", i))?;
-                pedigree.set_relationship(&offspring, (&parent1, &parent2))
-                    .with_loc(||loc_msg(&format!("Failed to set a valid relationship for {offspring}"), i))?;
+                let [offspring, parent1, parent2] = [offspring, parent1, parent2].map(|label| pedigree.get_ind_id(&label).unwrap());
+                pedigree.set_relationship(offspring, [parent1, parent2]);
+                    //.with_loc(||loc_msg(&format!("Failed to set a valid relationship for {offspring}"), i))?;
                 },
                 PedigreeSection::Comparison => {
                     let (label, ind1, ind2) = Self::parse_legacy_pedline(contents, "=compare(")
                         .with_loc(||loc_msg("Failed to parse a valid comparison", i))?;
-                    pedigree.add_comparison(&label, (&ind1, &ind2))
+                    pedigree.add_comparison(&label, [&ind1, &ind2])
                         .with_loc(||loc_msg(&format!("Failed to set a valid comparison for {label}"), i))?;
 
                 },

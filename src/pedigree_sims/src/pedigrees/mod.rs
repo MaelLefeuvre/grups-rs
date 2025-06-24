@@ -29,7 +29,9 @@ mod pedigree_reps;
 pub use pedigree_reps::PedigreeReps;
 mod pedigree;
 use pedigree::Contaminant;
-use pedigree::{pedparam::ParamRateGenerator, Pedigree};
+use pedigree::{pedparam::ParamRateGenerator};
+
+use pedigree::Pedigree as Pedigree;
 
 mod error;
 use error::PedigreeError;
@@ -318,7 +320,7 @@ impl Pedigrees {
             .compute_local_cont_af(reader)?;
 
         let xchr_mode = coordinate.chromosome.0 == b'X';
-        'pedigree: for (i, pedigree) in pedigree_vec.iter_mut().enumerate() {
+        'pedigree: for (i, pedigree) in pedigree_vec.inner.iter_mut().enumerate() {
             // --------------------- Perform SNP downsampling if necessary
             if rng.f64() < pedigree.get_params()?.snp_downsampling_rate {
                 continue 'pedigree;

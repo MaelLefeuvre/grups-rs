@@ -1,5 +1,8 @@
 use super::pedigree::parser::PedigreeBuilder;
-use super::{Contaminant, Pedigree};
+
+use super::Pedigree;
+
+use super::{Contaminant};
 use crate::pedigrees::constants::REPLICATE_ID_FORMAT_LEN;
 
 use std::{
@@ -81,7 +84,7 @@ impl PedigreeReps {
 
     pub fn assign_random_sex(&mut self) -> Result<()> {
         self.inner.iter_mut().enumerate().try_for_each(|(i, pedigree)| {
-            pedigree.assign_random_sex().with_loc(|| format!("While attempting to randomly assign sex of pedigree n°{i}"))
+            pedigree.assign_random_sexes().with_loc(|| format!("While attempting to randomly assign sex of pedigree n°{i}"))
         })
     }
 
@@ -90,16 +93,16 @@ impl PedigreeReps {
     /// # @TODO: This data structure is error prone and should be converted to a struct or named tuple.
     pub fn compute_sum_simulated_stats(&self) -> Result<Vec<(String, (f64,f64))>> {
         let mut sum_simulated_stats = HashMap::new();
-        for pedigree in self.iter() {
+        for pedigree in &self.inner {
             // Sum the avg pwd of each replicate.
-            for comparison in pedigree.comparisons.iter() {
+            for comparison in pedigree.comparisons.inner.values() {
                 sum_simulated_stats.entry(comparison.label.clone()).or_insert((0.0, 0.0)).0 += comparison.get_avg_pwd();
             }
         }
 
         // ---- Compute the sum-squared for sample variance for each comparison.
-        for pedigree in self.iter() {
-            for comparison in pedigree.comparisons.iter() {
+        for pedigree in &self.inner {
+            for comparison in pedigree.comparisons.inner.values() {
                 // ---- Access summary statistics 
                 let summary_statistics = sum_simulated_stats.get_mut(&comparison.label)
                     .with_loc(|| format!("While computing simulation summary statistics:\
@@ -131,7 +134,7 @@ impl PedigreeReps {
     #[inline]
     pub fn add_non_informative_snps(&mut self, n: u32) {
         for pedigree in &mut self.inner {
-            pedigree.comparisons.iter_mut().for_each(|comp| comp.add_n_overlaps(n));
+            pedigree.comparisons.inner.values_mut().for_each(|comp| comp.add_n_overlaps(n));
         }
     }
 
@@ -156,8 +159,10 @@ impl DerefMut for PedigreeReps {
 impl Display for PedigreeReps {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         self.inner.iter().enumerate().try_fold((), |(), (idx, pedigree)| {
-            pedigree.comparisons.iter().try_fold((), |(), comparison| {
-                writeln!(f, "{idx: <REPLICATE_ID_FORMAT_LEN$} - {comparison}")
+            //pedigree.comparisons.labels.keys().try_fold((), |(), label| {
+            pedigree.comparisons.inner.keys().try_fold((), |(), comp_id| {
+                write!(f, "{idx: <REPLICATE_ID_FORMAT_LEN$} - ")?;
+                pedigree._display_comparison(f, comp_id)
             })
         })
     }

@@ -3,6 +3,9 @@ use std::{
     fmt::{self, Display, Formatter},
 };
 
+use std::io::Write;
+
+
 #[cfg(test)] 
 use std::hash::{Hash, Hasher};
 
@@ -13,126 +16,86 @@ use fastrand;
 use located_error::prelude::*;
 use log::trace;
 
-mod parents;
-use parents::Parents;
-
-use self::error::IndividualError;
-
 mod error;
+pub use error::IndividualError;
+use slotmap::KeyData;
 
+use super::RelationshipId;
+
+//mod error;
 /// Space padding lengths used for `std::fmt::Display` of Individual
 const TAG_DISPLAY_LEN    : usize = 10; // Space padding of `self.tag`
 const LABEL_DISPLAY_LEN  : usize = 10; // Space padding of `self.label`
 const PARENTS_DISPLAY_LEN: usize = 25; // Space padding of `self.parents`
 
-/// Pedigree Individual.
-/// # Fields:
-/// - `tag`: Optional SampleTag of the Individual 
-///   - `Some(SampleTag)` if the individual is a founder.
-///   - `None`            if the individual is a simulated offspring.
-/// 
-/// - `label`: User-defined name of the individual (e.g. 'child', 'father', 'mother')
-/// 
-/// - `parents`: Optional Set of references for each parents of the individual.
-///   - `None` if the individual is a founder.
-///   - `Some(references)` if the individual is a simulated offspring.
-/// 
-/// - `strands` : Optional array indicating the provenance of each individual's chromosome strand.
-///   Strand provenance is tracked as a set of two indices. `strands[i]` = strand index of `parents[i]`.
-///   Two possible values: `0` = left strand and `1` == right strand of the given parent. 
-///   - `None` if the individual is a founder.
-///   - `Some(strands)` if the individual is a simulated offspring. 
-/// 
-/// - `currently_recombining`: Array of `bool` tracking whether or not the parent's chromosome is currently
-///   recombining. `currently_recombining[i]` = tracker for `parents[i]`.
-/// 
-/// - `alleles` : Optional size-two set of alleles of the Individual for the current SNP position.
+// --------------------------------------------------------------------------------------------- //
+// ---- Individual Id
+slotmap::new_key_type! {pub struct IndividualId;}
+
+impl IndividualId {
+    pub fn to_u64(self) -> u64 {
+        self.0.as_ffi()
+    }
+
+    pub fn from_u64(id: u64) -> Self {
+        IndividualId::from(KeyData::from_ffi(id))
+    }
+}
+
+impl Display for IndividualId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Individual {
-    tag                      : Option<SampleTag>,
-    label                    : String,
-    parents                  : Option<Parents>,
-    pub strands              : Option<[usize; 2]>,
-    pub currently_recombining: [bool; 2],
-    pub alleles              : Option<[u8; 2]>,
-    pub sex                  : Option<Sex>,
+    pub id: IndividualId,
+    tag: Option<SampleTag>,
+    label: String,
+    parents: Option<[RelationshipId; 2]>,
+    pub strands: Option<[usize; 2]>,
+    pub currently_recombining: [bool;2],
+    pub alleles: Option<[u8; 2]>,
+    pub sex: Option<Sex>
 }
 
 impl Display for Individual {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let parents = match &self.parents {
-            None => "None".to_string(),
-            Some(parents) => format!("{parents}")
-        };
-        let tag = match &self.tag {
-            Some(tag) => tag.id().clone(),
-            None => "None".to_owned()
-        };
-        write!(f, "tag: {: <TAG_DISPLAY_LEN$} label: {: <LABEL_DISPLAY_LEN$} - parents: {: <PARENTS_DISPLAY_LEN$}", tag, self.label, parents)
-    }
-}
-
-impl PartialEq for Individual {
-    fn eq(&self, other: &Individual) -> bool {
-        self.label == other.label
-    }
-}
-
-impl Eq for Individual {}
-
-#[cfg(test)]
-impl Hash for Individual {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.label.hash(state);
-    }
-}
-
-
-impl Ord for Individual {
-    fn cmp(&self, other: &Self) -> Ordering {
-        (self.label).cmp(&(other.label))
-    }
-}
-
-impl PartialOrd for Individual {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ({})", self.label, self.id)
     }
 }
 
 impl Individual {
-    /// Instantiate a new individual.
-    /// # Arguments
-    /// - `label`  : User-defined name of the individual (e.g. "father", "mother", "child", etc.)
-    /// - `parents`: Size-two array of `&Arc<RwLock<Individual>>`, representing the individual's parents. 
-    pub fn new(label: &str, parents: Option<Parents>, sex: Option<Sex> ) -> Individual {
-        //let parents = parents.map(Self::format_parents);
-        Individual {tag: None, label: label.to_string(), parents, strands: None, currently_recombining: [false, false], alleles: None, sex}
+    pub fn new(id: IndividualId, label: &str, sex: Option<Sex>) -> Self {
+        Self {
+            id,
+            tag: None,
+            label: label.to_string(),
+            parents: None,
+            strands: None,
+            currently_recombining: [false, false],
+            alleles: None,
+            sex
+        }
     }
 
-    /// Manually set the alleles for this individual. Used during tests only, to bypass some methods and create mock Individuals.
     #[cfg(test)]
     pub fn set_alleles(&mut self, alleles: [u8; 2]) {
         self.alleles = Some(alleles);
     }
 
-    /// Return the contents of `self.alleles`
-    /// # Errors
-    /// - In case `self.alleles` is `None`
     pub fn get_alleles(&self) -> Result<[u8; 2]> {
-        self.alleles.with_loc(||IndividualError::MissingAlleles)
+        self.alleles.with_loc(|| IndividualError::MissingAlleles)
     }
 
-    /// Simulate meiosis for the current position and return a unique allele (as `u8`).
-    /// Arguments:
-    /// - `selected_strand` : index of `self.alleles` used for sampling. The provided value will most likely
-    ///   originate from `self.strands` of the simulated offspring. 
-    /// 
-    /// - `offspring_currently_recombining`: bool indicating whether the strand being currently simulated is under recombination.
-    ///   The provided value will most likely originate from `self.currently_recombining` of the simulated offspring.
-    /// 
-    /// # Panics:
-    /// - when `self.alleles` is `None`
+    pub fn add_parents(&mut self, relationships: [RelationshipId; 2]) {
+        self.parents = Some(relationships);
+    }
+    pub fn has_parents(&self) -> bool {
+        self.parents.is_some()
+    }
+
     pub fn meiosis(&self, selected_strand: usize, offspring_currently_recombining: bool) -> u8 {
         // --- Switch the selected strand if the offspring is currently recombining.
         let selected_strand = match offspring_currently_recombining {
@@ -145,14 +108,9 @@ impl Individual {
             None          => panic!("Trying to perform meiosis within an empty genome!"),
             Some(alleles) => alleles[selected_strand],
         }
+
     }
 
-    /// Randomly assign a strand provenance for each parents. This method should be called once, before the simulations.
-    /// Returns `true` if strand assignment was succesful and non-redundant, `false` if the individual's strand were 
-    /// already assigned.
-    /// 
-    /// # Errors:
-    /// - if `self.parents` is `None`
     pub fn assign_strands(&mut self) -> Result<bool> {
         if self.parents.is_none() {
             return loc!(IndividualError::MissingParents)
@@ -175,13 +133,16 @@ impl Individual {
     pub fn label(&self) -> &str {
         self.label.as_str()
     }
-    
 
     /// Manually set the Individuals parents.
     /// # Arguments
     /// - `parents`: Size-two array of `&Arc<RwLock<Individual>>`, representing the individual's parents. 
-    pub fn set_parents(&mut self, parents: Parents) {
+    pub fn set_parents(&mut self, parents: [RelationshipId; 2]) {
         self.parents = Some(parents);
+    }
+
+    pub fn get_parents(&self) -> Option<[RelationshipId; 2]> {
+        self.parents
     }
 
     /// Check whether or not this individual is a founder individual. Returns `true` if `self.parents == None`
@@ -189,6 +150,13 @@ impl Individual {
     #[inline(always)]
     pub fn is_founder(&self) -> bool {
         self.parents.is_none()
+    }
+
+    /// Check whether or not this individual is a founder individual. Returns `true` if `self.parents == None`
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn is_offspring(&self) -> bool {
+        self.parents.is_some()
     }
 
     /// Manually set the individuals SampleTag. meaningless for offsprings.*
@@ -203,125 +171,6 @@ impl Individual {
     pub fn clear_alleles(&mut self){
         self.alleles = None;
     }
-    
-    /// Set the individual's alleles, given a recombination probability. 
-    /// - Returns `true`  if assignment was successful and non-redundant.
-    /// - Returns `false` if `self.alleles` were already assigned.
-    /// 
-    /// # Arguments:
-    /// - `recombination_prob`: probability that a recombination occured between the previous and current coordinate.
-    ///   This was most likely computed from a genetic_map. See `genome::GeneticMap` and  `genome::RecombinationRange`
-    /// 
-    /// - `ped_idx` : replicate index of this individual's belonging pedigree. This parameter is purely provided
-    ///   for debugging and logging, and serves no purpose during allele assignment.
-    /// # Errors
-    /// - when trying to assign alleles while `self.strands` is `None`.
-    /// 
-    /// # Panics
-    /// - When attempting to assign alleles while `self.parents` is `None` (i.e. Individual is a founder.)
-    /// 
-    /// # @ TODO
-    /// - Instantiating a new Rng for each individual might not be very efficient...
-    ///   Passing a &ThreadRng reference around might be better.
-    pub fn assign_alleles(&mut self, recombination_prob: f64, ped_idx: usize, rng: &mut fastrand::Rng, xchr_mode: bool) -> Result<bool> {
-        use IndividualError::{InvalidAlleleAssignment, MissingParents, MissingStrands};
-        // ---- Ensure this method call is non-redundant.
-        if self.alleles.is_some() {
-            return Ok(false)
-        }
-        // ---- Ensure the individual is 'equipped' with parents and strands before attempting allele assignment.
-        let Some(parents) = &self.parents else {
-            return Err(anyhow!(MissingParents)).with_loc(||InvalidAlleleAssignment)
-        };
-
-        // ---- Perform allele assignment for each parent.
-        for (i, parent) in parents.iter().enumerate() {
-            // ---- Assign parent genome if not previously generated.
-            if parent.read().alleles.is_none() {
-                parent.write().assign_alleles(recombination_prob, i, rng, xchr_mode)
-                    .with_loc(||InvalidAlleleAssignment)?;
-            }
-
-            // ---- Check if recombination occured for each parent and update recombination tracker if so.
-            if (!xchr_mode || parent.read().sex == Some(Sex::Female)) && rng.f64() < recombination_prob { 
-                trace!("- Cross-over occured in ped: {:<5} - ind: {} ({} {:?})", ped_idx, self.label, parent.read().label, parent.read().sex);
-                self.currently_recombining[i] = ! self.currently_recombining[i];
-            }
-        }
-        
-        // ---- Perform allele assignment for `self`, by simulating meiosis for each parent.
-        let Some(strands) = self.strands else {
-            return Err(anyhow!(MissingStrands)).with_loc(||InvalidAlleleAssignment)
-        };
-
-        self.alleles = if xchr_mode {
-            let mut alleles = [0u8 ; 2];
-            // ---- Find the index of both parents
-            let father_idx = parents.iter().position(|p| p.read().sex == Some(Sex::Male)).expect("No parent found..");
-            let mother_idx = (father_idx + 1 ) % 2;
-
-            alleles[mother_idx] = parents[mother_idx].read().meiosis(strands[mother_idx], self.currently_recombining[mother_idx]);
-            alleles[father_idx] = match self.sex {
-                Some(Sex::Male)           => Ok(alleles[mother_idx]), // If the descendant is a male, alleles are exclusively from the mother
-                Some(Sex::Female)         => Ok(parents[father_idx].read().meiosis(strands[father_idx], self.currently_recombining[father_idx])),
-                Some(Sex::Unknown) | None => Err(IndividualError::UnknownOrMissingSex).loc("While attempting to assign alleles during X-chromosome-mode"),
-            }?;
-
-            // ---- Sanity checks.
-            if self.sex == Some(Sex::Male) && alleles[0] != alleles[1] {
-                // Male individuals are not expected to be heterozygous during X-chromosome simulations.
-                return Err(IndividualError::SpuriousAlleleAssignment{alleles})
-                    .loc("Male Individual is heterozygous while in X-chromosome mode")
-            }
-            if self.currently_recombining[father_idx] {
-                // Fathers are not expected to recombine during X-chromosome simulations.
-                return Err(IndividualError::InvalidOrSpuriousRecombinationEvent)
-                    .loc("Father is recombining while in X-chromosome-mode")
-            }
-
-            Some(alleles)
-        } else {
-            let haplo_0 = parents[0].read().meiosis(strands[0], self.currently_recombining[0]);
-            let haplo_1 = parents[1].read().meiosis(strands[1], self.currently_recombining[1]);
-            Some([haplo_0, haplo_1])
-        };
-
-        Ok(true)
-    }
-
-    pub fn assign_random_sex(&mut self) -> Result<bool> {
-        use IndividualError::InvalidSexAssignment;
-        // ---- Ensure this method call is non-redundant
-        if self.sex.is_some() {
-            return Ok(false)
-        }
-
-        // ---- Perform sex-asignment for each parent (if the individual has known parents.)
-        if let Some(parents) = &self.parents { 
-            for (i, parent) in parents.iter().enumerate() {
-                // ---- Assign parent sex if not previously decided.
-                let spouse = &parents[(i+1) % 2];
-                if parent.read().sex.is_none() { // If the parent's sex is still unknown
-                    parent.write().sex = if let Some(spouse_sex) = spouse.read().sex { // If the spouse sex is already known, assign the opposite sex.
-                        match spouse_sex {
-                            Sex::Female  => Some(Sex::Male),
-                            Sex::Male    => Some(Sex::Female),
-                            Sex::Unknown => None
-                        }
-                    } else {
-                        Some(Sex::random()) // If not, assign a random sex to the parent.
-                    }
-                }
-                // ---- Apply the same process for the parent.
-                parent.write().assign_random_sex()
-                    .with_loc(||InvalidSexAssignment)?;
-            }
-        }
-
-        // ---- Randomly assign sex of the considered individual
-        self.sex = Some(Sex::random());
-        Ok(true)
-    }
 
     pub fn is_sex_assigned(&self) -> bool {
         self.sex.is_some_and(|s| s != Sex::Unknown)
@@ -329,44 +178,55 @@ impl Individual {
 
 }
 
+
+
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::collections::HashSet;
-    use crate::pedigrees::pedigree::tests::common;
+    use fastrand::Rng;
 
-    fn perform_allele_asignment(offspring: &mut Individual, parents_alleles: [[u8;2];2], recombination_prob: f64) -> Result<()> {
+    use super::*;
+    use crate::pedigrees::pedigree::tests::common;
+    use crate::pedigrees::Pedigree;
+
+    fn perform_allele_assignment(pedigree: &mut Pedigree, iid: IndividualId, parents_alleles: [[u8;2];2], recombination_prob: f64) -> Result<bool> {
         let mut rng = fastrand::Rng::new();
-        let parents = offspring.parents.as_ref().expect("Missing parents");
-        parents[0].write().alleles = Some(parents_alleles[0]);
-        parents[1].write().alleles = Some(parents_alleles[1]);        
-        offspring.assign_alleles(recombination_prob, 0, &mut rng, false)?;
-        Ok(())
+        
+        let ind = pedigree.get_ind(iid).unwrap();
+        let parent_rels = ind.get_parents().expect("Missing parents");
+        for i in [0, 1] {
+            let parent_id = pedigree.edges.get(parent_rels[i]).unwrap().to;
+            pedigree.get_ind_mut(parent_id).unwrap().alleles =  Some(parents_alleles[i]);
+        }
+        pedigree.assign_alleles(iid, recombination_prob, 0, false, &mut rng)
     }
 
     fn run_all_allele_assignment_cases(recombination_prob: f64) -> Result<()> {
-        let mut offspring = common::mock_offspring("offspring", None);
+        let mut offspring_pedigree = common::mock_offspring_pedigree("offspring", None);
+        let offspring_id = offspring_pedigree.get_ind_id("offspring").unwrap();
+
         let valid_alleles = [[0,0], [0,1], [1,0], [1,1]];
         let mut valid_strands = [[0,0], [0,1], [1,0], [1,1]];
 
         for parent_0_alleles in &valid_alleles{
             for parent_1_alleles in &valid_alleles {
                 for strands in &mut valid_strands {
-                    offspring.strands = Some(*strands);
-                    perform_allele_asignment(&mut offspring, [*parent_0_alleles, *parent_1_alleles], recombination_prob)?;
+
+                    offspring_pedigree.get_ind_mut(offspring_id).unwrap().strands = Some(*strands);
+                    perform_allele_assignment(&mut offspring_pedigree, offspring_id, [*parent_0_alleles, *parent_1_alleles], recombination_prob)?;
 
                     // If the individual's parent is 'recombining', we expect strand assignment to be inverted. 0 becomes 1 ; 1 becomes 0
-                    for i in [0,1]{
+                    let offspring = offspring_pedigree.get_ind(offspring_id).unwrap();
+                    for (i, strand) in strands.iter_mut().enumerate() {
                         if offspring.currently_recombining[i] {
-                            strands[i] = (strands[i]+1) % 2;
+                            *strand = (*strand + 1) % 2;
                         }
                     }
 
-                    let got = offspring.alleles.expect("Missing alleles within offspring.");
+                    let got  = offspring.alleles.expect("Missing alleles within offspring.");
                     let want = [parent_0_alleles[strands[0]], parent_1_alleles[strands[1]]];
-
+                    println!("{got:?} | {want:?}");
                     assert_eq!(got, want);
-                    offspring.alleles = None;
+                    offspring_pedigree.get_ind_mut(offspring_id).unwrap().alleles = None;
                 }
             }
         }
@@ -375,7 +235,8 @@ mod tests {
 
      #[test]
     fn alleles_getter_filled() -> Result<()> {
-        let mut ind = common::mock_founder("offspring");
+        let mut pedigree = common::mock_founder_pedigree("offspring");
+        let ind = pedigree.get_ind_from_label_mut("offspring").unwrap();
         let alt_ref = [0,1];
         for i in alt_ref {
             for j in alt_ref {
@@ -389,15 +250,17 @@ mod tests {
 
     #[test]
     fn alleles_getter_empty(){
-        let ind = common::mock_founder("offspring");
+        let mut pedigree = common::mock_founder_pedigree("offspring");
+        let ind = pedigree.get_ind_from_label_mut("offspring").unwrap();
         let alleles = ind.get_alleles();
         assert!(alleles.is_err());
     }
 
     #[test]
     fn meiosis_not_recombining() {
+        let mut pedigree = common::mock_founder_pedigree("offspring");
+        let ind = pedigree.get_ind_from_label_mut("offspring").unwrap();
         let offspring_currently_recombining = false; 
-        let mut ind = common::mock_founder("offspring");
         let alt_ref = [0,1];
         for i in alt_ref {
             for j in alt_ref {
@@ -417,7 +280,8 @@ mod tests {
     #[test]
     fn meiosis_recombining() {
         let offspring_currently_recombining = true; 
-        let mut ind = common::mock_founder("parent");
+        let mut pedigree = common::mock_founder_pedigree("offspring");
+        let ind = pedigree.get_ind_from_label_mut("offspring").unwrap();
         let alt_ref = [0,1];
         for i in alt_ref {
             for j in alt_ref {
@@ -438,7 +302,8 @@ mod tests {
     #[test]
     #[should_panic = "Trying to perform meiosis within an empty genome!"]
     fn meiosis_empty_alleles() {
-        let ind = common::mock_founder("parent");
+        let mut pedigree = common::mock_founder_pedigree("offspring");
+        let ind = pedigree.get_ind_from_label_mut("offspring").unwrap();
         ind.meiosis(0, false);
     }
 
@@ -446,7 +311,8 @@ mod tests {
     #[test]
     fn strand_setter_offspring() -> Result<()> {
         let valid_strands = [[0,0], [0,1], [1,0], [1,1]];
-        let mut ind = common::mock_offspring("offspring", None);
+        let mut pedigree = common::mock_offspring_pedigree("offspring", None);
+        let ind = pedigree.get_ind_from_label_mut("offspring").unwrap();
 
         for _ in 0..1000 {
             ind.assign_strands()?;
@@ -458,33 +324,39 @@ mod tests {
 
     #[test]
     fn strand_setter_founder() {
-        let mut ind = common::mock_founder("parent");
+        let mut pedigree = common::mock_founder_pedigree("parent");
+        let ind = pedigree.get_ind_from_label_mut("parent").unwrap();
         let result = ind.assign_strands();
         assert!(result.is_err());
     }
 
     #[test]
     fn sex_setter_founder() -> Result<()>{
-        let mut ind = common::mock_founder("parent");
-        ind.assign_random_sex()?;
-        assert!(ind.sex.is_some());
+        let mut pedigree = common::mock_founder_pedigree("parent");
+        let iid = pedigree.get_ind_from_label("parent").unwrap().id;
+        pedigree.assign_random_sex(iid)?;
+        assert!(pedigree.get_ind(iid).unwrap().sex.is_some());
         Ok(())
     }
 
     #[test]
     fn sex_setter_offspring() -> Result<()> {
         for _ in 0..1000 {
-            let mut child = common::mock_offspring("child", Some(["parent-1", "parent-2"]));
-            child.assign_random_sex()?;
-            let parents = child.parents.expect("Test offspring has missing parents");
-            assert_ne!(parents[0].read().sex, parents[1].read().sex);
+            let mut pedigree = common::mock_offspring_pedigree("child", Some(["parent-1", "parent-2"]));
+            let child_id = pedigree.get_ind_from_label_mut("child").unwrap().id;
+            pedigree.assign_random_sex(child_id)?;
+            let parents = pedigree.get_parents(child_id).expect("Test offspring has missing parents");
+    
+            println!("hey: {parents:#?}");
+            assert_ne!(parents[0].sex, parents[1].sex);
         }
         Ok(())
     }
 
     #[test]
     fn get_set_sampletag() {
-        let mut ind = common::mock_founder("parent");
+        let mut pedigree = common::mock_founder_pedigree("parent");
+        let ind = pedigree.get_ind_from_label_mut("parent").unwrap();
         let tag = SampleTag::new("HG00096", Some(0), None);
         ind.set_tag(tag.clone());
         assert_eq!(ind.get_tag(), Some(&tag));
@@ -493,26 +365,30 @@ mod tests {
 
     #[test]
     fn get_empty_tag(){
-       let ind = common::mock_founder("parent");
-       let result = ind.get_tag();
-       assert!(result.is_none());
+        let mut pedigree = common::mock_founder_pedigree("parent");
+        let ind = pedigree.get_ind_from_label_mut("parent").unwrap();
+        let result = ind.get_tag();
+        assert!(result.is_none());
     }
 
     #[test]
     fn founder_is_founder() {
-        let ind = common::mock_founder("parent");
+        let mut pedigree = common::mock_founder_pedigree("parent");
+        let ind = pedigree.get_ind_from_label_mut("parent").unwrap();
         assert!(ind.is_founder());
     }
 
     #[test]
-    fn offpsring_is_not_founder() {
-        let ind = common::mock_offspring("offspring", None);
+    fn offspring_is_not_founder() {
+        let mut pedigree = common::mock_offspring_pedigree("offspring", None);
+        let ind = pedigree.get_ind_from_label_mut("offspring").unwrap();
         assert!(!ind.is_founder());
     }
 
     #[test]
     fn clear_alleles() {
-        let mut ind = common::mock_founder("parent");
+        let mut pedigree = common::mock_founder_pedigree("parent");
+        let ind = pedigree.get_ind_from_label_mut("parent").unwrap();
         ind.set_alleles([0,1]);
         assert!(ind.alleles.is_some());
         ind.clear_alleles();
@@ -524,15 +400,17 @@ mod tests {
     #[test]
 
     fn alleles_assignment_founder() {
-        let mut ind = common::mock_founder("parent");
-        let result = ind.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false);
+        let mut pedigree = common::mock_founder_pedigree("parent");
+        let iid = pedigree.get_ind_from_label_mut("parent").unwrap().id;
+        let result = pedigree.assign_alleles(iid, 0.0, 0, false, &mut Rng::new());
         assert!(result.is_err());
     }
 
     #[test]
     fn alleles_assignments_unnassigned_parent_alleles(){
-        let mut ind = common::mock_offspring("offspring", None);
-        let result = ind.assign_alleles(0.0, 0, &mut fastrand::Rng::new(), false);
+        let mut pedigree = common::mock_offspring_pedigree("offspring", None);
+        let iid = pedigree.get_ind_from_label_mut("offspring").unwrap().id;
+        let result = pedigree.assign_alleles(iid, 0.0, 0, false, &mut Rng::new());
         assert!(result.is_err());
     }
 
@@ -547,75 +425,79 @@ mod tests {
 
     #[test]
     fn allele_assignment_updates_recombination_status() -> Result<()> {
-        let mut offspring = common::mock_offspring("offspring", None);
+        let mut pedigree = common::mock_offspring_pedigree("offspring", None);
+        let offspring = pedigree.get_ind_from_label_mut("offspring").unwrap();
+
         offspring.strands = Some([0,0]);
         let parents_alleles = [[0,1], [0,1]];
         let recombination_prob = 1.0;
-
         assert_eq!(offspring.currently_recombining, [false, false]);
-        perform_allele_asignment(&mut offspring, parents_alleles, recombination_prob)?;
-        assert_eq!(offspring.currently_recombining, [true, true]);
+        let offspring_id = offspring.id;
+        perform_allele_assignment(&mut pedigree, offspring_id, parents_alleles, recombination_prob)?;
+        let offspring_recombining = pedigree.get_ind(offspring_id).unwrap().currently_recombining;
+        assert_eq!(offspring_recombining, [true, true]);
         Ok(())
     }
 
-    #[test]
-    fn ind_equality() {
-        let  ind1 = common::mock_founder("parent");
-        let  ind2 = common::mock_founder("parent");
-        assert_eq!(ind1, ind2);
-    }
+    //#[test]
+    //fn ind_equality() {
+    //    let  ind1 = common::mock_founder_pedigree("parent").get_ind_from_label("parent").unwrap().clone();
+    //    let  ind2 = common::mock_founder_pedigree("parent").get_ind_from_label("parent").unwrap().clone();
+    //    assert_eq!(ind1, ind2);
+    //}
 
-    #[test]
-    fn ind_inequality() {
-        let  ind1 = common::mock_founder("ind1");
-        let  ind2 = common::mock_founder("ind2");
-        assert_ne!(ind1, ind2);
-    }
+    //#[test]
+    //fn ind_inequality() {
+    //    let  ind1 = common::mock_founder("ind1");
+    //    let  ind2 = common::mock_founder("ind2");
+    //    assert_ne!(ind1, ind2);
+    //}
 
-    #[test]
-    fn hashable() {
-        // We're ok here, given that The Hash implementation of Individual only uses the `label` field
-        // which is not mutable.
-        #[allow(clippy::mutable_key_type)]
-        let mut ind_set = HashSet::new();
-        let n_iters: u32 = 10_000;
-        for i in 0..n_iters {
-            let  new_ind = common::mock_founder(&i.to_string());
-            assert!(ind_set.insert(new_ind.clone()));
-            assert!(ind_set.contains(&new_ind));
-        }
-    }
+    //#[test]
+    //fn hashable() {
+    //    // We're ok here, given that The Hash implementation of Individual only uses the `label` field
+    //    // which is not mutable.
+    //    #[allow(clippy::mutable_key_type)]
+    //    let mut ind_set = HashSet::new();
+    //    let n_iters: u32 = 10_000;
+    //    for i in 0..n_iters {
+    //        let  new_ind = common::mock_founder(&i.to_string());
+    //        assert!(ind_set.insert(new_ind.clone()));
+    //        assert!(ind_set.contains(&new_ind));
+    //    }
+    //}
 
-    #[test]
-    fn ordering() {
-        let  ind_a = common::mock_founder("A");
-        let  ind_b = common::mock_founder("B");
-        assert!(ind_a <  ind_b);
-        assert!(ind_b <= ind_b);
-
-        assert!(ind_b >= ind_a);
-        assert!(ind_b >  ind_a);
-
-        // Different Index should not impact ordering. What matters is the ID.
-        let mut ind_a_prime = ind_a.clone();
-        ind_a_prime.set_tag(SampleTag::new("A", Some(996), None));
-        assert!(ind_a <= ind_a_prime);
-
-
-    }
-
-    #[test]
-    fn display() {
-        let (offspring_label, father_label, mother_label) = ("ind1", "ind2", "ind3");
-        let mut offspring = common::mock_offspring(offspring_label, Some([father_label, mother_label]));
-        
-        let display = format!("{offspring}");
-        assert!(display.contains(offspring_label));
-        assert!(display.contains(father_label));
-        assert!(display.contains(mother_label));
-
-        offspring.set_tag(SampleTag::new("HG00096", None, None));
-        let display = format!("{offspring}");
-        assert!(display.contains("HG00096"));
-    }
+    //#[test]
+    //fn ordering() {
+    //    let  ind_a = common::mock_founder("A");
+    //    let  ind_b = common::mock_founder("B");
+    //    assert!(ind_a <  ind_b);
+    //    assert!(ind_b <= ind_b);
+//
+    //    assert!(ind_b >= ind_a);
+    //    assert!(ind_b >  ind_a);
+//
+    //    // Different Index should not impact ordering. What matters is the ID.
+    //    let mut ind_a_prime = ind_a.clone();
+    //    ind_a_prime.set_tag(SampleTag::new("A", Some(996), None));
+    //    assert!(ind_a <= ind_a_prime);
+//
+//
+    //}
+//
+    //#[test]
+    //fn display() {
+    //    let (offspring_label, father_label, mother_label) = ("ind1", "ind2", "ind3");
+    //    let mut pedigree = common::mock_offspring_pedigree("offspring", Some([father_label, mother_label]));
+    //    let offspring = pedigree.get_ind_from_label_mut("offspring").unwrap();
+//
+    //    let display = format!("{offspring}");
+    //    assert!(display.contains(offspring_label));
+    //    assert!(display.contains(father_label));
+    //    assert!(display.contains(mother_label));
+//
+    //    offspring.set_tag(SampleTag::new("HG00096", None, None));
+    //    let display = format!("{offspring}");
+    //    assert!(display.contains("HG00096"));
+    //}
 }
