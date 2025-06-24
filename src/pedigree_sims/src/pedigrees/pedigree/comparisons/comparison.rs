@@ -384,7 +384,7 @@ mod tests {
                         let comp = pedigree.comparisons.inner.get_mut(comp_id).unwrap();
                         let alleles = [[allele_ind_0, allele_ind_0], [allele_ind_1, allele_ind_1]];
                         comp.pair.into_iter().zip(alleles.iter()).for_each(|(ind, all)| {
-                            pedigree.get_ind_mut(ind).unwrap().set_alleles(*all)
+                            pedigree.individuals.get_ind_mut(ind).unwrap().set_alleles(*all)
                         });
 
                         let comp = pedigree.comparisons.inner.get_mut(comp_id).unwrap();

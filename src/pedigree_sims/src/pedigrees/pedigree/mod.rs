@@ -7,6 +7,7 @@ use crate::pedigrees::constants::{AVG_PWD_FORMAT_LEN, COMPARISON_LABEL_FORMAT_LE
 
 mod relationship;
 use fastrand::Rng;
+use itertools::Itertools;
 use log::trace;
 use relationship::{Relationship, RelationshipId};
 
@@ -49,30 +50,130 @@ pub use error::PedigreeError;
 // --------------------------------------------------------------------------------------------- //
 // Individuals
 
+#[derive(Debug, Clone)]
+pub struct PedIndividuals {
+    inner: SlotMap<IndividualId, Individual>,
+    labels: BTreeMap<String, IndividualId>,
+}
+
+impl Default for PedIndividuals {
+    fn default() -> Self { Self::new() }
+}
+
+impl PedIndividuals {
+    pub fn new() -> Self {
+        Self{inner: SlotMap::with_key(), labels: BTreeMap::new()}
+    }
+
+    pub fn get_ind_id(&self, label: &str) -> Option<IndividualId> {
+        self.labels.get(label).copied()
+    }
+
+    pub fn get_ind(&self, id: IndividualId) -> Option<&Individual> {
+        self.inner.get(id)
+    }
+
+    pub fn get_ind_from_label_mut(&mut self, label: &str) -> Option<&mut Individual> {
+        let id = self.labels.get(label).unwrap();
+        self.get_ind_mut(*id)
+    }
+
+    pub fn get_ind_from_label(&self, label: &str) -> Option<&Individual> {
+        let id = self.labels.get(label).unwrap();
+        self.get_ind(*id)
+    }
+
+    pub fn get_ind_mut(&mut self, id: IndividualId) -> Option<&mut Individual> {
+        self.inner.get_mut(id)
+    }
+
+
+    #[inline] pub fn _sorted_iter<P: FnMut(&&Individual) -> bool>(&self, predicate: P) -> impl Iterator<Item = &Individual> {
+        Itertools::sorted_by(self.inner.values().filter(predicate), |a,b| a.label().partial_cmp(b.label()).unwrap())
+    }
+    #[inline] pub fn _sorted_iter_mut<T: FnMut(&&mut Individual) -> bool>(&mut self, predicate: T) -> impl Iterator<Item = &mut Individual> {
+        Itertools::sorted_by(self.inner.values_mut().filter(predicate), |a,b| a.label().partial_cmp(b.label()).unwrap())
+    }
+
+    #[inline]
+    pub fn founders_mut(&mut self) -> impl Iterator<Item = &mut Individual> {
+        self._sorted_iter_mut(|ind| ind.is_founder())
+        //self.inner.values_mut().filter(|ind| ind.is_founder())
+    }
+    
+    #[inline]
+    pub fn offsprings_ids(&self) -> Vec<IndividualId> {
+        self._sorted_iter(|ind| ind.is_offspring()).map(|ind| ind.id).collect::<Vec<IndividualId>>()
+        //self.inner.values().filter(|ind| ind.is_offspring()).map(|ind| ind.id).collect::<Vec<IndividualId>>()
+    }
+
+    #[inline]
+    pub fn offsprings(&self) -> impl Iterator<Item = &Individual> {
+        self.inner.values().filter(|ind| ind.is_offspring())
+    }
+
+    #[inline]
+    pub fn offsprings_mut(&mut self) -> impl Iterator<Item = &mut Individual> {
+        self._sorted_iter_mut(|ind| ind.is_offspring())
+        //self.inner.values_mut().filter(|ind| ind.is_offspring())
+    }
+
+    pub fn add_individual(&mut self, individual: &str, parents: Option<[&str; 2]>, sex:Option<Sex>) -> IndividualId {
+        // ---- Add parents as individuals if there were not previously found
+        let parent_ids = parents.map(|parents| {
+            parents.map(|parent| {
+                self.get_ind_id(parent)
+                    .or_else(|| Some(self.add_individual(parent, None, None))) 
+                    .unwrap()
+            })
+        });
+        // ---- Insert individuals, as well as its parents
+        // ---- Early return if ind already exists.
+        let ind_id = if let Some(id) = self.labels.get(individual) { *id } else {
+            let id = self
+                .inner
+                .insert_with_key(|id| Individual::new(id, individual, sex));
+            self.labels.insert(individual.to_string(), id);
+            id
+        };
+        ind_id
+    }
+
+    /// Set all individual allele's to `None` within this pedigree.
+    pub fn clear_alleles(&mut self){
+        self.inner.values_mut().for_each(|ind| ind.clear_alleles())
+    }
+}
+
+
 
 #[derive(Debug, Clone)]
 pub struct Pedigree {
-    pub nodes: SlotMap<IndividualId, Individual>,
+    pub individuals: PedIndividuals,
     pub edges: SlotMap<RelationshipId, Relationship>,
-    pub labels: BTreeMap<String, IndividualId>,
     pub comparisons: PedComparisons,
-    //pub comparisons: SlotMap<ComparisonId, PedComparison>,
-    //pub comp_labels: BTreeMap<String, ComparisonId>,
     params: Option<PedigreeParams>,
     pop: Option<String>,
+}
+
+impl Default for Pedigree {
+    fn default() -> Self { Self::new() }
 }
 
 impl Pedigree {
     pub fn new() -> Self {
         Self {
-            nodes: SlotMap::with_key(),
+            individuals: PedIndividuals::new(),
             edges: SlotMap::with_key(),
-            labels: BTreeMap::new(),
             comparisons: PedComparisons::new(),
-            //comp_labels: BTreeMap::new(),
             params: None,
             pop: None,
         }
+    }
+
+    #[inline]
+    pub fn clear_alleles(&mut self) {
+        self.individuals.clear_alleles();
     }
 
     #[inline]
@@ -93,7 +194,7 @@ impl Pedigree {
         for comparison_id in comp_ids {
             //println!("{comparison_id:?} {} {}");
             let alleles = self.comparisons.inner.get(comparison_id).unwrap().pair.map(|ind_id| {
-                self.get_ind(ind_id).unwrap().alleles.unwrap()
+                self.individuals.get_ind(ind_id).unwrap().alleles.unwrap()
             });
             let comparison = self.comparisons.inner.get_mut(comparison_id).unwrap();
 
@@ -112,10 +213,10 @@ impl Pedigree {
 
         // ---- Perform allele fixation at random, according to this pedigrees af_downsampling_rate
         if rng.f64() < af_downsampling_rate {
-            self.founders_mut().for_each(|founder| founder.alleles = Some([0, 0]));
+            self.individuals.founders_mut().for_each(|founder| founder.alleles = Some([0, 0]));
         } else {
             // ---- Fetch and assign the 'true' alleles for all founder individuals. 
-            for founder in self.founders_mut() {
+            for founder in self.individuals.founders_mut() {
                 // ---- Extract founder tag ; raise an error if None is returned.
                 let founder_tag = founder.get_tag().loc(loc_msg)?;
 
@@ -128,9 +229,9 @@ impl Pedigree {
 
     #[inline]
     pub fn compute_offspring_alleles(&mut self, interval_prob_recomb: f64, pedigree_index: usize, xchr_mode: bool, rng: &mut fastrand::Rng) -> Result<()> {
-        for offspring_id in self.offsprings_ids() {
+        for offspring_id in self.individuals.offsprings_ids() {
             self.assign_alleles(offspring_id, interval_prob_recomb, pedigree_index, xchr_mode, rng)
-                .with_loc(|| format!("While attempting to assign the alleles of {}", self.get_ind(offspring_id).unwrap().label()))?;
+                .with_loc(|| format!("While attempting to assign the alleles of {}", self.individuals.get_ind(offspring_id).unwrap().label()))?;
         }
         Ok(())
     }
@@ -151,16 +252,16 @@ impl Pedigree {
     }
     
     pub fn assign_offspring_strands(&mut self) -> Result<()> {
-        for offspring_id in self.offsprings_ids() {
-            self.nodes.get_mut(offspring_id).unwrap().assign_strands()?;
+        for offspring_id in self.individuals.offsprings_ids() {
+            self.individuals.get_ind_mut(offspring_id).unwrap().assign_strands()?;
         }
         Ok(())
     }
 
     /// Randomly assign the sex of each individual.
     pub fn assign_random_sexes(&mut self) -> Result<()> {
-        for offspring_id in self.offsprings_ids() {
-            self.assign_random_sex(offspring_id).with_loc(||PedigreeError::FailedSexAssignment(self.get_ind(offspring_id).unwrap().label().to_string()))?;
+        for offspring_id in self.individuals.offsprings_ids() {
+            self.assign_random_sex(offspring_id).with_loc(||PedigreeError::FailedSexAssignment(self.individuals.get_ind(offspring_id).unwrap().label().to_string()))?;
         }
         Ok(())
     }
@@ -169,22 +270,16 @@ impl Pedigree {
         // ---- Add parents as individuals if there were not previously found
         let parent_ids = parents.map(|parents| {
             parents.map(|parent| {
-                self.get_ind_id(parent)
+                self.individuals.get_ind_id(parent)
                     .or_else(|| Some(self.add_individual(parent, None, None))) 
                     .unwrap()
             })
         });
-        // ---- Insert individuals, as well as its parents
-        // ---- Early return if ind already exists.
-        let ind_id = if let Some(id) = self.labels.get(individual) { *id } else {
-            let id = self
-                .nodes
-                .insert_with_key(|id| Individual::new(id, individual, sex));
-            self.labels.insert(individual.to_string(), id);
-            id
-        };
+
+        let ind_id = self.individuals.add_individual(individual, parents, sex);
+
         if let Some(parents) = parent_ids {
-            if !self.nodes[ind_id].has_parents() {
+            if !self.individuals.get_ind(ind_id).unwrap().has_parents() {
                 // ---- Create relationship from ind to parent 1 and parent 2
                 println!("----- While adding individual ! ({individual})");
                 self.set_relationship(ind_id, parents);
@@ -203,7 +298,7 @@ impl Pedigree {
         // [].try_map() is still unstable...
         let pair_ids: [IndividualId; 2] = pair
             .iter()
-            .flat_map(|ind_label| self.get_ind_id(ind_label).ok_or(InvalidInput))
+            .flat_map(|ind_label| self.individuals.get_ind_id(ind_label).ok_or(InvalidInput))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -224,37 +319,32 @@ impl Pedigree {
                 .insert_with_key(|id| Relationship::new(id, from, parent_id))
         });
 
-        if let Some(ind) = self.nodes.get_mut(from) {
+        if let Some(ind) = self.individuals.get_ind_mut(from) {
             ind.add_parents(parental_relationships);
         }
 
         parental_relationships
     }
 
-    pub fn get_ind_id(&self, label: &str) -> Option<IndividualId> {
-        self.labels.get(label).copied()
-    }
+    pub fn set_founder_tags(&mut self, panel: &PanelReader, pop: &String, contaminants: Option<&Contaminant>) -> Result<()>{
+        use PedigreeError::{MissingContaminant, MissingSampleTag};
+        self.pop = Some(pop.to_owned());
 
-    pub fn get_ind(&self, id: IndividualId) -> Option<&Individual> {
-        self.nodes.get(id)
-    }
+        // ---- Contaminating individual are excluded from pedigree individuals.
+        let mut exclude_tags = contaminants.map(|cont| cont.as_flat_list()).with_loc(||MissingContaminant)?;
 
-    pub fn get_ind_from_label_mut(&mut self, label: &str) -> Option<&mut Individual> {
-        let id = self.labels.get(label).unwrap();
-        self.get_ind_mut(*id)
-    }
-
-    pub fn get_ind_from_label(&self, label: &str) -> Option<&Individual> {
-        let id = self.labels.get(label).unwrap();
-        self.get_ind(*id)
-    }
-
-    pub fn get_ind_mut(&mut self, id: IndividualId) -> Option<&mut Individual> {
-        self.nodes.get_mut(id)
+        // ---- For each founder, pick and assign a random SampleTag using our panel (without replacement)
+        for founder in self.individuals.founders_mut() {
+            // ---- Pick a random SampleTag from our panel.
+            let random_tag = panel.random_sample(pop, Some(&exclude_tags), founder.sex)?.with_loc(||MissingSampleTag)?; 
+            founder.set_tag(random_tag.clone());
+            exclude_tags.push(random_tag); // Exclude this pedigree individual for other iterations.
+        };
+        Ok(())
     }
 
     pub fn get_parents_ids(&self, id: IndividualId) -> Option<[IndividualId; 2]> {
-        if let Some(ind) = self.get_ind(id) {
+        if let Some(ind) = self.individuals.get_ind(id) {
             if let Some(parent_ids) = ind.get_parents() {
                 let parents_ids = parent_ids.map(|rel_id| {
                     self.edges.get(rel_id).unwrap().to
@@ -267,64 +357,16 @@ impl Pedigree {
 
     pub fn get_parents(&self, id: IndividualId) -> Option<[&Individual; 2]> {
         self.get_parents_ids(id).map(|ids| {
-            ids.map(|parent_id| self.nodes.get(parent_id).unwrap())
+            ids.map(|parent_id| self.individuals.get_ind(parent_id).unwrap())
         })
     }
 
-
-
-
-    #[inline]
-    pub fn founders_mut(&mut self) -> impl Iterator<Item = &mut Individual> {
-        self.nodes.values_mut().filter(|ind| ind.is_founder())
-    }
-    
-    #[inline]
-    pub fn offsprings_ids(&self) -> Vec<IndividualId> {
-        self.nodes.values().filter(|ind| ind.is_offspring()).map(|ind| ind.id).collect::<Vec<IndividualId>>()
-    }
-
-    #[inline]
-    pub fn offsprings(&self) -> impl Iterator<Item = &Individual> {
-        self.nodes.values().filter(|ind| ind.is_offspring())
-    }
-
-    #[inline]
-    pub fn offsprings_mut(&mut self) -> impl Iterator<Item = &mut Individual> {
-        self.nodes.values_mut().filter(|ind| ind.is_offspring())
-    }
-
-    pub fn set_founder_tags(&mut self, panel: &PanelReader, pop: &String, contaminants: Option<&Contaminant>) -> Result<()>{
-        use PedigreeError::{MissingContaminant, MissingSampleTag};
-        self.pop = Some(pop.to_owned());
-
-        // ---- Contaminating individual are excluded from pedigree individuals.
-        let mut exclude_tags = contaminants.map(|cont| cont.as_flat_list()).with_loc(||MissingContaminant)?;
-
-        // ---- For each founder, pick and assign a random SampleTag using our panel (without replacement)
-        for founder in self.founders_mut() {
-            // ---- Pick a random SampleTag from our panel.
-            let random_tag = panel.random_sample(pop, Some(&exclude_tags), founder.sex)?.with_loc(||MissingSampleTag)?; 
-            founder.set_tag(random_tag.clone());
-            exclude_tags.push(random_tag); // Exclude this pedigree individual for other iterations.
-        };
-        Ok(())
-    }
-
-    /// Set all individual allele's to `None` within this pedigree.
-    pub fn clear_alleles(&mut self){
-        self.nodes.values_mut().for_each(|ind| ind.clear_alleles())
-    }
-
-    pub fn all_sex_assigned(&self) -> bool {
-        self.nodes.values().all(|ind| ind.is_sex_assigned())
-    }
 
     #[inline]
     pub fn assign_alleles (&mut self, iid: IndividualId, recombination_prob: f64, ped_idx: usize, xchr_mode: bool, rng: &mut Rng) -> Result<bool> {
         use IndividualError::{InvalidAlleleAssignment, MissingParents, MissingStrands};
         // ---- Ensure this method call is non-redundant.
-        if self.get_ind(iid).unwrap().alleles.is_some() {
+        if self.individuals.get_ind(iid).unwrap().alleles.is_some() {
             return Ok(false)
         }
 
@@ -336,42 +378,42 @@ impl Pedigree {
         // ---- perform allele assignment for each parent
         for (i, parent_id) in parents.iter().enumerate() {
             // ---- Assign parent genome if not previously generated
-            let parent = self.get_ind(*parent_id).unwrap();
+            let parent = self.individuals.get_ind(*parent_id).unwrap();
             if parent.alleles.is_none() {
                 self.assign_alleles(*parent_id, recombination_prob, ped_idx, xchr_mode, rng)?;
             }
 
             // ---- Check if recombination occured for each parent and update recombination tracker if so
-            let parent = self.get_ind(*parent_id).unwrap();
+            let parent = self.individuals.get_ind(*parent_id).unwrap();
             if (!xchr_mode || parent.sex == Some(Sex::Female)) && rng.f64() < recombination_prob {
-                let ind = self.get_ind(iid).unwrap();
+                let ind = self.individuals.get_ind(iid).unwrap();
                 trace!("- Cross-over occured in ped: {:<5} - ind: {} ({} {:?})", ped_idx, ind.label(), parent.label(), parent.sex);
-                let ind = self.get_ind_mut(iid).unwrap();
+                let ind = self.individuals.get_ind_mut(iid).unwrap();
                 ind.currently_recombining[i] = ! ind.currently_recombining[i];
             }
         }
 
         // ---- Perform allele assignment for `ind`, by simulating meiosis for each parent.
-        let Some(strands) = self.get_ind(iid).unwrap().strands else {
+        let Some(strands) = self.individuals.get_ind(iid).unwrap().strands else {
             return Err(anyhow!(MissingStrands)).with_loc(||InvalidAlleleAssignment)
         };
 
-        let ind = self.get_ind(iid).unwrap();
+        let ind = self.individuals.get_ind(iid).unwrap();
         let ind_alleles = if xchr_mode {
             let mut alleles = [0u8; 2];
             // ---- Find the index of both parents
-            let father_idx = parents.iter().position(|p| self.get_ind(*p).unwrap().sex == Some(Sex::Male)).expect("No parent found..");
+            let father_idx = parents.iter().position(|p| self.individuals.get_ind(*p).unwrap().sex == Some(Sex::Male)).expect("No parent found..");
             let mother_idx = (father_idx + 1 ) % 2;
 
             // -- assign maternal strand
             let mat_strand_currently_recombining = ind.currently_recombining[mother_idx];
-            alleles[mother_idx] = self.get_ind(parents[mother_idx]).unwrap().meiosis(strands[mother_idx], mat_strand_currently_recombining);
+            alleles[mother_idx] = self.individuals.get_ind(parents[mother_idx]).unwrap().meiosis(strands[mother_idx], mat_strand_currently_recombining);
 
             // -- Assign paternal strand
             let pat_strand_currently_recombining = ind.currently_recombining[father_idx];
             alleles[father_idx] = match ind.sex {
                 Some(Sex::Male)           => Ok(alleles[mother_idx]), // If the descendant is a male, alleles are exclusively from the mother
-                Some(Sex::Female)         => Ok(self.get_ind(parents[father_idx]).unwrap().meiosis(strands[father_idx], pat_strand_currently_recombining)),
+                Some(Sex::Female)         => Ok(self.individuals.get_ind(parents[father_idx]).unwrap().meiosis(strands[father_idx], pat_strand_currently_recombining)),
                 Some(Sex::Unknown) | None => Err(IndividualError::UnknownOrMissingSex).loc("While attempting to assign alleles during X-chromosome-mode"),
             }?;
 
@@ -390,12 +432,12 @@ impl Pedigree {
 
             Some(alleles)
         } else {
-            let haplo_0 = self.nodes.get(parents[0]).unwrap().meiosis(strands[0], ind.currently_recombining[0]);
-            let haplo_1 = self.nodes.get(parents[1]).unwrap().meiosis(strands[1], ind.currently_recombining[1]);
+            let haplo_0 = self.individuals.get_ind(parents[0]).unwrap().meiosis(strands[0], ind.currently_recombining[0]);
+            let haplo_1 = self.individuals.get_ind(parents[1]).unwrap().meiosis(strands[1], ind.currently_recombining[1]);
             Some([haplo_0, haplo_1])
         };
 
-        self.get_ind_mut(iid).unwrap().alleles = ind_alleles;
+        self.individuals.get_ind_mut(iid).unwrap().alleles = ind_alleles;
         Ok(true)
     }
 
@@ -403,7 +445,7 @@ impl Pedigree {
     pub fn assign_random_sex(&mut self, id: IndividualId) -> Result<bool> {
         use IndividualError::InvalidSexAssignment;
         // ---- Ensure this method call is non-redundant
-        if self.get_ind(id).unwrap().sex.is_some() {
+        if self.individuals.get_ind(id).unwrap().sex.is_some() {
             return Ok(false)
         }
 
@@ -412,8 +454,8 @@ impl Pedigree {
             for (i, parent_id) in parents_ids.iter().enumerate() {
                 // ---- Assign parent sex if not previously decided
                 let spouse_id  = parents_ids[(i+1) % 2];
-                let parent_sex =  self.get_ind(*parent_id).unwrap().sex;
-                let spouse_sex =  self.get_ind(spouse_id).unwrap().sex;
+                let parent_sex =  self.individuals.get_ind(*parent_id).unwrap().sex;
+                let spouse_sex =  self.individuals.get_ind(spouse_id).unwrap().sex;
                 if parent_sex.is_none() { // If the parent's sex is still unknown
                     let parent_sex = match spouse_sex { 
                         Some(sex) => match sex {  // If the spouse sex is already known, assign the opposite sex.
@@ -423,7 +465,7 @@ impl Pedigree {
                         }
                         None => Some(Sex::random()), // If not, assign a random sex to the parent.
                     };
-                    let parent = self.get_ind_mut(*parent_id).unwrap();
+                    let parent = self.individuals.get_ind_mut(*parent_id).unwrap();
                     parent.sex = parent_sex;
                 }
                 // ---- Apply the same process for the parent
@@ -432,18 +474,22 @@ impl Pedigree {
         }
 
         // ---- Randomly assign sex of the considered individual
-        let ind = self.get_ind_mut(id).unwrap();
+        let ind = self.individuals.get_ind_mut(id).unwrap();
         ind.sex = Some(Sex::random());
 
         Ok(true)
     }
 
+    pub fn all_sex_assigned(&self) -> bool {
+        self.individuals.inner.values().all(|ind| ind.is_sex_assigned())
+    }
+    
     pub fn _display_comparison(&self, f: &mut Formatter<'_>, id: ComparisonId) -> fmt::Result {
             let default_tag = SampleTag::new("None", None, None);
             //let comp_id = self.comparisons.labels.get(label).unwrap();
             let comp = self.comparisons.inner.get(id).unwrap();
-            let ind1 = self.nodes.get(comp.pair[0]).unwrap();
-            let ind2 = self.nodes.get(comp.pair[1]).unwrap();
+            let ind1 = self.individuals.get_ind(comp.pair[0]).unwrap();
+            let ind2 = self.individuals.get_ind(comp.pair[1]).unwrap();
 
             // <Comparison-Label> <Ind1-label> <Ind2-label> <Ind1-reference> <Ind2-reference> <Sum.PWD> <Overlap> <Avg.PWD> <Ind1-sex> <Ind2-sex>
             writeln!(f,
@@ -492,10 +538,10 @@ mod test {
         pedigree.add_individual("mother", None, None);
         pedigree.add_individual("offspr", Some(["father", "mother"]), None);
     
-        let father = pedigree.get_ind_from_label_mut("father").expect("Cannot extract father");
+        let father = pedigree.individuals.get_ind_from_label_mut("father").expect("Cannot extract father");
         father.set_alleles([0, 1]);
     
-        let mother = pedigree.get_ind_from_label_mut("mother").expect("Cannot extract mother");
+        let mother = pedigree.individuals.get_ind_from_label_mut("mother").expect("Cannot extract mother");
         mother.set_alleles([1, 0]);
     
     
@@ -511,7 +557,7 @@ mod test {
                 println!("{label}, {parents:?}");
                 pedigree.add_individual(label, parents, None);
             }
-            for ind in pedigree.nodes.values_mut() {
+            for ind in pedigree.individuals.inner.values_mut() {
                 if ind.is_founder() {
                     ind.set_alleles([u8::from(fastrand::bool()), u8::from(fastrand::bool())]);
                 }
@@ -533,7 +579,7 @@ mod test {
     #[should_panic = "Failed to assign alleles"]
     fn meiosis_assign_alleles_empty_strands(){
         let mut pedigree = test_pedigree_set();
-        let offspr = pedigree.get_ind_id("offspr").expect("Cannot extract offspr");
+        let offspr = pedigree.individuals.get_ind_id("offspr").expect("Cannot extract offspr");
         pedigree.assign_alleles(offspr, 0.0, 0, false, &mut fastrand::Rng::new()).expect("Failed to assign alleles");
     }
 
@@ -541,10 +587,10 @@ mod test {
     fn meiosis_assign_alleles_filled_strands(){
         let mut rng      = fastrand::Rng::new();
         let mut pedigree = test_pedigree_set();
-        let offspr       = pedigree.get_ind_from_label_mut("offspr").expect("Cannot extract offspr");
+        let offspr       = pedigree.individuals.get_ind_from_label_mut("offspr").expect("Cannot extract offspr");
         offspr.strands   = Some([0, 0]);
         
-        let offspr_id   = pedigree.get_ind_id("offspr").expect("Cannot extract offspr");
+        let offspr_id   = pedigree.individuals.get_ind_id("offspr").expect("Cannot extract offspr");
         let output = pedigree.assign_alleles(offspr_id, 0.0, 0, false, &mut rng).expect("Failed to assign alleles");
         assert!(output);
         let output = pedigree.assign_alleles(offspr_id, 0.0, 0, false, &mut rng).expect("Failed to assign alleles");
@@ -554,36 +600,36 @@ mod test {
     #[test]
     fn meiosis_check_strands_00() {
         let mut pedigree = test_pedigree_set();
-        let offspr_id    = pedigree.get_ind_id("offspr").expect("Cannot extract offspr");
-        let offspr   = pedigree.get_ind_mut(offspr_id).expect("Cannot extract offspr");
+        let offspr_id    = pedigree.individuals.get_ind_id("offspr").expect("Cannot extract offspr");
+        let offspr   = pedigree.individuals.get_ind_mut(offspr_id).expect("Cannot extract offspr");
         offspr.strands   = Some([0, 0]);
         pedigree.assign_alleles(offspr_id, 0.0, 0, false, &mut fastrand::Rng::new()).expect("Failed to assign alleles");
-        assert_eq!(pedigree.get_ind(offspr_id).unwrap().alleles, Some([0, 1]));
+        assert_eq!(pedigree.individuals.get_ind(offspr_id).unwrap().alleles, Some([0, 1]));
     }
 
     #[test]
     fn meiosis_check_strands_01() {
         let mut pedigree = test_pedigree_set();
-        let offspr_id    = pedigree.get_ind_id("offspr").expect("Cannot extract offspr");
-        let offspr       = pedigree.get_ind_mut(offspr_id).expect("Cannot extract offspr");
+        let offspr_id    = pedigree.individuals.get_ind_id("offspr").expect("Cannot extract offspr");
+        let offspr       = pedigree.individuals.get_ind_mut(offspr_id).expect("Cannot extract offspr");
         offspr.strands   = Some([1, 1]);
 
         pedigree.assign_alleles(offspr_id, 0.0, 0, false, &mut fastrand::Rng::new()).expect("Failed to assign alleles");
-        assert_eq!(pedigree.get_ind(offspr_id).unwrap().alleles, Some([1, 0]));
-        assert_eq!(pedigree.get_ind(offspr_id).unwrap().currently_recombining, [false, false]);
+        assert_eq!(pedigree.individuals.get_ind(offspr_id).unwrap().alleles, Some([1, 0]));
+        assert_eq!(pedigree.individuals.get_ind(offspr_id).unwrap().currently_recombining, [false, false]);
 
     }
 
     #[test]
     fn meiosis_check_recombination() {
         let mut pedigree = test_pedigree_set();
-        let offspr_id    = pedigree.get_ind_id("offspr").expect("Cannot extract offspr");
-        let offspr       = pedigree.get_ind_mut(offspr_id).expect("Cannot extract offspr");
+        let offspr_id    = pedigree.individuals.get_ind_id("offspr").expect("Cannot extract offspr");
+        let offspr       = pedigree.individuals.get_ind_mut(offspr_id).expect("Cannot extract offspr");
         offspr.strands   = Some([0, 1]);
         pedigree.assign_alleles(offspr_id, 1.0, 0, false, &mut fastrand::Rng::new()).expect("Failed to assign alleles");
 
-        assert_eq!(pedigree.get_ind(offspr_id).unwrap().alleles, Some([1, 1]));
-        assert_eq!(pedigree.get_ind(offspr_id).unwrap().currently_recombining, [true, true]);
+        assert_eq!(pedigree.individuals.get_ind(offspr_id).unwrap().alleles, Some([1, 1]));
+        assert_eq!(pedigree.individuals.get_ind(offspr_id).unwrap().currently_recombining, [true, true]);
     }
 
     #[test]
@@ -610,7 +656,7 @@ mod test {
         for _ in 0..1000 {
             let mut pedigree = test_pedigree_random(Some(def.clone())).unwrap();//.expect("Cannot generate test pedigree");
             pedigree.assign_random_sexes()?;
-            for ind in pedigree.nodes.values() {
+            for ind in pedigree.individuals.inner.values() {
                 assert!(ind.sex.is_some());
             }
         }
@@ -648,12 +694,12 @@ mod test {
     fn clear_alleles() {
         let mut pedigree = test_pedigree_set();
         let mut rng = Rng::new();
-        for ind in pedigree.nodes.values_mut() {
+        for ind in pedigree.individuals.inner.values_mut() {
             ind.alleles = Some([u8::from(rng.bool()), u8::from(rng.bool())])
         }
-        assert!(pedigree.nodes.values().all(|ind| ind.alleles.is_some()));
+        assert!(pedigree.individuals.inner.values().all(|ind| ind.alleles.is_some()));
         pedigree.clear_alleles();
-        assert!(pedigree.nodes.values().all(|ind| ind.alleles.is_none()));
+        assert!(pedigree.individuals.inner.values().all(|ind| ind.alleles.is_none()));
 
     }
 }

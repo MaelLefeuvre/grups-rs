@@ -360,7 +360,7 @@ impl PedigreeBuilder {
             //println!("While adding relationships ({copy_iid})");
             
             let [iid, fid, mid] =[iid, fid, mid].map(|label| {
-                pedigree.get_ind_id(label).unwrap()
+                pedigree.individuals.get_ind_id(label).unwrap()
             });
             //let x = pedigree.get_ind_id(iid);
             
@@ -417,7 +417,7 @@ impl PedigreeBuilder {
                 PedigreeSection::Relationship => {
                 let (offspring, parent1, parent2) = Self::parse_legacy_pedline(contents, "=repro(")
                     .with_loc(||loc_msg("Failed to parse a valid relationship", i))?;
-                let [offspring, parent1, parent2] = [offspring, parent1, parent2].map(|label| pedigree.get_ind_id(&label).unwrap());
+                let [offspring, parent1, parent2] = [offspring, parent1, parent2].map(|label| pedigree.individuals.get_ind_id(&label).unwrap());
                 pedigree.set_relationship(offspring, [parent1, parent2]);
                     //.with_loc(||loc_msg(&format!("Failed to set a valid relationship for {offspring}"), i))?;
                 },
