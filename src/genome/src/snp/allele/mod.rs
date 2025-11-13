@@ -34,7 +34,8 @@ impl TryFrom<char> for Allele {
             'T'       => Ok(T),
             'N'       => Ok(N),
             '*'       => Ok(D),
-             _  => Err(ParseAlleleError)
+            'R' | 'Y' | 'S' | 'W' | 'K' | 'M' | 'B' | 'D' | 'H' | 'V' => Err(ParseAlleleError::IUPACAmbiguityCodeCharacterFound),
+             _  => Err(ParseAlleleError::InvalidCharacter)
         }
     }
 }
@@ -43,7 +44,7 @@ impl FromStr for Allele {
     type Err = ParseAlleleError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let char = s.parse::<char>().map_err(|_| ParseAlleleError)?;
+        let char = s.parse::<char>().map_err(|_| ParseAlleleError::InvalidCharacter)?;
         Self::try_from(char)
     }
 }
@@ -107,7 +108,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = "Not a valid allele character: ParseAlleleError"]
+    #[should_panic = "Not a valid allele character: InvalidCharacter"]
     fn panic_try_from_char_panic() {
         Allele::try_from('x').expect("Not a valid allele character");
     }
@@ -126,6 +127,15 @@ mod tests {
                 Allele::A | Allele::C | Allele::G | Allele::T => true,
                 Allele::D | Allele::N                         => false
             });
+        }
+    }
+
+    #[test]
+    fn detect_iupac() {
+        const IUPAC_CHARS: [char; 10] = ['R', 'Y', 'S', 'W', 'K', 'M', 'B', 'D', 'H', 'V'];
+        for allele_char in IUPAC_CHARS {
+            let allele = Allele::try_from(allele_char);
+            assert!(allele.is_err_and(|e| e == ParseAlleleError::IUPACAmbiguityCodeCharacterFound))
         }
     }
 }

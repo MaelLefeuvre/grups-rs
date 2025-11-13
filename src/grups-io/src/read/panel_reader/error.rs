@@ -19,6 +19,18 @@ pub enum PanelReaderError {
     MissingSample(String),
 
     #[error("Exhausted the number of available samples to populate the pedigree")]
-    ExhaustedPanel
+    ExhaustedPanel,
+
+    #[error("Line {0} of the provided .panel definition file does not contain the appropriate number of fields. Each line of this file should contain 3 to 4 fields: <ID (required)> <super-population-tag (required)> <population tag (required)> <sex (optional)> (e.g. 'HG00096 GBR EUR male')")]
+    InvalidNumberOfFields(usize),
+
+    #[error("Line {0} - Field 1 of the provided .panel definition file carries an invalid Individual-ID.")]
+    ParseIndividualId(usize),
+
+    #[error("Line {0} - Field 2 of the provided .panel definition file carries an invalid Superpopulation ID.")]
+    ParseSuperPop(usize),
+
+    #[error("Line {0} - Field 3 of the provided .panel definition file carries an invalid Population ID.")]
+    ParsePop(usize),
 
 }

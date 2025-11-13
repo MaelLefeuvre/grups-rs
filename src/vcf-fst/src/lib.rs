@@ -378,7 +378,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
         let mut frequencies : BTreeMap<&str, f32> = BTreeMap::new();
         
         let pop_afs: Option<Vec<(&str, &str)>> = info.iter()
-            .filter(|&field| field.contains("_AF"))
+            .filter(|&field| field.contains("_AF="))
             .map(|field| field.split_once("_AF="))
             .collect();
 

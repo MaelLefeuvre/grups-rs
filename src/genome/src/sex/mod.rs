@@ -12,6 +12,14 @@ impl Sex {
     pub fn random() -> Self {
         [Self::Female, Self::Male][usize::from(fastrand::bool())]
     }
+
+    #[must_use]
+    pub fn is_unknown(&self) -> bool {
+        match self {
+            Self::Unknown => true,
+            _             => false,
+        }
+    }
 }
 
 impl FromStr for Sex {
@@ -19,7 +27,7 @@ impl FromStr for Sex {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s.to_lowercase().as_str() {
-            "male" | "1"   => Self::Male,
+            "male"   | "1" => Self::Male,
             "female" | "2" => Self::Female,
             _              => Self::Unknown,
         })

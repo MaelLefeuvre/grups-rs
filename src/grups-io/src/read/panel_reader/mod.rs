@@ -204,15 +204,41 @@ impl PanelReader {
     }
 
     /// Parse the provided input `.panel` definition file. and populate the `self.samples`
-    pub fn parse(source: BufReader<File>) -> std::io::Result<HashMap<String, Vec<SampleTag>>> {
+    pub fn parse(source: BufReader<File>) -> Result<HashMap<String, Vec<SampleTag>>> {
         let mut output: HashMap<String, Vec<SampleTag>> = HashMap::new();
-        for line in source.lines(){
-            let line       = line?;
+        for (i,line) in source.lines().enumerate(){
+            let line = line?;
+            let line = line.trim();
+            // ----- skip empty lines
+            if line.is_empty() { continue }
+            
+            // ---- split into fields and ensure the number of fields is correct.
             let line       = line.split('\t').collect::<Vec<&str>>();
-            let sample_idx = None;
+            if line.len() < 3 {
+                return Err(PanelReaderError::InvalidNumberOfFields(i)).with_loc(|| "While checking the number of fields is correct.")
+            }
+
+
+            // ---- Parse Sex field if present.
             let sex        = line.get(3).and_then(|s| Sex::from_str(s).ok());
-            output.entry(line[1].into()).or_default().push(SampleTag::new(line[0], sample_idx, sex)); // Key == Super-pop
-            output.entry(line[2].into()).or_default().push(SampleTag::new(line[0], sample_idx, sex)); // Key == Pop
+            if sex.is_some_and(|s| s.is_unknown()) {
+                warn!("Line {i} of the provided .panel definition file has an unknown/unparseable genetic sex (column 4). (Note: valid values are either 'male', 'female', '1' or '2').");
+            }
+            
+            // ---- Parse Individual label
+            let sample_idx = None;
+            let sample_label = line.get(0).ok_or(PanelReaderError::ParseIndividualId(i))?;
+
+            // ---- Parse Super-population tag.
+            output.entry(
+                (*line.get(1).ok_or(PanelReaderError::ParseSuperPop(i))?).into()
+            ).or_default().push(SampleTag::new(sample_label, sample_idx, sex)); // Key == Super-pop
+
+            // ---- Parse Population tag
+            output.entry(
+                (*line.get(2).ok_or(PanelReaderError::ParsePop(i))?).into()
+            ).or_default().push(SampleTag::new(sample_label, sample_idx, sex)); // Key == Pop
+
         }
         Ok(output)
     }

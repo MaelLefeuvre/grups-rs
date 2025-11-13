@@ -269,7 +269,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
 name = "coordinate-derive"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "proc-macro-crate",
  "quote",
@@ -541,7 +541,7 @@ checksum = "e575fab7d1e0dcb8d0c7bcf9a63ee213816ab51902e6d244a95819acacf1d4f7"
 
 [[package]]
 name = "genome"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -600,7 +600,7 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
 name = "grups-io"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -621,7 +621,7 @@ dependencies = [
 
 [[package]]
 name = "grups-rs"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "clap 3.2.25",
@@ -900,7 +900,7 @@ checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
 name = "located-error"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "thiserror",
@@ -924,7 +924,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "logger"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chrono",
  "env_logger",
@@ -1199,7 +1199,7 @@ dependencies = [
 
 [[package]]
 name = "parser"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1216,7 +1216,7 @@ dependencies = [
 
 [[package]]
 name = "pedigree_sims"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "pwd_from_stdin"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1851,7 +1851,7 @@ checksum = "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c"
 
 [[package]]
 name = "vcf-fst"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "fst",
  "genome",
