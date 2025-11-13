@@ -1,3 +1,5 @@
+use std::fmt::{self, Display, Formatter};
+
 use super::IndividualId;
 
 use slotmap::KeyData;
@@ -18,6 +20,13 @@ impl RelationshipId {
     }
 }
 
+impl Display for RelationshipId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_u64())
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub struct Relationship {
     pub id: RelationshipId,
@@ -30,3 +39,4 @@ impl Relationship {
         Self { id, from, to }
     }
 }
+

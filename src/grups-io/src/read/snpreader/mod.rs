@@ -169,7 +169,7 @@ mod tests {
     macro_rules! check_file_format {
         ($cols:expr, $sep:expr, $ext:expr) => {
             let path = format!("./targets /v50.0_1240K_public.{}", $ext);
-            assert_eq!((SNPReaderMode::from_str($ext).unwrap(), $cols, $sep), SNPReader::get_file_format(&path).expect("Failed to obtain file format"));
+            assert_eq!((SNPReaderMode::from_str($ext).expect("Provided .ext is invalid"), $cols, $sep), SNPReader::get_file_format(&path).expect("Failed to obtain file format"));
         }
     }
 

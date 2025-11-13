@@ -14,7 +14,7 @@ fn test_grups_fst() -> Result<()> {
         .set_vcf_dir("vcf/binary-2FIN-1ACB-virtual-autosomes/")
         .set_output_dir("test_grups_fst")
         .build()
-        .unwrap();
+        .expect("GrupsRunner object should be buildable");
 
     fst_runner.run();
     // ---- Ensure grups can correctly estimate results using the newly generated FST index.
@@ -31,7 +31,7 @@ fn test_grups_fst() -> Result<()> {
         .set_mode(parser::Mode::Fst)
         .overwrite()
         .build()
-        .unwrap();
+        .expect("GrupsRunner Object should be buildable");
     pedigree_sims_runner.run();
 
     validate_file!("expect/parents-offspring.pwd", pedigree_sims_runner.output_pwd().unwrap());

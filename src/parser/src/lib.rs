@@ -315,23 +315,19 @@ pub struct PwdFromStdin {
     pub exclude_transitions: bool,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Serialize, Deserialize, Default)]
 pub enum Mode {
-    Vcf,
+    #[default] Vcf,
     Fst,
     FstMmap
 }
 
-impl Default for Mode {
-    fn default() -> Self {Self::Vcf}
+#[derive(Debug, Copy, Clone, ArgEnum, Serialize, Deserialize, Default)]
+pub enum RelAssignMethod {
+    Zscore,
+    #[default] SVM
 }
 
-#[derive(Debug, Copy, Clone, ArgEnum, Serialize, Deserialize)]
-pub enum RelAssignMethod {Zscore, SVM }
-
-impl Default for RelAssignMethod {
-    fn default() -> Self {Self::SVM}
-}
 
 impl Display for RelAssignMethod {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

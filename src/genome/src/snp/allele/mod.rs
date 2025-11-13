@@ -107,9 +107,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = ": ParseAlleleError"]
+    #[should_panic = "Not a valid allele character: ParseAlleleError"]
     fn panic_try_from_char_panic() {
-        Allele::try_from('x').unwrap();
+        Allele::try_from('x').expect("Not a valid allele character");
     }
 
     #[test]

@@ -386,7 +386,7 @@ impl Pedigrees {
         // Keep a record of positions that should get filtered out after maf < treshold.
         let positions_to_delete: RwLock<AHashMap<String, Vec<Coordinate>>> = RwLock::new(AHashMap::new());
 
-        let pool          = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
+        let pool          = rayon::ThreadPoolBuilder::new().num_threads(threads).build().expect("ThreadPool should build");
         let multiprogress = logger::Logger::multi();
         let pb_style      = ProgressStyle::with_template(
             "{spinner:.blue} [{elapsed_precise}] {wide_bar:.white/white} {percent:>3}% [{prefix}] {msg}"
@@ -414,7 +414,7 @@ impl Pedigrees {
                     // Get the number of typed positions for these chromosomes (this .clone() is quite expensive for just a fancy progress estimation...)
                     let n = relevant_positions.clone().count();
                     let progress_bar = multiprogress.insert(
-                        rayon::current_thread_index().unwrap(), ProgressBar::new(n as u64).with_style(pb_style.clone()));
+                        rayon::current_thread_index().expect("Thread index should be returned"), ProgressBar::new(n as u64).with_style(pb_style.clone()));
                     progress_bar.set_prefix(pair_name.to_string());
                     if ! log::log_enabled!(log::Level::Info) { progress_bar.set_draw_target(ProgressDrawTarget::hidden())}
 
@@ -448,13 +448,13 @@ impl Pedigrees {
                                     .push(pairwise_diff.coordinate);
                                 continue 'coordinate;
                             },
-                            Err(e) => tx.send(Some(e)).expect("MPSC Channel Receiver disconnected")
+                            Err(e) => tx.send(Err(e)).expect("MPSC Channel Receiver disconnected")
                         }
 
                         let pileup_error_probs = pairwise_diff.error_probs();
                         // --------------------- Parse genotype fields and start updating dynamic simulations.
                         if let Err(e) = self.update_pedigrees(&fst_reader, coordinate, key, &pileup_error_probs, &mut rng){
-                            tx.send(Some(e)).expect("MPSC Channel Receiver disconnected");
+                            tx.send(Err(e)).expect("MPSC Channel Receiver disconnected");
                         }
 
                     }
@@ -465,7 +465,7 @@ impl Pedigrees {
                         info!("[{}] {missing_snps} missing SNPs within the simulation dataset. Counting those as non-informative overlap.", comparison.get_pair());
                         self.inner
                             .get(comparison.get_pair())
-                            .unwrap()
+                            .expect("Vector of Pedigree replicates should be accessible")
                             .write()
                             .add_non_informative_snps(missing_snps);
                     }
@@ -479,7 +479,7 @@ impl Pedigrees {
         self.rng = ori_rng.write().clone(); // TEMP WORKAROUND (just to check that changes in test files is only due to seeding)
         drop(tx);
         while let Some(e) = rx.try_iter().next() {
-            println!("{e:?}");
+            e.with_loc(|| "Worther thread failure during pedigree simulations.")?;
         }
 
         // --------------------- Filter out unwanted alleles.
@@ -618,14 +618,14 @@ impl Pedigrees {
         Ok(())
     }
 
-    fn get_pedigree_vec(&self, comparison_label: &str) -> Result<RwLockReadGuard<PedigreeReps>, PedigreeError> {
+    fn get_pedigree_vec(&self, comparison_label: &str) -> Result<RwLockReadGuard<'_, PedigreeReps>, PedigreeError> {
        use PedigreeError::MissingPedVec;
         Ok(self.inner
             .get(comparison_label)
             .ok_or_else(|| MissingPedVec(comparison_label.to_string()))?.read())
     }
 
-    fn get_pedigree_vec_mut(&self, comparison_label: &str) -> Result<RwLockWriteGuard<PedigreeReps>, PedigreeError> {
+    fn get_pedigree_vec_mut(&self, comparison_label: &str) -> Result<RwLockWriteGuard<'_, PedigreeReps>, PedigreeError> {
        use PedigreeError::MissingPedVec;
         Ok(self.inner
             .get(comparison_label)
@@ -770,8 +770,7 @@ impl Pedigrees {
             .enumerate()
             .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .map(|(index, _)| index)
-            .ok_or(anyhow!("Failed to obtain index of maximum SVM probability"))
-            .unwrap();
+            .ok_or(anyhow!("Failed to obtain index of maximum SVM probability"))?;
 
         let most_likely_rel = ordered_rels.get(max_prob_index).map(|s| (*s).clone());
         Ok((most_likely_rel, per_class_svm_prob))
@@ -824,11 +823,14 @@ impl Pedigrees {
         if ! log::log_enabled!(log::Level::Info) { progress_bar.set_draw_target(ProgressDrawTarget::hidden())}
 
         // ---- Set Threadpool
-        let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().expect("ThreadPool should build correctly");
         // ---- loop across our pileup comparisons and assign a most-likely relationship, using our simulations.
+        let (tx, rx) = mpsc::channel(); // Error propagation
         pool.in_place_scope_fifo(|scope| {
             for comparison in comparisons.iter() {
+                let tx = tx.clone();
                 scope.spawn_fifo(|_| {
+                    let tx = tx; 
                     let observed_avg_pwd = comparison.get_avg_pwd();
                     let comparison_label = comparison.get_pair();
                     // ---- Set progress bar prefix
@@ -836,9 +838,21 @@ impl Pedigrees {
             
                     // ---- Gain access to pedigree vector.
                     //      @TODO: This error handling is performed multiple times. Stay DRY & wrap this in a public method.
-                    let pedigree_vec = self.get_pedigree_vec(comparison_label).loc(loc_msg).unwrap();
+                    let pedigree_vec = match self.get_pedigree_vec(comparison_label).loc(loc_msg) {
+                        Ok(pedigree_vec) => pedigree_vec,
+                        Err(e) => {
+                            tx.send(Err(e)).expect("MPSC Channel Receiver disconnected");
+                            return
+                        }
+                    };
                     // ---- Aggregate the sum of avg. PWD for each relatedness scenario.
-                    let stats = pedigree_vec.compute_sum_simulated_stats().unwrap();
+                    let stats = match pedigree_vec.compute_sum_simulated_stats().loc(loc_msg){
+                        Ok(stats) => stats,
+                        Err(e) => {
+                            tx.send(Err(e)).expect("MPSC Channel Receiver disconnected");
+                            return
+                        }
+                    };
                     let ordered_rels: Vec<&String> = stats.iter().rev().map(|(rel, _)| rel).collect();
 
                     // ---- Select the scenario having the least amount of Z-score with our observed avg.PWD
@@ -847,8 +861,13 @@ impl Pedigrees {
 
                     // ---- Get svm probabilities if this was assigned.
                     if matches!(assign_method, RelAssignMethod::SVM) {
-                        let (most_likely_rel_svm, svm_probs) =
-                            Self::get_most_likely_relationship_svm(comparison, &pedigree_vec, &ordered_rels).unwrap();
+                        let (most_likely_rel_svm, svm_probs) = match Self::get_most_likely_relationship_svm(comparison, &pedigree_vec, &ordered_rels) {
+                            Ok(stats) => stats,
+                            Err(e) => {
+                                tx.send(Err(e)).expect("MPSC Channel Receiver disconnected");
+                                return
+                            }
+                        };
                         most_likely_rel = most_likely_rel_svm;
 
                         // ---- Insert label wise svm probabilities for that comparison.
@@ -910,8 +929,8 @@ impl Pedigrees {
                     let mut svm_row = format!("{comparison_label:<20} - {observed_avg_pwd:<12.6}");
                     simulations_results.write().insert(comparison_label.to_owned(), simulation_result);
                     for (_, map) in svm_indexer.read().iter() {
-                        let prob = map.get(&comparison_label).unwrap();
-                        write!(svm_row, " - {prob:>12.6}").unwrap();
+                        let prob = map.get(&comparison_label).expect("Comparison should be retrievable");
+                        write!(svm_row, " - {prob:>12.6}").expect("svm_row should be writable.");
                     }
                     svm_results.write().insert(comparison_label.to_owned(), svm_row);
 
@@ -920,6 +939,10 @@ impl Pedigrees {
                 });
             }
         });
+        drop(tx);
+        while let Some(e) = rx.try_iter().next() { // Broadcast potential errors from the thread
+            e.with_loc(|| "Worther thread failure while computing results.")?;
+        }
         multiprogress.clear()?;
 
         // ---- Print simulation results to shell if debug mode.
@@ -942,9 +965,9 @@ impl Pedigrees {
             svm_indexer
                 .read()
                 .keys()
-                .for_each(|rel| write!(svm_results_header, " - {rel: <10}").unwrap());
+                .for_each(|rel| write!(svm_results_header, " - {rel: <10}").expect("Row should be writable"));
 
-            let svm_output_file = output_file.strip_suffix("result").unwrap().to_owned() + "probs";
+            let svm_output_file = output_file.strip_suffix("result").expect("File should contain '.result' extension").to_owned() + "probs";
             let mut svm_writer = GenericWriter::new(Some(svm_output_file)).loc(loc_msg)?;
             svm_writer
                 .write_iter([svm_results_header].into_iter().chain(svm_results.read().values().cloned()))

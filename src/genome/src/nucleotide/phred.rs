@@ -36,7 +36,7 @@ impl Phred {
 
     #[must_use]
     pub fn as_prob(&self) -> f64 {
-        f64::powf(10.0, -1.0 * f64::from(self.0) / 10.0) // P = 10^(-Q/10)
+        f64::powf(10.0, -f64::from(self.0) / 10.0) // P = 10^(-Q/10)
     }
 
     #[must_use]

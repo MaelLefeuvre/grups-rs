@@ -1,20 +1,14 @@
 use std::{
     cmp::{Ord, Ordering, PartialOrd},
-    fmt::{self, Display, Formatter},
+    fmt::{self, Display, Formatter}, hash::{Hash, Hasher},
 };
 
-use std::io::Write;
-
-
-#[cfg(test)] 
-use std::hash::{Hash, Hasher};
 
 use grups_io::read::SampleTag;
 use genome::Sex;
 use fastrand;
 
 use located_error::prelude::*;
-use log::trace;
 
 mod error;
 pub use error::IndividualError;
@@ -60,9 +54,43 @@ pub struct Individual {
     pub sex: Option<Sex>
 }
 
+impl PartialEq for Individual {
+    fn eq(&self, other: &Individual) -> bool {
+        self.label == other.label
+    }
+}
+
+impl Eq for Individual {}
+
+impl Hash for Individual {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.label.hash(state);
+    }
+}
+
+impl Ord for Individual {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (self.label).cmp(&(other.label))
+    }
+}
+
+impl PartialOrd for Individual {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl Display for Individual {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} ({})", self.label, self.id)
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let relationship_ids = match &self.parents {
+            None => "None".to_string(),
+            Some(parents) => format!("[{: <PARENTS_DISPLAY_LEN$}, {: <PARENTS_DISPLAY_LEN$}]", parents[0], parents[1])
+        };
+        let tag = match &self.tag {
+            Some(tag) => tag.id().clone(),
+            None => "None".to_owned()
+        };
+        write!(f, "tag: {: <TAG_DISPLAY_LEN$} label: {: <LABEL_DISPLAY_LEN$} - relationships-ids: {}", tag, self.label, relationship_ids)
     }
 }
 
@@ -178,12 +206,11 @@ impl Individual {
 
 }
 
-
-
 #[cfg(test)]
 mod tests {
-    use fastrand::Rng;
+    use std::collections::HashSet;
 
+    use fastrand::Rng;
     use super::*;
     use crate::pedigrees::pedigree::tests::common;
     use crate::pedigrees::Pedigree;
@@ -191,18 +218,18 @@ mod tests {
     fn perform_allele_assignment(pedigree: &mut Pedigree, iid: IndividualId, parents_alleles: [[u8;2];2], recombination_prob: f64) -> Result<bool> {
         let mut rng = fastrand::Rng::new();
         
-        let ind = pedigree.individuals.get_ind(iid).unwrap();
+        let ind = pedigree.individuals.get_ind(iid).expect("Individual should be retrievable");
         let parent_rels = ind.get_parents().expect("Missing parents");
         for i in [0, 1] {
-            let parent_id = pedigree.edges.get(parent_rels[i]).unwrap().to;
-            pedigree.individuals.get_ind_mut(parent_id).unwrap().alleles =  Some(parents_alleles[i]);
+            let parent_id = pedigree.edges.get(parent_rels[i]).expect("Parent should be retrievable").to;
+            pedigree.individuals.get_ind_mut(parent_id).expect("Individual should be retrievable").alleles =  Some(parents_alleles[i]);
         }
         pedigree.assign_alleles(iid, recombination_prob, 0, false, &mut rng)
     }
 
     fn run_all_allele_assignment_cases(recombination_prob: f64) -> Result<()> {
         let mut offspring_pedigree = common::mock_offspring_pedigree("offspring", None);
-        let offspring_id = offspring_pedigree.individuals.get_ind_id("offspring").unwrap();
+        let offspring_id = offspring_pedigree.individuals.get_ind_id("offspring").expect("Individual should be retrievable");
 
         let valid_alleles = [[0,0], [0,1], [1,0], [1,1]];
         let mut valid_strands = [[0,0], [0,1], [1,0], [1,1]];
@@ -211,11 +238,11 @@ mod tests {
             for parent_1_alleles in &valid_alleles {
                 for strands in &mut valid_strands {
 
-                    offspring_pedigree.individuals.get_ind_mut(offspring_id).unwrap().strands = Some(*strands);
+                    offspring_pedigree.individuals.get_ind_mut(offspring_id).expect("Individual should be retrievable").strands = Some(*strands);
                     perform_allele_assignment(&mut offspring_pedigree, offspring_id, [*parent_0_alleles, *parent_1_alleles], recombination_prob)?;
 
                     // If the individual's parent is 'recombining', we expect strand assignment to be inverted. 0 becomes 1 ; 1 becomes 0
-                    let offspring = offspring_pedigree.individuals.get_ind(offspring_id).unwrap();
+                    let offspring = offspring_pedigree.individuals.get_ind(offspring_id).expect("Individual should be retrievable");
                     for (i, strand) in strands.iter_mut().enumerate() {
                         if offspring.currently_recombining[i] {
                             *strand = (*strand + 1) % 2;
@@ -226,7 +253,7 @@ mod tests {
                     let want = [parent_0_alleles[strands[0]], parent_1_alleles[strands[1]]];
                     println!("{got:?} | {want:?}");
                     assert_eq!(got, want);
-                    offspring_pedigree.individuals.get_ind_mut(offspring_id).unwrap().alleles = None;
+                    offspring_pedigree.individuals.get_ind_mut(offspring_id).expect("Individual should be retrievable").alleles = None;
                 }
             }
         }
@@ -236,7 +263,7 @@ mod tests {
      #[test]
     fn alleles_getter_filled() -> Result<()> {
         let mut pedigree = common::mock_founder_pedigree("offspring");
-        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").expect("Individual should be retrievable");
         let alt_ref = [0,1];
         for i in alt_ref {
             for j in alt_ref {
@@ -251,7 +278,7 @@ mod tests {
     #[test]
     fn alleles_getter_empty(){
         let mut pedigree = common::mock_founder_pedigree("offspring");
-        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").expect("Individual should be retrievable");
         let alleles = ind.get_alleles();
         assert!(alleles.is_err());
     }
@@ -259,7 +286,7 @@ mod tests {
     #[test]
     fn meiosis_not_recombining() {
         let mut pedigree = common::mock_founder_pedigree("offspring");
-        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").expect("Individual should be retrievable");
         let offspring_currently_recombining = false; 
         let alt_ref = [0,1];
         for i in alt_ref {
@@ -281,7 +308,7 @@ mod tests {
     fn meiosis_recombining() {
         let offspring_currently_recombining = true; 
         let mut pedigree = common::mock_founder_pedigree("offspring");
-        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").expect("Individual should be retrievable");
         let alt_ref = [0,1];
         for i in alt_ref {
             for j in alt_ref {
@@ -303,7 +330,7 @@ mod tests {
     #[should_panic = "Trying to perform meiosis within an empty genome!"]
     fn meiosis_empty_alleles() {
         let mut pedigree = common::mock_founder_pedigree("offspring");
-        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").expect("Individual should be retrievable");
         ind.meiosis(0, false);
     }
 
@@ -312,7 +339,7 @@ mod tests {
     fn strand_setter_offspring() -> Result<()> {
         let valid_strands = [[0,0], [0,1], [1,0], [1,1]];
         let mut pedigree = common::mock_offspring_pedigree("offspring", None);
-        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").expect("Individual should be retrievable");
 
         for _ in 0..1000 {
             ind.assign_strands()?;
@@ -325,7 +352,7 @@ mod tests {
     #[test]
     fn strand_setter_founder() {
         let mut pedigree = common::mock_founder_pedigree("parent");
-        let ind = pedigree.individuals.get_ind_from_label_mut("parent").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("parent").expect("Individual should be retrievable");
         let result = ind.assign_strands();
         assert!(result.is_err());
     }
@@ -333,9 +360,9 @@ mod tests {
     #[test]
     fn sex_setter_founder() -> Result<()>{
         let mut pedigree = common::mock_founder_pedigree("parent");
-        let iid = pedigree.individuals.get_ind_from_label("parent").unwrap().id;
+        let iid = pedigree.individuals.get_ind_from_label("parent").expect("Individual should be retrievable").id;
         pedigree.assign_random_sex(iid)?;
-        assert!(pedigree.individuals.get_ind(iid).unwrap().sex.is_some());
+        assert!(pedigree.individuals.get_ind(iid).expect("Individual should be retrievable").sex.is_some());
         Ok(())
     }
 
@@ -343,7 +370,7 @@ mod tests {
     fn sex_setter_offspring() -> Result<()> {
         for _ in 0..1000 {
             let mut pedigree = common::mock_offspring_pedigree("child", Some(["parent-1", "parent-2"]));
-            let child_id = pedigree.individuals.get_ind_from_label_mut("child").unwrap().id;
+            let child_id = pedigree.individuals.get_ind_from_label_mut("child").expect("Individual should be retrievable").id;
             pedigree.assign_random_sex(child_id)?;
             let parents = pedigree.get_parents(child_id).expect("Test offspring has missing parents");
     
@@ -356,7 +383,7 @@ mod tests {
     #[test]
     fn get_set_sampletag() {
         let mut pedigree = common::mock_founder_pedigree("parent");
-        let ind = pedigree.individuals.get_ind_from_label_mut("parent").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("parent").expect("Individual should be retrievable");
         let tag = SampleTag::new("HG00096", Some(0), None);
         ind.set_tag(tag.clone());
         assert_eq!(ind.get_tag(), Some(&tag));
@@ -366,7 +393,7 @@ mod tests {
     #[test]
     fn get_empty_tag(){
         let mut pedigree = common::mock_founder_pedigree("parent");
-        let ind = pedigree.individuals.get_ind_from_label_mut("parent").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("parent").expect("Individual should be retrievable");
         let result = ind.get_tag();
         assert!(result.is_none());
     }
@@ -374,21 +401,21 @@ mod tests {
     #[test]
     fn founder_is_founder() {
         let mut pedigree = common::mock_founder_pedigree("parent");
-        let ind = pedigree.individuals.get_ind_from_label_mut("parent").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("parent").expect("Individual should be retrievable");
         assert!(ind.is_founder());
     }
 
     #[test]
     fn offspring_is_not_founder() {
         let mut pedigree = common::mock_offspring_pedigree("offspring", None);
-        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("offspring").expect("Individual should be retrievable");
         assert!(!ind.is_founder());
     }
 
     #[test]
     fn clear_alleles() {
         let mut pedigree = common::mock_founder_pedigree("parent");
-        let ind = pedigree.individuals.get_ind_from_label_mut("parent").unwrap();
+        let ind = pedigree.individuals.get_ind_from_label_mut("parent").expect("Individual should be retrievable");
         ind.set_alleles([0,1]);
         assert!(ind.alleles.is_some());
         ind.clear_alleles();
@@ -401,7 +428,7 @@ mod tests {
 
     fn alleles_assignment_founder() {
         let mut pedigree = common::mock_founder_pedigree("parent");
-        let iid = pedigree.individuals.get_ind_from_label_mut("parent").unwrap().id;
+        let iid = pedigree.individuals.get_ind_from_label_mut("parent").expect("Individual should be retrievable").id;
         let result = pedigree.assign_alleles(iid, 0.0, 0, false, &mut Rng::new());
         assert!(result.is_err());
     }
@@ -409,7 +436,7 @@ mod tests {
     #[test]
     fn alleles_assignments_unnassigned_parent_alleles(){
         let mut pedigree = common::mock_offspring_pedigree("offspring", None);
-        let iid = pedigree.individuals.get_ind_from_label_mut("offspring").unwrap().id;
+        let iid = pedigree.individuals.get_ind_from_label_mut("offspring").expect("Individual should be retrievable").id;
         let result = pedigree.assign_alleles(iid, 0.0, 0, false, &mut Rng::new());
         assert!(result.is_err());
     }
@@ -426,7 +453,7 @@ mod tests {
     #[test]
     fn allele_assignment_updates_recombination_status() -> Result<()> {
         let mut pedigree = common::mock_offspring_pedigree("offspring", None);
-        let offspring = pedigree.individuals.get_ind_from_label_mut("offspring").unwrap();
+        let offspring = pedigree.individuals.get_ind_from_label_mut("offspring").expect("Individual should be retrievable");
 
         offspring.strands = Some([0,0]);
         let parents_alleles = [[0,1], [0,1]];
@@ -434,70 +461,71 @@ mod tests {
         assert_eq!(offspring.currently_recombining, [false, false]);
         let offspring_id = offspring.id;
         perform_allele_assignment(&mut pedigree, offspring_id, parents_alleles, recombination_prob)?;
-        let offspring_recombining = pedigree.individuals.get_ind(offspring_id).unwrap().currently_recombining;
+        let offspring_recombining = pedigree.individuals.get_ind(offspring_id).expect("Individual should be retrievable").currently_recombining;
         assert_eq!(offspring_recombining, [true, true]);
         Ok(())
     }
 
-    //#[test]
-    //fn ind_equality() {
-    //    let  ind1 = common::mock_founder_pedigree("parent").get_ind_from_label("parent").unwrap().clone();
-    //    let  ind2 = common::mock_founder_pedigree("parent").get_ind_from_label("parent").unwrap().clone();
-    //    assert_eq!(ind1, ind2);
-    //}
+    #[test]
+    fn ind_equality() {
+        let  ind1 = common::mock_founder_pedigree("parent").individuals.get_ind_from_label("parent").expect("Individual should be retrievable").clone();
+        let  ind2 = common::mock_founder_pedigree("parent").individuals.get_ind_from_label("parent").expect("Individual should be retrievable").clone();
+        assert_eq!(ind1, ind2);
+    }
 
-    //#[test]
-    //fn ind_inequality() {
-    //    let  ind1 = common::mock_founder("ind1");
-    //    let  ind2 = common::mock_founder("ind2");
-    //    assert_ne!(ind1, ind2);
-    //}
+    #[test]
+    fn ind_inequality() {
+        let  ind1 = common::mock_founder_pedigree("ind1").individuals.get_ind_from_label("ind1").expect("Individual should be retrievable").clone();
+        let  ind2 = common::mock_founder_pedigree("ind2").individuals.get_ind_from_label("ind2").expect("Individual should be retrievable").clone();
+        assert_ne!(ind1, ind2);
+    }
 
-    //#[test]
-    //fn hashable() {
-    //    // We're ok here, given that The Hash implementation of Individual only uses the `label` field
-    //    // which is not mutable.
-    //    #[allow(clippy::mutable_key_type)]
-    //    let mut ind_set = HashSet::new();
-    //    let n_iters: u32 = 10_000;
-    //    for i in 0..n_iters {
-    //        let  new_ind = common::mock_founder(&i.to_string());
-    //        assert!(ind_set.insert(new_ind.clone()));
-    //        assert!(ind_set.contains(&new_ind));
-    //    }
-    //}
+    #[test]
+    fn hashable() {
+        // We're ok here, given that The Hash implementation of Individual only uses the `label` field
+        // which is not mutable.
+        #[allow(clippy::mutable_key_type)]
+        let mut ind_set = HashSet::new();
+        let n_iters: u32 = 10_000;
+        for i in 0..n_iters {
+            let  new_ind = common::mock_founder_pedigree(&i.to_string()).individuals.get_ind_from_label(&i.to_string()).expect("Individual should be retrievable").clone();
+            assert!(ind_set.insert(new_ind.clone()));
+            assert!(ind_set.contains(&new_ind));
+        }
+    }
 
-    //#[test]
-    //fn ordering() {
-    //    let  ind_a = common::mock_founder("A");
-    //    let  ind_b = common::mock_founder("B");
-    //    assert!(ind_a <  ind_b);
-    //    assert!(ind_b <= ind_b);
-//
-    //    assert!(ind_b >= ind_a);
-    //    assert!(ind_b >  ind_a);
-//
-    //    // Different Index should not impact ordering. What matters is the ID.
-    //    let mut ind_a_prime = ind_a.clone();
-    //    ind_a_prime.set_tag(SampleTag::new("A", Some(996), None));
-    //    assert!(ind_a <= ind_a_prime);
-//
-//
-    //}
-//
-    //#[test]
-    //fn display() {
-    //    let (offspring_label, father_label, mother_label) = ("ind1", "ind2", "ind3");
-    //    let mut pedigree = common::mock_offspring_pedigree("offspring", Some([father_label, mother_label]));
-    //    let offspring = pedigree.get_ind_from_label_mut("offspring").unwrap();
-//
-    //    let display = format!("{offspring}");
-    //    assert!(display.contains(offspring_label));
-    //    assert!(display.contains(father_label));
-    //    assert!(display.contains(mother_label));
-//
-    //    offspring.set_tag(SampleTag::new("HG00096", None, None));
-    //    let display = format!("{offspring}");
-    //    assert!(display.contains("HG00096"));
-    //}
+    #[test]
+    fn ordering() {
+        let  ind_a = common::mock_founder_pedigree("A").individuals.get_ind_from_label("A").expect("Individual should be retrievable").clone();
+        let  ind_b = common::mock_founder_pedigree("B").individuals.get_ind_from_label("B").expect("Individual should be retrievable").clone();
+        assert!(ind_a <  ind_b);
+        assert!(ind_b <= ind_b);
+
+        assert!(ind_b >= ind_a);
+        assert!(ind_b >  ind_a);
+
+        // Different Index should not impact ordering. What matters is the ID.
+        let mut ind_a_prime = ind_a.clone();
+        ind_a_prime.set_tag(SampleTag::new("A", Some(996), None));
+        assert!(ind_a <= ind_a_prime);
+
+
+    }
+
+    #[test]
+    fn display() {
+        let (offspring_label, father_label, mother_label) = ("ind1", "ind2", "ind3");
+        let mut pedigree = common::mock_offspring_pedigree("ind1", Some([father_label, mother_label]));
+        let offspring = pedigree.individuals.get_ind_from_label_mut("ind1").expect("Individual should be retrievable");
+
+        let display = format!("{offspring}");
+        println!("{display}");
+        assert!(display.contains(offspring_label));
+        assert!(display.contains(&offspring.get_parents().expect("RelationshipIds should be retrievable")[0].to_string()));
+        assert!(display.contains(&offspring.get_parents().expect("RelationshipIds should be retrievable")[1].to_string()));
+
+        offspring.set_tag(SampleTag::new("HG00096", None, None));
+        let display = format!("{offspring}");
+        assert!(display.contains("HG00096"));
+    }
 }

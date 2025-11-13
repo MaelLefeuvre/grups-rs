@@ -43,7 +43,9 @@ pub fn pileup_new_split(line: &str, ignore_dels: bool) -> Result<Line> {
 pub fn pileup_new_window(line: &str, ignore_dels: bool) -> Result<Line> {
     let mut window = iter_window(line);
 
-    let header  = window.next().map(|(start, end)| line[start..end].split('\t').collect::<Vec<&str>>()).unwrap();
+    let header  = window.next().map(|(start, end)| line[start..end].split('\t')
+        .collect::<Vec<&str>>())
+        .expect("Window should be buildable from 'start' and 'end'");
     let chromosome: ChrIdx       = header[0].parse()?;
     let position  : Position     = header[1].parse()?;
     let reference : Allele       = header[2].parse()?;
@@ -78,14 +80,14 @@ fn bench_pileup_split(c: &mut Criterion) {
         pileup_new_split(
             black_box(&line), 
             black_box(true)
-        ).unwrap()
+        ).expect("'Split_ignore_dels' bench should start at this point")
     }));
 
     group.bench_function("Window_ignore_dels", |b| b.iter(|| {
         pileup_new_window(
             black_box(&line), 
             black_box(true)
-        ).unwrap()
+        ).expect("Window_ignore_dels bench should start at this point")
     }));
 
     group.finish();

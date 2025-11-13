@@ -107,7 +107,7 @@ impl Pwd {
     #[must_use]
     pub fn error_probs(&self) -> [f64; 2] {
         // @ TODO: this is very wrong, since we're re-implementing a phred method.
-        [0, 1].map(|i|  f64::powf(10.0, -1.0 * (self.phred_sums[i]) / 10.0) )
+        [0, 1].map(|i|  f64::powf(10.0, -(self.phred_sums[i]) / 10.0) )
     }
 }
 

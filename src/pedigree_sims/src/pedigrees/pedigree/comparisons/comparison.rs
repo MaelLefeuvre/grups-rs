@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn pwd_increment(){
         let mut pedigree = common::mock_pedcomparison();
-        let comp = pedigree.comparisons.first_mut().unwrap();
+        let comp = pedigree.comparisons.first_mut().expect("Comparison should be retrievable");
         assert_eq!(comp.pwd, 0);
         comp.add_pwd();
         assert_eq!(comp.pwd, 1);
@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn overlap_increment(){
         let mut pedigree = common::mock_pedcomparison();
-        let comp = pedigree.comparisons.first_mut().unwrap();
+        let comp = pedigree.comparisons.first_mut().expect("Comparison should be retrievable");
         assert_eq!(comp.overlap, 0);
         comp.add_overlap();
         assert_eq!(comp.overlap, 1);
@@ -152,7 +152,7 @@ mod tests {
         #![allow(clippy::float_cmp)]
         let n_iters = 10;
         let mut pedigree = common::mock_pedcomparison();
-        let comp = pedigree.comparisons.first_mut().unwrap();
+        let comp = pedigree.comparisons.first_mut().expect("Comparison should be retrievable");
         for pwd in 0..n_iters {
             comp.add_pwd();
             for overlap in 0..n_iters {
@@ -192,13 +192,13 @@ mod tests {
                 for contam_rate in binary_rates {
                     for contam_pop_af in binary_rates {
                         let mut pedigree = common::mock_pedcomparison();
-                        let comp = pedigree.comparisons.first().unwrap();
+                        let comp = pedigree.comparisons.first().expect("Comparison should be retrievable");
                         let alleles = [[allele_ind_0, allele_ind_0], [allele_ind_1, allele_ind_1]];
                         comp.pair.into_iter().zip(alleles.iter()).for_each(|(ind, all)| {
-                            pedigree.individuals.get_ind_mut(ind).unwrap().set_alleles(*all)
+                            pedigree.individuals.get_ind_mut(ind).expect("Individual should be retrievable").set_alleles(*all)
                         });
 
-                        let comp = pedigree.comparisons.first_mut().unwrap();
+                        let comp = pedigree.comparisons.first_mut().expect("Comparison should be retrievable");
                         comp.compare_alleles(alleles, contam_rate, contam_pop_af, [0.0,0.0], &mut rng)?;
 
                         let mut want = [0, 0];

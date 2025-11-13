@@ -143,7 +143,7 @@ impl<T: AsRef<[u8]> + SetRead<T>>FSTReader<T> {
 
     /// @TODO: This should be a macro ?
     #[inline]
-    fn format_coordinate_pattern(coord_bytes: &[u8; 5]) -> StartsWith<Str> {
+    fn format_coordinate_pattern(coord_bytes: &[u8; 5]) -> StartsWith<Str<'_>> {
         let regex = unsafe { str::from_utf8_unchecked(coord_bytes) };
         Str::new(regex).starts_with()
     }

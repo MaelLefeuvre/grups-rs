@@ -1,4 +1,4 @@
-use std::{process, collections::BTreeMap, fs::File, io::{BufRead, BufWriter}, path::Path};
+use std::{collections::BTreeMap, fs::File, io::{BufRead, BufWriter}, path::Path, process};
 
 use genome::coordinate::Coordinate;
 
@@ -516,20 +516,26 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
                 info!("Output path: {output_path:?}");
 
                 // -------------------------- Build an FST set for this vcf file. 
-                let mut setbuilder = VCFIndexer::new(
-                    vcf, 
-                    &output_path,
-                    panel.into_transposed_btreemap(),
-                    fst_cli.decompression_threads
-                ).unwrap();
+                let mut setbuilder = match VCFIndexer::new(
+                        vcf,
+                        &output_path,
+                        panel.into_transposed_btreemap(),
+                        fst_cli.decompression_threads
+                    ).with_loc(|| "While constructing VCFIndexer") {
+                        Ok(builder) => builder,
+                        Err(e) => {
+                            error!("{e:?}");
+                            process::exit(1);
+                        }
+                    };
 
-                if let Err(e) = setbuilder.build_fst(&frequency_strategy) {
+                if let Err(e) = setbuilder.build_fst(&frequency_strategy).with_loc(|| "While building FST from VCF") {
                     error!("{e:?}");
                     process::exit(1);
                 }
 
                 // -------------------------- Finish the construction of our `.fst` and `.fst.frq` sets.
-                if let Err(e) = setbuilder.finish_build() {
+                if let Err(e) = setbuilder.finish_build().with_loc(|| "While Finalizing FST build") {
                     error!("{e:?}");
                     process::exit(1);
                 }
