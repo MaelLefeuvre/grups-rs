@@ -257,10 +257,13 @@ grups-rs fst \
 
 #### Using FSA-encoded files with `grups-rs`
 
-Once the indexation is completed, `.fst` and `.fst.frq` files can be used seamlessly when performing pedigree simulations. The user merely has to specify the input type using the [`--mode`](#i--mode) argument. Specifying a target directory is performed in the same way, using [`--data-dir`](#f--data-dir).
+Once the indexation is completed, `.fst` and `.fst.frq` files can be used seamlessly when performing pedigree simulations. The user merely has to specify the input type using the [`--mode`](#i--mode) argument. Specifying a target directory is performed in the same way, using [`--data-dir`](#f--data-dir). Starting at [`grups-rs v0.5.0`](https://github.com/MaelLefeuvre/grups-rs/tree/v0.5.0), an additional benefit of using FSA-encoded files, is that `grups-rs` will greatly benefit from multithreading.
+Note that multithreading is here performed across all pairwise comparisons, and is parametrized using the [`--threads`](#---threads) argument.
 
 ```Bash
 grups-rs pedigree-sims --pileup ./tests/test-data/pileup/parents-offspring.pileup \
+                    --threads 3                                                \
+                    --mode fst-mmap                                            \
                     --data-dir ./test-fst-index                                \
                     --recomb-dir ./tests/test-data/recombination-map/          \
                     --pedigree ./tests/test-data/pedigree/tiny_pedigree.txt    \
@@ -268,7 +271,7 @@ grups-rs pedigree-sims --pileup ./tests/test-data/pileup/parents-offspring.pileu
                     --sample-names MDH1 MDH2 MDH3                              \
                     --reps 1000                                                \
                     --quiet                                                    \
-                    --mode fst-mmap                                                 
+                    --mode fst-mmap
 ```
 
 ##### A note on the `--mode` argument:
@@ -912,6 +915,11 @@ Path to input pedigree definition file. Examples of such definition files may be
 
 #### Optional arguments
 
+###### `-@`|`--threads`
+Number of parallel CPU processes when performing FST-Indexation
+
+Note that parallelization is dispatched according to the number of investigated pairwise comparisons. Thus, there is no point in invoking more than $n\cdot(n-1)/2$ threads, where $n$ is the number of samples being compared within the pileup. When [`--self-comparison`](#s--self-comparison) is applied, the sofware can benefit from as much as $n^{2}/2$ thread, provided your computer has enough CPU resources..
+
 ###### `-d`|`--af-downsampling-rate`
 Allele frequency downsampling rate, i.e. the proportion of SNPs to keep at true frequency (in percentage).
 
@@ -1047,7 +1055,7 @@ Note that parallelization is dispatched according to the number of separate `.vc
 ###### `--decompression-threads`
 Number of additional parallel decompression threads when decompressing BGZF-compressed VCF files. (This parameter has no effect when working with uncompressed `.vcf` files.)
 
-Also note that decompression threads have a multiplicative effect when combined with '--threads'. Thus, setting `--decompression-threads 2` and `--threads 22`, will in fact consume up to 44 worker threads.
+Also note that decompression threads have a multiplicative effect when combined with [`--threads`](#---threads-1). Thus, setting `--decompression-threads 2` and `--threads 22`, will in fact consume up to 44 worker threads.
 
 #### Optional flags
 ###### `-F`|`--compute-pop-afs`

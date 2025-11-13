@@ -547,7 +547,7 @@ pub struct PedigreeSims {
     /// Number of parallel CPU processes when performing Pedigree simulations
     /// 
     /// Parallelization is dispatched according to the number of pairwise comparisons. Thus, there is no point in 
-    /// invoking more threads than (n*n-1)/2 samples (or n^2/2, when allowing self-comparisons)
+    /// invoking more threads than (n*n-1)/2 samples (or n^2/2, when allowing --self-comparisons)
     /// 
     #[clap(short='@', long, default_value("1"))]
     pub threads: usize,
