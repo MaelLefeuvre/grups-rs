@@ -21,8 +21,4 @@ pub enum PedigreeBuilderError{
 
     #[error("Failed to retrieve {0} field at index {1}")]
     RetrieveField(PedFormatField, usize),
-
-    #[error("Failed to add individual {0} while parsing line n°{1} in the pedigree definition file")]
-    AddIndividual(String, usize),
-
 }

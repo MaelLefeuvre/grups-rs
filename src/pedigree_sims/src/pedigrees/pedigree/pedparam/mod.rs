@@ -4,11 +4,8 @@ pub use param_rate_generator::ParamRateGenerator;
 mod pedigree_params;
 pub use pedigree_params::PedigreeParams;
 
-
+use std::{fmt::{self, Formatter, Debug, Display}, ops::Range, cmp::PartialOrd};
 use rand::{Rng, distributions::uniform::SampleUniform};
-use std::fmt::{Debug, Display};
-use std::ops::Range;
-use std::cmp::PartialOrd;
 
 /// Trait defining a pedigree parameter. This struct is mainly leveraged by `super::ParamRateGenerator` to generate
 /// constant/random values, according to the user-provided rates.
@@ -23,8 +20,8 @@ impl<T: 'static + Copy + SampleUniform + PartialOrd + Debug + Display> dyn PedPa
     /// - `vec`: vector of user-provided value(s). Must either be of len 1 or 2.
     /// 
     /// # Panics
-    /// - whenever `vec.len() > 2`
-
+    ///  - Whenever `vec.len() > 2`
+    /// 
     pub fn from_vec(vec: &[T]) -> Box<dyn PedParam<T>> {
         match vec.len() {
             // If length is 1, the user is requesting a set, constant rate
@@ -57,7 +54,7 @@ impl<T: Copy + Debug + Display> PedParam<T> for PedParamConst<T> {
 }
 
 impl<T: Display> Display for PedParamConst<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
@@ -81,7 +78,7 @@ struct PedParamRange<T: Display> {
 }
 
 impl<T: Display> Display for PedParamRange<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "[{}; {}]", self.range.start, self.range.end)
     }
 }

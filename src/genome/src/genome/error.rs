@@ -1,6 +1,5 @@
 
 use thiserror::Error;
-//use std::error::Error;
 
 #[derive(Error, Debug)]
 pub enum FastaIndexReaderError {

@@ -26,6 +26,7 @@ impl Display for ChrIdx {
 }
 
 impl ChrIdx {
+    #[must_use]
     pub fn into_inner(&self) -> u8 {
         self.0
     }
@@ -107,16 +108,16 @@ mod tests {
 
     #[test]
     fn add() {
-        assert_eq!(ChrIdx(17) + ChrIdx(2), ChrIdx(19))
+        assert_eq!(ChrIdx(17) + ChrIdx(2), ChrIdx(19));
     }
 
     #[test]
     fn as_ref(){
-        assert_eq!(ChrIdx(17).as_ref(), &17u8)
+        assert_eq!(ChrIdx(17).as_ref(), &17u8);
     }
 
     #[test]
     fn into_inner(){
-        assert_eq!(ChrIdx(17).into_inner(), 17u8)
+        assert_eq!(ChrIdx(17).into_inner(), 17u8);
     }
 }

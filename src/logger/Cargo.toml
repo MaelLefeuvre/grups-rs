@@ -1,15 +1,23 @@
 [package]
-  name              = "logger"
-  version.workspace = true
-  authors.workspace = true
-  publish.workspace = true
-  edition.workspace = true
+  name                 = "logger"
+  version.workspace    = true
+  authors.workspace    = true
+  publish.workspace    = true
+  edition.workspace    = true
+  license.workspace    = true
+  repository.workspace = true
 
 [lib]
   name = "logger"
   path = "src/logger.rs"
 
+[lints]
+  workspace = true
+
 [dependencies]
-  log        = {workspace = true}
-  chrono     = {workspace = true}
-  env_logger = "0.9.0"
+  log                  = {workspace = true}
+  chrono               = {workspace = true}
+  indicatif-log-bridge = {workspace = true} # //MODIFIED
+  indicatif            = {workspace = true} # //MODIFIED
+  thiserror            = {workspace = true}
+  env_logger           = "0.9.0"

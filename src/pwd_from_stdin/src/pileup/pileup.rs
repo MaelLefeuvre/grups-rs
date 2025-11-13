@@ -1,6 +1,5 @@
 use genome::{Nucleotide, SNPCoord, snp::Allele, Phred} ;
 use std::{iter::Peekable, collections::HashMap};
-//use std::error::Error;
 use located_error::prelude::*;
 
 use super::PileupError;
@@ -52,10 +51,10 @@ impl Pileup {
                         ',' | '.' => Nucleotide::new(reference, score), // These symbols imply it's the reference allele
                         _         => Nucleotide::try_new(n, score).with_loc(||format!("While parsing {n}"))?,          // Else, try parsing the allele from the given char.
                     };
-                    nucleotides.push(n)
+                    nucleotides.push(n);
                 },
                 None => return Err(anyhow!(PileupError::UnequalLength))
-            };
+            }
         }
         Ok(Pileup { depth, nucleotides })
     }
@@ -107,7 +106,7 @@ impl Pileup {
     #[must_use]
     #[cfg(test)]
     pub fn get_nucleotides(&self) -> String {
-        let mut pileup_nuc = String::from("");
+        let mut pileup_nuc = String::new();
         for nuc in &self.nucleotides {
             pileup_nuc.push(char::from(&nuc.base));
         }
@@ -118,7 +117,7 @@ impl Pileup {
     #[must_use]
     #[cfg(test)]
     pub fn get_scores_ascii(&self) -> String {
-        let mut pileup_nuc = String::from("");
+        let mut pileup_nuc = String::new();
         for nuc in &self.nucleotides {
             pileup_nuc.push(nuc.get_score_ascii());
         }
@@ -138,7 +137,7 @@ impl Pileup {
     /// # Errors
     /// - If the length of the sequence (following [+-]) cannot get parsed into an integer.
     fn skip_indel<I: Iterator<Item = char>>(chars: &mut Peekable<I>) -> Result<()> {
-        let mut digit: String = "".to_string();
+        let mut digit = String::new();
         let err_msg = "Error while skipping indels: characters following indel identifier are not numeric.";
         while chars.peek().loc(err_msg)?.is_numeric() {
             digit.push(
@@ -157,6 +156,7 @@ impl Pileup {
     /// Mainly used by: - `self.filter_known_variants()`
     ///                 - `self.filter_base_quality()`
     fn update_depth(&mut self) {
+        #![allow(clippy::cast_possible_truncation)] // Hopefully we don't expect a local sequencing depth of u32::MAX
         self.depth = self.nucleotides.len() as u16;
 
     }
@@ -168,6 +168,7 @@ mod tests {
     use super::*;
 
     fn create_dummy_pileup(reference: Allele, line_input: &str, score_input: &str, ignore_dels: bool) -> Result<Pileup> {
+        #![allow(clippy::cast_possible_truncation)]
         Pileup::new(reference, line_input.len() as u16, line_input, score_input, ignore_dels)
     }
 
@@ -237,7 +238,7 @@ mod tests {
         let line_input   = ",.act>gn,.NGTCA,.";
         let scores_input = "JEJEEECc$cacJgGg";
         let pileup = create_dummy_pileup(Allele::N, line_input, scores_input, false);
-        assert!(pileup.is_err())
+        assert!(pileup.is_err());
     }
 
     #[test]
@@ -246,7 +247,7 @@ mod tests {
         let line_input   = ",.actgn,.NGTCA,.";
         let scores_input = "JEcacJGg";
         let pileup = create_dummy_pileup(Allele::N, line_input, scores_input, false);
-        assert!(pileup.is_err())
+        assert!(pileup.is_err());
     }
 
 }

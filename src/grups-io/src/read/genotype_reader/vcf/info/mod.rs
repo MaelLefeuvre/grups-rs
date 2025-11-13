@@ -21,12 +21,12 @@ impl InfoField {
     /// # Arguments:
     /// - `field`: raw, unparsed `INFO` vcf column string slice.
     pub fn new(field: &str) -> Self {
-        Self(Some(field.split(';').map(|s| s.to_string()).collect::<Vec<String>>()))
+        Self(Some(field.split(';').map(ToString::to_string).collect::<Vec<String>>()))
     }
 
     /// Clear-out the structs content.
     pub fn clear(&mut self) {
-        self.0 = None
+        self.0 = None;
     }
 
     /// return `true` if InfoField contains the "MULTI_ALLELIC" tag. (i.e. is multiallelic.) 
@@ -55,7 +55,7 @@ impl InfoField {
         let pop_af_regex = format!("{pop}_AF");
         self.iter()
             .find(|&field| field.starts_with(&pop_af_regex))
-            .and_then(|x| x.split('=').last())
+            .and_then(|x| x.split('=').next_back())
             .ok_or(InfoFieldError::MissingAF(pop_af_regex))?
             .parse::<f32>()
             .map_err(InfoFieldError::ParseAlleleFrequency)

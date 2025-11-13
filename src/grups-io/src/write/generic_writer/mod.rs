@@ -1,7 +1,7 @@
-use std::{fs::File, io::{Write, BufWriter}, path::Path};
+use std::{fmt::Display, fs::File, io::{self, BufWriter, Write}, path::Path, sync::LazyLock};
+
 use anyhow::Result;
 use regex::Regex;
-use lazy_static::lazy_static;
 
 use located_error::LocatedError;
 
@@ -31,7 +31,7 @@ impl<'a> GenericWriter<'a>{
                 BufWriter::new(Box::new(file))
             },
             None => {
-                BufWriter::new(Box::new(std::io::stdout()))
+                BufWriter::new(Box::new(io::stdout()))
             }
         }})
     }
@@ -53,12 +53,11 @@ impl<'a> GenericWriter<'a>{
     /// 
     pub fn write_iter<T, I>(&mut self, iter: T) -> Result<()>
     where   T: IntoIterator<Item = I>,
-            I: std::fmt::Display,
+            I: Display,
     {
         // Remove pretty print trailing and leading whitespace
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r"[ ]+-[ ]+").expect("Failed to parse regex.");
-        }
+        static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[ ]+-[ ]+").expect("Failed to parse regex."));
+        
         iter.into_iter()
             .map(|obj| self.source.write(RE.replace_all(&format!("{obj}\n"), WRITER_SEPARATOR).as_bytes()))
             .collect::<Result<Vec<usize>, _>>()
@@ -83,7 +82,7 @@ mod tests {
         let test_vec = vec![Coordinate::new(10, 10000)];
         writer.write_iter(&test_vec)?;
 
-        let got = std::io::read_to_string(File::open(path)?)?;
+        let got = io::read_to_string(File::open(path)?)?;
         assert_eq!(got.replace('\n', ""), test_vec[0].to_string());
         Ok(())
     }

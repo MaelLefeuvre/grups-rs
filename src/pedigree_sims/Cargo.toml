@@ -1,30 +1,39 @@
 [package]
-  name              = "pedigree_sims"
-  version.workspace = true
-  authors.workspace = true
-  publish.workspace = true
-  edition.workspace = true
+  name                 = "pedigree_sims"
+  version.workspace    = true
+  authors.workspace    = true
+  publish.workspace    = true
+  edition.workspace    = true
+  license.workspace    = true
+  repository.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lints]
+  workspace = true
 
 [dependencies]
-  parser         = {workspace = true}
-  pwd_from_stdin = {workspace = true}
-  genome         = {workspace = true}
-  grups-io       = {workspace = true}
-  located-error  = {workspace = true}
-  log            = {workspace = true}
-  fastrand       = {workspace = true}
-  ahash          = {workspace = true}
-  thiserror      = {workspace = true}
-  anyhow         = {workspace = true}
-  gzp            = {workspace = true}
-  fst            = {workspace = true}
-  memmap2        = {workspace = true}
-  rand           = "0.8.5"
-  indexmap       = "2.0.2"
-  libsvm         = {version = "0.4.2", git = "https://github.com/MaelLefeuvre/libsvm-rust.git", features=["link"]}
-[dev-dependencies]
+  parser               = {workspace = true}
+  pwd_from_stdin       = {workspace = true}
+  genome               = {workspace = true}
+  grups-io             = {workspace = true}
+  located-error        = {workspace = true}
+  logger               = {workspace = true}
+  log                  = {workspace = true}
+  fastrand             = {workspace = true}
+  ahash                = {workspace = true}
+  thiserror            = {workspace = true}
+  anyhow               = {workspace = true}
+  gzp                  = {workspace = true}
+  fst                  = {workspace = true}
+  memmap2              = {workspace = true}
+  rayon                = {workspace = true}
+  indicatif            = {workspace = true}
+  indicatif-log-bridge = {workspace = true}
+  parking_lot          = {workspace = true}
+  slotmap              = "1.0.7"
+  rand                 = "0.8.5"
+  indexmap             = "2.0.2"
+  libsvm               = {version = "0.4.2", git = "https://github.com/MaelLefeuvre/libsvm-rust.git", features=["link"]}
   itertools      = {workspace = true}
+[dev-dependencies]
   mockall        = {workspace = true}
 

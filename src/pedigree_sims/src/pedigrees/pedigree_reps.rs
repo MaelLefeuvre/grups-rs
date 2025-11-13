@@ -1,11 +1,15 @@
 use super::pedigree::parser::PedigreeBuilder;
-use super::{Contaminant, Pedigree};
+
+use super::Pedigree;
+
+use super::{Contaminant};
 use crate::pedigrees::constants::REPLICATE_ID_FORMAT_LEN;
 
 use std::{
     collections::HashMap,
     path::Path,
-    ops::{Deref, DerefMut}
+    ops::{Deref, DerefMut},
+    fmt::{self, Formatter, Display}
 };
 
 use grups_io::read::PanelReader;
@@ -16,8 +20,7 @@ use located_error::prelude::*;
 /// A vector of pedigree simulation replicates. This struct is generally assigned to a given Pileup-Comparison.
 /// # Fields:
 /// - `inner`       : vector of `Pedigree` simulation replicates.
-/// - `contaminants`: Size-two array set of contaminating SampleTags, one vector for each compared pileup individual. 
-///                   (see pedigree::Contaminant)
+/// - `contaminants`: Size-two array set of contaminating SampleTags, one vector for each compared pileup individual. (see pedigree::Contaminant)
 pub struct PedigreeReps{
     pub inner: Vec<Pedigree>,
     pub contaminants: Option<Contaminant> 
@@ -27,6 +30,7 @@ impl PedigreeReps {
     /// Instantiate an empty vector of pedigrees with a preset capacity.
     /// # Arguments:
     /// - `n`: allocated size of the `self.inner` vector.
+    #[must_use]
     pub fn with_capacity(n: usize) -> Self {
         Self{inner: Vec::with_capacity(n), contaminants: None}
     }
@@ -34,12 +38,12 @@ impl PedigreeReps {
     /// Instantiate and assign a new `Contaminant` object to `self.contaminants`
     /// # Arguments
     /// - `sample_contam_tags`: Size-two vector of vectors of contaminating SampleTags.
-    ///                         `sample_contam_tags[i] = contaminating individuals for pileup individual[i]
+    ///   - `sample_contam_tags[i] = contaminating individuals for pileup individual[i]
     /// -  `pair_indices`     : Size-two array, containing the pileup index of each pileup individual being compared.
     /// 
     /// # @ TODO:
     /// - `samples_contam_tags` should be an array. at the very least, this method should 
-    ///    check if `samples_contam_tags.len()` == 2
+    ///   check if `samples_contam_tags.len()` == 2
     pub fn set_contaminants(&mut self, samples_contam_tags: &[Vec<SampleTag>], pair_indices: [usize; 2]) {
         let tags_0 = samples_contam_tags[pair_indices[0] % samples_contam_tags.len()].clone();
         let tags_1 = samples_contam_tags[pair_indices[1] % samples_contam_tags.len()].clone();
@@ -62,8 +66,6 @@ impl PedigreeReps {
             .with_loc(|| format!("While attempting to read the pedigree definition file {}", pedigree_path.display()))?;
         for i in 0..self.inner.capacity() {
             let pedigree = pedigree_builder.build().with_loc(||loc_msg("parse", i))?;
-            //pedigree.set_tags(panel, pop, self.contaminants.as_ref()).with_loc(||loc_msg("set population tags of", i))?;
-            //pedigree.assign_offspring_strands().with_loc(||loc_msg("assign offspring strands of", i))?;
             self.inner.push(pedigree);
         }
         Ok(())
@@ -82,7 +84,7 @@ impl PedigreeReps {
 
     pub fn assign_random_sex(&mut self) -> Result<()> {
         self.inner.iter_mut().enumerate().try_for_each(|(i, pedigree)| {
-            pedigree.assign_random_sex().with_loc(|| format!("While attempting to randomly assign sex of pedigree n°{i}"))
+            pedigree.assign_random_sexes().with_loc(|| format!("While attempting to randomly assign sex of pedigree n°{i}"))
         })
     }
 
@@ -91,15 +93,15 @@ impl PedigreeReps {
     /// # @TODO: This data structure is error prone and should be converted to a struct or named tuple.
     pub fn compute_sum_simulated_stats(&self) -> Result<Vec<(String, (f64,f64))>> {
         let mut sum_simulated_stats = HashMap::new();
-        for pedigree in self.iter() {
+        for pedigree in &self.inner {
             // Sum the avg pwd of each replicate.
             for comparison in pedigree.comparisons.iter() {
-                sum_simulated_stats.entry(comparison.label.to_owned()).or_insert((0.0, 0.0)).0 += comparison.get_avg_pwd()
+                sum_simulated_stats.entry(comparison.label.clone()).or_insert((0.0, 0.0)).0 += comparison.get_avg_pwd();
             }
         }
 
         // ---- Compute the sum-squared for sample variance for each comparison.
-        for pedigree in self.iter() {
+        for pedigree in &self.inner {
             for comparison in pedigree.comparisons.iter() {
                 // ---- Access summary statistics 
                 let summary_statistics = sum_simulated_stats.get_mut(&comparison.label)
@@ -131,13 +133,13 @@ impl PedigreeReps {
     /// Apply `add_n_overlap` to every comparison of every contained pedigree.
     #[inline]
     pub fn add_non_informative_snps(&mut self, n: u32) {
-        for pedigree in self.inner.iter_mut() {
+        for pedigree in &mut self.inner {
             pedigree.comparisons.iter_mut().for_each(|comp| comp.add_n_overlaps(n));
         }
     }
 
     pub fn all_sex_assigned(&self) -> bool {
-        self.inner.iter().all(|ped| ped.all_sex_assigned())
+        self.inner.iter().all(Pedigree::all_sex_assigned)
     }
 }
 
@@ -154,11 +156,13 @@ impl DerefMut for PedigreeReps {
     }
 }
 
-impl std::fmt::Display for PedigreeReps {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.inner.iter().enumerate().try_fold((), |_, (idx, pedigree)| {
-            pedigree.comparisons.iter().try_fold((), |_, comparison| {
-                writeln!(f, "{idx: <REPLICATE_ID_FORMAT_LEN$} - {comparison}")
+impl Display for PedigreeReps {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.inner.iter().enumerate().try_fold((), |(), (idx, pedigree)| {
+            //pedigree.comparisons.labels.keys().try_fold((), |(), label| {
+            pedigree.comparisons.iter().try_fold((), |(), comparison| {
+                write!(f, "{idx: <REPLICATE_ID_FORMAT_LEN$} - ")?;
+                pedigree._display_comparison(f, comparison)
             })
         })
     }

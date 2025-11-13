@@ -1,7 +1,6 @@
 use anyhow::{Result, bail};
 use clap::Parser;
-use std::collections::HashMap;
-use std::path::Path;
+use std::{path::Path, collections::HashMap};
 
 use super::Fixture;
 
@@ -224,7 +223,7 @@ impl <'a> GrupsRunnerBuilder<'a> {
             }
 
             if self.x_chromosome_mode {
-                args.push("--x-chromosome-mode".to_string())
+                args.push("--x-chromosome-mode".to_string());
             }
         }
 
@@ -271,9 +270,13 @@ pub struct GrupsRunner {
 
 impl GrupsRunner {
     pub fn run(&self) {
+        match logger::Logger::init(0) {
+            Ok(()) | Err(logger::LoggerError::DoubleLogInitialization(_)) => {},
+            other => panic!("LoggerError {other:?}")
+        };
         let args = self.args.join(" ");
         let cli = parser::Cli::parse_from(args.split_whitespace());
-        grups_rs::run(cli).expect("Failed to run grups using stringified CLI Args");
+        grups_rs::run(&cli).expect("Failed to run grups using stringified CLI Args");
     }
 
     pub fn get_fixture(&self, key: &str) -> &Fixture {

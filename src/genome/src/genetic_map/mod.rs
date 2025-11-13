@@ -6,7 +6,7 @@ use located_error::prelude::*;
 //use anyhow::{anyhow, Result};
 
 mod error;
-use error::*;
+use error::GeneticMapError;
 
 mod recomb_range;
 use recomb_range::RecombinationRange;
@@ -52,7 +52,7 @@ impl GeneticMap {
     /// - can return either `ParseIntError` or `ParseFloatError` if one of the fields
     ///   contains invalid information. 
     pub fn from_map(&mut self, path: impl AsRef<Path> ) -> Result<()> {
-        use GeneticMapError::*;
+        use GeneticMapError::{InvalidFields, InvalidLine, ParseChr, ParsePos, ParseRate};
 
         // ---- Open the genetic recombination file and initialize HashMap
         let source = BufReader::new(File::open(path).loc("Failed to open file")?);
@@ -95,7 +95,7 @@ impl GeneticMap {
             .filter_map(Result::ok)        
             .filter(|f| {
                 // Filter out anything that does not end with the .txt file extension (case insensitive).
-                f.path().extension().map_or(false, |ext| ext.eq_ignore_ascii_case("txt"))
+                f.path().extension().is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
             }).map(|f| f.path());
         
         Ok(paths)

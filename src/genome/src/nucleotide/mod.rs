@@ -76,6 +76,7 @@ mod tests {
 
     #[test]
     fn compute_error_prob() -> Result<()> {
+        #![allow(clippy::float_cmp)]
         let scores         = [0,   10,  20,   30,    40    ];
         let expected_probs = [1.0, 0.1, 0.01, 0.001, 0.0001];
 
@@ -84,7 +85,7 @@ mod tests {
 
             let nucleotide = Nucleotide::try_new('A', ascii_score)?;
             println!("{}", nucleotide.error_prob());
-            assert_eq!(nucleotide.error_prob(), expected_probs[i])
+            assert_eq!(nucleotide.error_prob(), expected_probs[i]);
         }
         Ok(())
     }

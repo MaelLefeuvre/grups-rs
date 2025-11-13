@@ -90,12 +90,9 @@ where
     where
         C: Display + Send + Sync + 'static
     {
-        match self {
-            Ok(ok) => Ok(ok),
-            Err(_) => {
-                let loc = loc_caller!(Location::caller());
-                self.context(format!("{loc} {context}"))
-            }
+        if let Ok(ok) = self { Ok(ok) } else {
+            let loc = loc_caller!(Location::caller());
+            self.context(format!("{loc} {context}"))
         }
     }
 
@@ -111,13 +108,10 @@ where
         C: Display + Send + Sync + 'static,
         F: FnOnce() -> C
     {
-        match self {
-            Ok(ok) => Ok(ok),
-            Err(_) => {
-                let caller = std::panic::Location::caller();
-                let loc = format!("[{}:{}:{}]", caller.file(), caller.line(), caller.column());
-                self.with_context( || format!("{loc} {}", f()))
-            }
+        if let Ok(ok) = self { Ok(ok) } else {
+            let caller = std::panic::Location::caller();
+            let loc = format!("[{}:{}:{}]", caller.file(), caller.line(), caller.column());
+            self.with_context( || format!("{loc} {}", f()))
         }
         
     }
@@ -180,12 +174,9 @@ impl<T> LocatedOption<T> for Option<T>
     where
         C: Display + Send + Sync + 'static
     {
-        match self {
-            Some(ok) => Ok(ok),
-            None     => {
-                let loc = loc_caller!(Location::caller());
-                self.context(format!("{loc} {context}"))
-            }
+        if let Some(ok) = self { Ok(ok) } else {
+            let loc = loc_caller!(Location::caller());
+            self.context(format!("{loc} {context}"))
         }
     }
 
@@ -195,13 +186,10 @@ impl<T> LocatedOption<T> for Option<T>
         C: Display + Send + Sync + 'static,
         F: FnOnce() -> C
     {
-        match self {
-            Some(ok) => Ok(ok),
-            None     => {
-                let caller = std::panic::Location::caller();
-                let loc = format!("[{}:{}:{}]", caller.file(), caller.line(), caller.column());
-                self.with_context( || format!("{loc} {}", f()))
-            }
+        if let Some(ok) = self { Ok(ok) } else {
+            let caller = std::panic::Location::caller();
+            let loc = format!("[{}:{}:{}]", caller.file(), caller.line(), caller.column());
+            self.with_context( || format!("{loc} {}", f()))
         }
         
     }
@@ -240,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    fn print_with_loc_error() -> Result<()> {
+    fn print_with_loc_error() {
         if let Err(err) = error_bubble_2() {
             // ---- Ensure file, line, and col matches.
             let mut chain = err.chain();
@@ -251,11 +239,9 @@ mod tests {
                     format!("{}", result.expect_err("Not an error."))
                 );
             }
-
             // ---- Display
             eprintln!("ERROR: {err:?}");
         }
-        Ok(())
     }
 
     fn none_bubble() -> Option<()> {
@@ -263,9 +249,13 @@ mod tests {
     }
 
     #[test]
-    fn test_missing() -> Result<()> {
+    fn test_missing() {
         let x = none_bubble().loc(BubbleError::Blop);
         eprintln!("{x:?}");
-        Ok(())
+        let got = x.is_err_and(|ref e| {
+            let str = format!("{e}");
+            str.contains("Blop") && str.contains(std::file!())
+        });
+        assert!(got);
     }
 }

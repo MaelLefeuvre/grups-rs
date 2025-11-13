@@ -28,7 +28,8 @@ pub const PANEL_EXT: [&str; 1] = ["panel"];
 /// # Errors:
 /// Returns an error if, after iterating over all the contents of `input_dir`:
 /// - the output Vec<PathBuf> is empty.
-/// - the length of the output Vec<PathBuf> is greater than 1. 
+/// - the length of the output Vec<PathBuf> is greater than 1.
+/// 
 /// @TODO: use this as a 'from_dir()' constructor within PanelReader instead.
 fn fetch_input_panel(input_dir: &Path) -> Result<PathBuf>{
     use PanelReaderError::{NotFound, MultipleFound};
@@ -108,7 +109,7 @@ impl PanelReader {
     /// 
     /// # Behavior:
     /// - `When contam_pop.len()` and `contam_num_ind.len()` differ, indices and values are expected to wrap around,
-    ///    according to the smallest vector length out of the two. 
+    ///   according to the smallest vector length out of the two. 
     pub fn fetch_contaminants(&self, contam_pop: &[String], contam_num_ind: &Vec<usize>) -> Result<Vec<Vec<SampleTag>>> {
         let mut samples_contam_tags: Vec<Vec<SampleTag>> = Vec::new();
 
@@ -137,7 +138,7 @@ impl PanelReader {
     /// # Arguments:
     /// - `pop`: (super-)Population-id string
     /// - `exclude`: Optional vector of sample tags to exclude from our sampling batch.
-    ///    Thus, any provided sample tag cannot become a return value.
+    ///   Thus, any provided sample tag cannot become a return value.
     pub fn random_sample(&self, pop: &str, exclude: Option<&Vec<&SampleTag>>, sex_filter: Option<Sex>) -> Result<Option<&SampleTag>> {
         // Extract the vector of candidate SampleTags using the provided population-id.
         // Bailout if `pop` does not match anything.
@@ -164,12 +165,13 @@ impl PanelReader {
     }
 
     /// Convert the `self.samples` HashMap<String, Vec<SampleTag>> into a transposed BTreeMap<SampleTag, String>.
+    #[must_use]
     pub fn into_transposed_btreemap(&self) -> BTreeMap<&SampleTag, Vec<&str>> {
         let mut transposed_data: BTreeMap<&SampleTag, Vec<&str>> = BTreeMap::new();
-        for (pop, samples) in self.samples.iter(){
+        for (pop, samples) in &self.samples{
             
-            for sample in samples.iter() {
-                transposed_data.entry(sample).or_default().push(pop.as_str())
+            for sample in samples {
+                transposed_data.entry(sample).or_default().push(pop.as_str());
                 //transposed_data.insert(value.clone(), key.clone());
             }
         }
@@ -229,9 +231,9 @@ impl PanelReader {
         // ---- Loop along lines and assign indices for each vcf entry.
         for sample_tags in self.samples.values_mut(){
             for sample_tag in sample_tags.iter_mut() {
-                let sample_idx = match header.iter().position(|id| id == sample_tag.id()){
-                    Some(idx) => idx - 9, // Correct for previous fields.
-                    None => {skipped_entries.push(sample_tag.id()); continue}
+                let Some(sample_idx) = header.iter().position(|id| id == sample_tag.id()).map(|idx| idx -9) else {
+                    skipped_entries.push(sample_tag.id());
+                    continue
                 };
                 sample_tag.set_idx(sample_idx);
             }
@@ -241,7 +243,7 @@ impl PanelReader {
         if ! skipped_entries.is_empty() {
             skipped_entries.sort();
             skipped_entries.dedup();
-            warn!("Some sample entries were not found in input vcfs:\n{:?}", skipped_entries);
+            warn!("Some sample entries were not found in input vcfs:\n{skipped_entries:?}");
         }
         
         Ok(())
@@ -256,7 +258,7 @@ mod tests {
     fn random_sampletag(){
         let mut samples = HashMap::new();
         let pop = String::from("EUR");
-        samples.insert(pop.to_owned(), vec![
+        samples.insert(pop.clone(), vec![
             SampleTag::new("HG00096", Some(0), None),
             SampleTag::new("NA06984", Some(1), None),
         ]);

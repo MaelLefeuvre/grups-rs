@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fs::File, io::{BufRead, BufWriter}, path::Path};
+use std::{collections::BTreeMap, fs::File, io::{BufRead, BufWriter}, path::Path, process};
 
 use genome::coordinate::Coordinate;
 
@@ -23,7 +23,7 @@ pub enum AFStrategy {
 }
 
 
-///Create a new SetBuilder from a file
+///Create a new `SetBuilder` from a file
 fn create_set_builder(file: &str) -> Result<SetBuilder<BufWriter<File>>> {
     use GenomeFstError::{CreateFile, CreateSetBuilder};
     let loc_msg = "While attempting to generate a new Set Builder";
@@ -33,8 +33,8 @@ fn create_set_builder(file: &str) -> Result<SetBuilder<BufWriter<File>>> {
 
 /// Convert a `.vcf(.gz)` file into a Finite-State-Transducer Set.
 /// See the following resources for a recap on the theory and applications of FST Sets :
-/// - <https://cs.nyu.edu/~mohri/pub/fla.pdf (DOI: 10.1007/978-3-540-39886-8_29) 
-/// - <https://blog.burntsushi.net/transducers/>
+/// - `<https://cs.nyu.edu/~mohri/pub/fla.pdf` (DOI: 10.1007/978-3-540-39886-8_29) 
+/// - `<https://blog.burntsushi.net/transducers/>`
 /// 
 /// # Behavior:
 /// `VCFIndexer` will build to FST sets from a unique vcf file:
@@ -80,7 +80,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
     /// Initialize a new `VCFIndexer`.
     /// # Arguments:
     /// - `vcf`    : path leading to the target `.vcf`|`.vcf.gz` file
-    /// - `samples`: transposed input samples definition file (sorted across SampleTag.id())
+    /// - `samples`: transposed input samples definition file (sorted across `SampleTag.id()``)
     /// - `threads`: number of requested decompression threads (only relevant in the case of BGZF compressed `.vcf.gz` files)
     pub  fn new(vcf: &'a Path, output_file: &str, samples: BTreeMap<&'panel SampleTag, Vec<&'panel str>>, threads: usize) -> Result<Self> {
         let loc_msg = |ext| format!("While attempting to create a new VCFIndexer for {output_file}.{ext}");
@@ -128,7 +128,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
 
             // ---- Go to INFO field.
             self.skip_fields(5)?;                                      // 6 
-            let info = self.reader.next_field()?.split(';').map(|x| x.to_string()).collect::<Vec<String>>();
+            let info = self.reader.next_field()?.split(';').map(ToString::to_string).collect::<Vec<String>>();
 
             // ---- Check if Bi-Allelic and skip line if not.
             if info.iter().any(|field| field == "MULTI_ALLELIC") {
@@ -165,7 +165,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
             debug!("{} | Pop_afs: {pop_afs:?}", Coordinate::try_from(&self.coordinate_buffer[0..5])?);
 
            // ---- and insert the relevant entries within our frequency_set.
-            self.insert_frequency_keys(pop_afs);
+            self.insert_frequency_keys(&pop_afs);
             
             self.print_progress(50000).with_loc(|| loc_msg)?;              
             self.parse_keys().with_loc(|| loc_msg)?;
@@ -201,7 +201,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
         self.reader.source.read_until(b'\t', &mut pos_buffer).with_loc(||ReadField { c: self.coordinate_buffer.clone() })?;
         pos_buffer.pop();
 
-        let chr: u8 = std::str::from_utf8(&chr_buffer).ok()
+        let chr: u8 = str::from_utf8(&chr_buffer).ok()
             .and_then(|c| {
                 match c.parse::<u8>() {
                     Ok(b) => Some(b),
@@ -214,7 +214,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
                 }
             }).with_loc(||EncodeChr {c: self.coordinate_buffer.clone() })?;
 
-        let pos: [u8; 4] = std::str::from_utf8(&pos_buffer).ok().and_then(|c| c.parse::<u32>().ok()).map(|p| p.to_be_bytes())
+        let pos: [u8; 4] = str::from_utf8(&pos_buffer).ok().and_then(|c| c.parse::<u32>().ok()).map(u32::to_be_bytes)
             .with_loc(||EncodePos { c: self.coordinate_buffer.clone() })?;
 
         self.coordinate_buffer.push(chr);
@@ -248,9 +248,9 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
     }
 
     #[inline]
-    fn insert_frequency_keys(&mut self, pop_afs: BTreeMap<&str, f32>) {
+    fn insert_frequency_keys(&mut self, pop_afs: &BTreeMap<&str, f32>) {
         // ---- and insert the relevant entries within our frequency_set.
-        for (pop_tag, pop_af) in pop_afs.iter() {
+        for (pop_tag, pop_af) in pop_afs {
             // ---- Parse to: "{chromosome(u7)}{position(u32_be)}{pop(chars)}{freq(f32_be)}"
             let pop_tag    = pop_tag.as_bytes();
             let pop_af_be  = pop_af.to_be_bytes();
@@ -259,7 +259,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
                 .chain(pop_tag.iter())
                 .chain(pop_af_be.iter())
                 .copied();
-            self.frequency_keys.push(Vec::from_iter(frequency_key));
+            self.frequency_keys.push(frequency_key.collect::<Vec<_>>());
         }
     }
 
@@ -356,7 +356,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
             trace!("  - {} | {}:{}",
                 self.current_coordinate().loc("While parsing keys")?,
                 sample_tag.id(),
-                std::str::from_utf8(sample_genotype).loc("While parsing keys")?
+                str::from_utf8(sample_genotype).loc("While parsing keys")?
             );
 
             let (left, right) = match sample_genotype.len() {
@@ -383,7 +383,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
             .collect();
 
         let pop_afs = pop_afs.with_loc(|| ParseAlleleFrequency{c:self.coordinate_buffer.clone()})?;
-        for (pop, allele_frequency) in pop_afs.iter() {
+        for (pop, allele_frequency) in &pop_afs {
             if frequencies.contains_key(pop) {
                 return Err(DuplicatePopFreqTag{c: self.coordinate_buffer.clone()})
                     .loc("While attempting to parse allele frequencies from INFO field")
@@ -402,7 +402,7 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
 
         let sample_genotypes: Vec<&[u8]> = self.genotypes_buffer.split(|c| *c == b'\t' || *c == b'\n').collect();
 
-        for (sample_tag, pop_tags) in self.samples.iter() {
+        for (sample_tag, pop_tags) in &self.samples {
             let genotype_index = sample_tag.idx().expect("Missing sample tag index");
             let sample_genotype = sample_genotypes.get(genotype_index)
                 .with_loc(|| GenomeFstError::InvalidGenotypeIndex { 
@@ -430,13 +430,13 @@ impl<'a, 'panel> VCFIndexer<'a, 'panel> {
 
         }
 
-        for (pop_tag, alternative_allele_count) in frequencies.iter_mut() {
+        for (pop_tag, alternative_allele_count) in &mut frequencies {
+            const FREQ_ROUND_DECIMAL: u32 = 4;
             let observed_alleles = allele_count.get(pop_tag).expect("Missing sample tag index");
             trace!("{pop_tag}: {alternative_allele_count} / {observed_alleles} = {:.4}", *alternative_allele_count / *observed_alleles);
 
             *alternative_allele_count /= observed_alleles;
 
-            const FREQ_ROUND_DECIMAL: u32 = 4;
             let round_factor = 10u32.pow(FREQ_ROUND_DECIMAL) as f32;
             *alternative_allele_count = (round_factor * *alternative_allele_count).round() / round_factor;
         }
@@ -465,10 +465,7 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
     panel.assign_vcf_indexes(input_vcf_paths[0].as_path()).loc(loc_msg)?;
 
     // --------------------- Subset the panel according to user-provided (super-)population id(s)
-    match &fst_cli.pop_subset {
-        Some(subset) => panel.subset_panel(subset),
-        None         => (),
-    }
+    if let Some(subset) = &fst_cli.pop_subset { panel.subset_panel(subset) }
 
     // --------------------- Parse the output panel file.
     let Some(output_dir) = fst_cli.output_dir.to_str() else {
@@ -485,7 +482,7 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
 
     // --------------------- Check whether the user requested allele frequency recalculation or not.
     let frequency_strategy = match fst_cli.compute_pop_afs {
-        true => AFStrategy::ComputeFromAlleles,
+        true  => AFStrategy::ComputeFromAlleles,
         false => AFStrategy::ParseFromVcf,
     };
 
@@ -511,7 +508,7 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
                 // -------------------------- add population id to the output filename if the user provided some.
                 let pop_tag = match &fst_cli.pop_subset {
                     Some(subset) => format!("-{}", subset.join("-")),
-                    None => "".to_string(),
+                    None => String::new(),
                 };
 
                 // -------------------------- Format the output file and destination directory.
@@ -519,23 +516,29 @@ pub fn run(fst_cli: &VCFFst) -> Result<()> {
                 info!("Output path: {output_path:?}");
 
                 // -------------------------- Build an FST set for this vcf file. 
-                let mut setbuilder = VCFIndexer::new(
-                    vcf, 
-                    &output_path,
-                    panel.into_transposed_btreemap(),
-                    fst_cli.decompression_threads
-                ).unwrap();
+                let mut setbuilder = match VCFIndexer::new(
+                        vcf,
+                        &output_path,
+                        panel.into_transposed_btreemap(),
+                        fst_cli.decompression_threads
+                    ).with_loc(|| "While constructing VCFIndexer") {
+                        Ok(builder) => builder,
+                        Err(e) => {
+                            error!("{e:?}");
+                            process::exit(1);
+                        }
+                    };
 
-                if let Err(e) = setbuilder.build_fst(&frequency_strategy) {
-                    error!("{:?}", e);
-                    std::process::exit(1);
-                };
+                if let Err(e) = setbuilder.build_fst(&frequency_strategy).with_loc(|| "While building FST from VCF") {
+                    error!("{e:?}");
+                    process::exit(1);
+                }
 
                 // -------------------------- Finish the construction of our `.fst` and `.fst.frq` sets.
-                if let Err(e) = setbuilder.finish_build() {
-                    error!("{:?}", e);
-                    std::process::exit(1);
-                };
+                if let Err(e) = setbuilder.finish_build().with_loc(|| "While Finalizing FST build") {
+                    error!("{e:?}");
+                    process::exit(1);
+                }
             });
         }
     });

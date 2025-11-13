@@ -21,19 +21,19 @@ fn main() -> Result<()> {
 
     // ----------------------------- Init logger.
     let verbosity = if cli.quiet {0} else {cli.verbose + 1};
-    logger::Logger::init(verbosity);
+    logger::Logger::init(verbosity)?;
     
     // ----------------------------- Serialize command line arguments
     if let Err(e) = cli.serialize() {
-        error!("{:?}", e);
+        error!("{e:?}");
         process::exit(1);
-    };
+    }
     
     // ----------------------------- unpack Cli and run the appropriate modules.
-    if let Err(e) = grups_rs::run(cli) {
-        error!("{:?}", e);
+    if let Err(e) = grups_rs::run(&cli) {
+        error!("{e:?}");
         process::exit(1);
-    };
+    }
 
     Ok(())
 }

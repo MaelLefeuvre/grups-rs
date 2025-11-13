@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn display() {
-        let pos = 139543;
+        let pos = 139_543;
         let want = format!("{pos:_^12}");
         let got = format!("{:_^12}", Position(pos));
         println!("want: {want}\ngot : {got}");

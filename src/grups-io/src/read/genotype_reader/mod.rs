@@ -15,7 +15,7 @@ pub use error::GenotypeReaderError;
 use anyhow::Result;
 
 //#[cfg(test)]
-use mockall::{automock, predicate::*};
+use mockall::{automock, predicate::str};
 
 
 

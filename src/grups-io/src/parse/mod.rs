@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::{Path, PathBuf}};
 
-use located_error::*;
+use located_error::LocatedError;
 
 use log::trace;
 use anyhow::Result;
@@ -9,7 +9,7 @@ mod error;
 use error::ParseError;
 
 /// Attempt to create the parent directories of a path (if needed) and return an error if it failed.
-pub fn create_parent_directory(path: &PathBuf) -> Result<()> {
+pub fn create_parent_directory(path: &Path) -> Result<()> {
     use ParseError::CreateParentDirectory;
     let parent_dir = path.parent().unwrap_or(path);
     let loc_msg = || format!("While attempting to create output directory '{}'", path.display());
@@ -43,7 +43,7 @@ pub enum FileKey{Suffix, Ext}
 /// when failing to convert `file_prefix` from `PathBuf` to `&str`
 /// 
 pub fn get_output_files<'a>(
-    file_prefix: &'a mut PathBuf,
+    file_prefix    : &'a mut Path,
     allow_overwrite: bool,
     sort           : FileKey,
     suffixes       : &[String],
@@ -110,7 +110,7 @@ pub fn fetch_input_files(input_dir: &Path, extensions: &[&str] ) -> Result<Vec<P
     use ParseError::MissingInput;
     // Fetch any file matching the provided extensions. Note that we don't use the '.extension()'
     // method, since we want to target chained-ext file, as in '.vcf.gz'.
-    let mut files: Vec<PathBuf> = std::fs::read_dir(input_dir)?.filter_map(|file| {
+    let mut files: Vec<PathBuf> = fs::read_dir(input_dir)?.filter_map(|file| {
         let Ok(file) = file else {
             return None
         };

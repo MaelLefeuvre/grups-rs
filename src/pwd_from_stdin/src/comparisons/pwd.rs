@@ -3,7 +3,7 @@ use genome::Nucleotide;
 
 use super::Individual;
 
-use genome::coordinate::{Coordinate, derive::*};
+use genome::coordinate::{Coordinate, derive::{Coord, CoordBorrow, CoordEq, CoordHash, CoordOrd}};
 
 #[derive(Debug, Coord, CoordEq, CoordOrd, CoordHash, CoordBorrow)]
 pub struct Pwd {
@@ -101,18 +101,19 @@ impl Pwd {
 
     #[must_use]
     pub fn compute_avg_phred(&self) -> f64 {
-        (self.phred_sums[0] + self.phred_sums[1]) / 2.0 / f64::from(self.observations)
+        f64::midpoint(self.phred_sums[0], self.phred_sums[1]) / f64::from(self.observations)
     }
 
     #[must_use]
     pub fn error_probs(&self) -> [f64; 2] {
         // @ TODO: this is very wrong, since we're re-implementing a phred method.
-        [0, 1].map(|i|  f64::powf(10.0, -1.0 * (self.phred_sums[i]) / 10.0) )
+        [0, 1].map(|i|  f64::powf(10.0, -(self.phred_sums[i]) / 10.0) )
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
     use std::error::Error;
 
     use super::*;

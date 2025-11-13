@@ -1,34 +1,34 @@
-use crate::pedigrees::pedigree::Individual;
-use crate::pedigrees::pedigree::PedComparison;
 
-use std::{
-    rc::Rc,
-    cell::RefCell,
-};
+use crate::pedigrees::pedigree::Pedigree;
 
 /// Mock a founder individual with no parents.
 /// # Arguments:
 ///  - `label`: raw string slice defining the individual's name (e.g. "father", "mother", etc.)
-pub fn mock_founder(label: &str) -> Individual {
-    Individual::new(label, None, None)
+pub fn mock_founder_pedigree(label: &str) -> Pedigree {
+    let mut pedigree = Pedigree::new();
+    pedigree.add_individual(label, None, None);
+    pedigree
 }
 
 /// Mock an offspring individual, with two parents.
 /// # Arguments:
 ///  - `label` : raw string slice defining the individual's name (e.g. "child")
-/// - `parents`: sice two array, defining the parents names (e.g. ["mother", "father"])
-pub fn mock_offspring(label: &str, parents_labels: Option<[&str; 2]>) -> Individual {
+/// - `parents`: sice two array, defining the parents names (e.g. `["mother", "father"]``)
+pub fn mock_offspring_pedigree(label: &str, parents_labels: Option<[&str; 2]>) -> Pedigree {
     let parents_labels = parents_labels.unwrap_or(["father", "mother"]);
 
-    let father = Rc::new(RefCell::new(mock_founder(parents_labels[0])));
-    let mother = Rc::new(RefCell::new(mock_founder(parents_labels[1])));
-    let parents = Some([&father, &mother]);
-    Individual::new(label, parents, None)
+    let mut pedigree = Pedigree::new();
+    let _fid = pedigree.add_individual(parents_labels[0], None, None);
+    let _mid = pedigree.add_individual(parents_labels[1], None, None);
+    let _cid = pedigree.add_individual(label, Some(parents_labels), None);
+    pedigree
 }
 
 /// Mock a pedigree comparison, using two founder individuals (=> this comparison is always labeled "unrelated")
-pub fn mock_pedcomparison() -> PedComparison {
-    let ind1 = Rc::new(RefCell::new(mock_founder("ind1")));
-    let ind2 = Rc::new(RefCell::new(mock_founder("ind2")));
-    PedComparison::new("unrelated", [&ind1, &ind2], false)
+pub fn mock_pedcomparison() -> Pedigree {
+    let mut pedigree = Pedigree::new();
+    let _fid = pedigree.add_individual("ind1", None, None);
+    let _mid = pedigree.add_individual("ind2", None, None);
+    pedigree.add_comparison("unrelated", ["ind1", "ind2"]).expect("Individual should be includable");
+    pedigree
 }

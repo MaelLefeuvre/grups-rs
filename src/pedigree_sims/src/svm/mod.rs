@@ -19,7 +19,7 @@ pub struct LibSvmBuilder<'a> {
     sigma      : f64,
 }
 
-impl<'a> Default for LibSvmBuilder<'a> {
+impl Default for LibSvmBuilder<'_> {
     fn default() -> Self {
         // ---- Initialize binary SVM with linear kernel.
         let svm_initializer  = SvmInit {
@@ -55,7 +55,7 @@ impl<'a> LibSvmBuilder<'a> {
         self
     }
 
-    pub fn labels(&mut self, pedigrees: &PedigreeReps, label_treshold: &usize) -> &mut Self {
+    pub fn labels(&mut self, pedigrees: &PedigreeReps, label_treshold: usize) -> &mut Self {
         let Some(label_order) = self.label_order else {
             panic!("No underflying label order found.")
         };
@@ -65,8 +65,8 @@ impl<'a> LibSvmBuilder<'a> {
                 ped.comparisons.iter().map(|cmp| {
                     let label_idx = label_order.iter().position(|lab| *lab == &cmp.label )
                         .expect("Invalid Label Found while building SVM labels.");
-                    let is_greater_than = label_idx > *label_treshold;
-                    (is_greater_than as u32) as f64
+                    let is_greater_than = label_idx > label_treshold;
+                    f64::from(u32::from(is_greater_than))
                 })
             )
         );
@@ -90,7 +90,7 @@ impl<'a> LibSvmBuilder<'a> {
             features.iter_mut().for_each(|v| v[0] = (v[0] - mu)/sigma);
             (self.mu, self.sigma) = (mu, sigma);
         } else {
-            warn!("Invalid standard deviation while applying SVM feature scaling: {sigma}")
+            warn!("Invalid standard deviation while applying SVM feature scaling: {sigma}");
         }
 
         Ok(self)
@@ -123,7 +123,7 @@ pub struct LibSvm {
 impl LibSvm {
     /// Directly create an SVM from a pedigree vector.
     #[allow(unused)]
-    pub fn from_comparisons(pedigrees: &PedigreeReps, label_treshold: &usize, label_order: &[&String]) -> Result<Self> {
+    pub fn from_comparisons(pedigrees: &PedigreeReps, label_treshold: usize, label_order: &[&String]) -> Result<Self> {
 
         let svm = LibSvmBuilder::default()
             .sims(pedigrees)
@@ -156,6 +156,7 @@ impl LibSvm {
     }
 
     pub fn true_label_idx(&self) -> Result<usize, SVMError> {
+        #[allow(clippy::cast_sign_loss)]
         self.inner.labels().last().map(|idx| *idx as usize).ok_or(SVMError::InvalidLabels)
     }
 }

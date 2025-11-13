@@ -1,17 +1,36 @@
+use indicatif::MultiProgress;
+use indicatif_log_bridge::LogWrapper;
 use log::LevelFilter;
 use log::Level;
 use env_logger::{Builder, Env, fmt::Color};
-use std::io::Write;
-pub struct Logger;
+use std::{io::Write, sync::OnceLock};
+use thiserror::Error;
+
+static INSTANCE: OnceLock<Logger> = OnceLock::new();
+
+#[derive(Debug)]
+pub struct Logger {
+    multi_pg: MultiProgress,
+}
+
+
+#[derive(Debug, Error)]
+pub enum LoggerError {
+    #[error("Logger is already initialized. ({0})")]
+    DoubleLogInitialization(#[from] log::SetLoggerError),
+
+    #[error("Static Instance of Logger is already set")]
+    DoubleCellInitialization
+}
 
 impl Logger {
-
-    pub fn init(verbosity: u8) {
+    /// Initialize a static env_logger, along with a thread-safe `indicatif::Multiprogress' progress bar.
+    pub fn init(verbosity: u8) -> Result<(), LoggerError>{
         let log_level = Self::u8_to_loglevel(verbosity);
         let env = Env::default()
             .filter("GRUPS_LOG");
 
-        Builder::new().filter_level(log_level)
+        let logger = Builder::new().filter_level(log_level)
             .format(|buf, record| {
                 
                 let traceback: String;
@@ -20,9 +39,9 @@ impl Logger {
                     traceback = format!("(@ {}:{}) ", record.file().unwrap_or("unknown"), record.line().unwrap_or(0));
                     set_intensity = true;
                 } else {
-                    traceback = String::from("");
+                    traceback = String::new();
                     set_intensity = false;
-                };
+                }
 
                 let mut arg_style = buf.style();
                 arg_style.set_intense(set_intensity);
@@ -48,7 +67,13 @@ impl Logger {
                 )
             })
             .parse_env(env)
-            .init();
+            .build();
+        // Progress bar support.
+        let multi_pg = MultiProgress::new();
+        LogWrapper::new(multi_pg.clone(), logger)
+            .try_init()?;
+
+        INSTANCE.set(Self{multi_pg}).map_err(|_| LoggerError::DoubleCellInitialization)
     }
 
     fn u8_to_loglevel(verbosity: u8) -> LevelFilter {
@@ -64,6 +89,16 @@ impl Logger {
     pub fn set_level(verbosity: u8) {
         log::set_max_level(Self::u8_to_loglevel(verbosity));
     }
+
+    /// Obtain a static reference to a globally initiated `indicatif::Multiprogress` progress bar.
+    /// 
+    /// # Panics
+    /// 
+    /// The progress bar is initialized when calling `Logger::init()`. This function will thus
+    /// panic if the Logger was not first initialized.
+    pub fn multi() -> &'static MultiProgress {
+        &INSTANCE.get().expect("Unitialized").multi_pg
+    }
 }
 
 #[cfg(test)]
@@ -71,8 +106,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn log_level(){
-        Logger::init(0);
+    fn log_level() -> Result<(), LoggerError> {
+        Logger::init(0)?;
         for level in 0..u8::MAX {
             Logger::set_level(level);
 
@@ -86,5 +121,6 @@ mod tests {
 
             assert_eq!(log::max_level(), expected_level);
         }
+        Ok(())
     }
 }

@@ -3,7 +3,7 @@ extern crate logger;
 
 use std::fs::File;
 
-use parser::{Cli, Commands::*};
+use parser::{Cli, Commands::{Cite, FST, FromYaml, PedigreeSims, PwdFromStdin}};
 use genome::Genome;
 
 #[macro_use]
@@ -52,7 +52,7 @@ pub fn cite() {
     println!("{CITATIONS}");
 }
 
-pub fn run(cli: Cli) -> Result<()> {
+pub fn run(cli: &Cli) -> Result<()> {
     // ----------------------------- Set seed (randomly assigned by parser-rs if none was provided.)
     if let PedigreeSims{ref ped, common: _, pwd:_ } = cli.commands {
         fastrand::seed(ped.seed);
@@ -71,14 +71,14 @@ pub fn run(cli: Cli) -> Result<()> {
 
             if common.x_chromosome_mode {
                 genome = x_chromosome.ok_or_else(||anyhow!("Missing Xchromosome"))?;
-            };
+            }
             Some(genome)
         },
         _ => None
     };
 
     // ---- Run with autosomes.
-    _run(&cli, genome)?;
+    _run(cli, genome)?;
 
     Ok(())
 }
@@ -112,7 +112,7 @@ pub fn _run(cli: &Cli, genome: Option<Genome>) -> Result<()> {
         },
 
         FST {fst: fst_cli} => {
-            vcf_fst::run(fst_cli)?
+            vcf_fst::run(fst_cli)?;
         },
 
         FromYaml{yaml} => {
@@ -121,12 +121,12 @@ pub fn _run(cli: &Cli, genome: Option<Genome>) -> Result<()> {
                 Ok(cli)  => cli,
                 Err(e)   => return Err(anyhow!("Unable to deserialize arguments from {yaml:?} file: [{e}]"))
             };
-            self::run(cli)?;
+            self::run(&cli)?;
         },
 
         Cite => {
             cite();
         }
-    };
+    }
     Ok(())
 }

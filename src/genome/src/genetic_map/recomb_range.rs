@@ -70,6 +70,7 @@ impl Borrow<Range<u32>> for RecombinationRange {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use float_cmp::approx_eq;
     const ULPS: i64 = 2;
 
@@ -78,26 +79,26 @@ mod tests {
     #[test]
     fn prob() {
         for step in 0..N_ITERS {
-            let test_rate = f64::from(step) / N_ITERS as f64 ;
+            let test_rate = f64::from(step) / f64::from(N_ITERS) ;
             let test_prob = test_rate / ONE_MORGAN / ONE_MEGABASE;
             let range = RecombinationRange::new(0, 1000, test_rate);
-            assert!( approx_eq!(f64, *range.prob(), test_prob, ulps = ULPS) )
+            assert!( approx_eq!(f64, *range.prob(), test_prob, ulps = ULPS) );
         }
     }
 
     #[test]
     fn prob_to_rate() {
         for step in 0..N_ITERS {
-            let test_rate = f64::from(step) / N_ITERS as f64 ;
+            let test_rate = f64::from(step) / f64::from(N_ITERS) ;
             let range = RecombinationRange::new(0, 1000, test_rate);
-            assert!( approx_eq!(f64, range.rate(), test_rate, ulps = ULPS) )
+            assert!( approx_eq!(f64, range.rate(), test_rate, ulps = ULPS) );
         }
     }
 
     #[test]
     fn recomb_equality() {
         for step in 0..N_ITERS {
-            let test_rate = f64::from(step) / N_ITERS as f64 ;
+            let test_rate = f64::from(step) / f64::from(N_ITERS) ;
             let range_1 = RecombinationRange::new(0, 1000, test_rate);
             let range_2 = RecombinationRange::new(0, 1000, test_rate);
             assert_eq!(range_1, range_2);
@@ -108,10 +109,10 @@ mod tests {
     fn recomb_partial_equality() {
         // Recomb range should still be equal even if test rates are different.
         for step in 0..N_ITERS  {
-            let test_rate_1 = f64::from(step) / (N_ITERS as f64);
+            let test_rate_1 = f64::from(step) / f64::from(N_ITERS);
             let range_1 = RecombinationRange::new(0, 1000, test_rate_1);
 
-            let test_rate_2 = test_rate_1 + (1.0 / N_ITERS as f64);
+            let test_rate_2 = test_rate_1 + (1.0 / f64::from(N_ITERS));
             let range_2 = RecombinationRange::new(0, 1000, test_rate_2);
             assert_eq!(range_1, range_2);
         }
@@ -137,7 +138,7 @@ mod tests {
 
     #[test]
     fn range_inequality() {
-        let ranges: Vec<u32> = (1..N_ITERS+1).step_by(1000).collect();
+        let ranges: Vec<u32> = (1..=N_ITERS).step_by(1000).collect();
         for step in ranges.windows(2)  {
             let (start, end) = (step[0], step[1]);
             let recomb_range = RecombinationRange::new(start, end, 0.5);
@@ -154,7 +155,7 @@ mod tests {
 
     #[test]
     fn borrow_range() {
-        let mut test_hashset = std::collections::HashSet::new();
+        let mut test_hashset = HashSet::new();
         let ranges: Vec<u32> = (0..N_ITERS).step_by(1000).collect();
         for step in ranges.windows(2)  {
             let (start, end) = (step[0], step[1]);

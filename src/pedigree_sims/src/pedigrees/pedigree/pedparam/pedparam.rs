@@ -1,12 +1,14 @@
 use rand::Rng;
-use std::fmt::Debug;
-use std::ops::Range;
-use rand::distributions::uniform::SampleUniform;
-use std::cmp::PartialOrd;
+use std::{
+    fmt::{self, Formatter, Display, Debug},
+    ops::Range,
+    rand::distributions::uniform::SampleUniform,
+    cmp::PartialOrd
+};
 
 /// Trait defining a pedigree parameter. This struct is mainly leveraged by `super::ParamRateGenerator` to generate
 /// constant/random values, according to the user-provided rates.
-pub trait PedParam<T>: std::fmt::Debug {
+pub trait PedParam<T>: Debug {
     fn value(&mut self) -> T;
 }
 

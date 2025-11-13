@@ -1,9 +1,7 @@
 
 use crate::snp::SNPCoord;
 use crate::coordinate::{ChrIdx, Position, Coordinate};
-use std::hash::{Hash, Hasher};
-use std::ops::Range;
-use std::fmt::{self, Display, Formatter};
+use std::{hash::{Hash, Hasher}, ops::Range, fmt::{self, Display, Formatter}};
 
 use super::{CHROM_FORMAT_LEN, COUNT_FORMAT_LEN, RANGE_FORMAT_LEN};
 
@@ -127,7 +125,9 @@ impl Hash for JackknifeBlock {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
     use super::*;
+    use std::collections::HashSet;
     use anyhow::Result;
     const N_ITERS: u32 = 1_000_000;
 
@@ -187,11 +187,13 @@ mod tests {
         //        self.chromosome == other.chromosome && self.range == other.range 
         let block_0 = JackknifeBlock::new(10, 11_000, 12_000);
         let block_1 = JackknifeBlock::new(10, 11_000, 12_000);
-        assert_eq!(block_0, block_1)
+        assert_eq!(block_0, block_1);
     }
 
     #[test]
     fn block_inequality() {
+        #![allow(clippy::cast_possible_truncation)]
+        #![allow(clippy::cast_sign_loss)]
         //        self.chromosome == other.chromosome && self.range == other.range 
         let (chr, start, end) = (10, 11_000, 12_000);
         let block = JackknifeBlock::new(10, 11_000, 12_000);
@@ -217,7 +219,8 @@ mod tests {
 
     #[test]
     fn hash_block() {
-        let mut test_hashset = std::collections::HashSet::new();
+        #![allow(clippy::cast_possible_truncation,clippy::cast_sign_loss,clippy::cast_possible_wrap)]
+        let mut test_hashset = HashSet::new();
         let ranges: Vec<u32> = (1000..N_ITERS).step_by(1000).collect();
         let chr = 10;
 
@@ -235,7 +238,7 @@ mod tests {
             for chr_deviation in deviations {
                 for start_deviation in deviations {
                     for end_deviation in deviations {
-                        let chr   = chr   as i32 + chr_deviation;
+                        let chr   = i32::from(chr) + chr_deviation;
                         let start = start as i32 + start_deviation;
                         let end   = end   as i32 + end_deviation;
                         let other_block = JackknifeBlock::new(chr as u8, start as u32, end as u32);

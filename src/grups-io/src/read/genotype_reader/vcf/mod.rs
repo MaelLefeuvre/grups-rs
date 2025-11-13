@@ -1,4 +1,4 @@
-use std::{io::{BufRead, BufReader, Read}, path::{Path, PathBuf}, fs::File};
+use std::{io::{self, BufRead, BufReader, Read}, path::{Path, PathBuf}, fs::File};
 
 mod info;
 use info::InfoField;
@@ -22,11 +22,10 @@ pub use error::VCFReaderError;
 
 const INFO_FIELD_INDEX   : usize = 7;  /// 0-based expected column index of the INFO field.
 const GENOTYPES_START_IDX: usize = 9;  /// 0-based expected column index where genotype entries are expected to begin.
-
 const VCF_EXT: [&str; 2] = ["vcf", "vcf.gz"];
 
 
-impl<'a> GenotypeReader for VCFReader<'a> {
+impl GenotypeReader for VCFReader<'_> {
     // Return the alleles for a given SampleTag. Search is performed using `sample_tag.idx()`;
     fn get_alleles(&self, sample_tag: &SampleTag ) -> Result<[u8; 2]> {
         use GenotypeReaderError::{MissingAlleles, InvalidSampleIndex};
@@ -70,14 +69,14 @@ impl<'a> GenotypeReader for VCFReader<'a> {
 
     fn fetch_input_files(input_dir: &Path) -> Result<Vec<PathBuf>> {
         let vcfs = parse::fetch_input_files(input_dir, &VCF_EXT).loc("While searching for candidate vcf files.")?;
-        debug!("Found the following vcf file candidates as input for the pedigree simulations: {:#?}", vcfs);
+        debug!("Found the following vcf file candidates as input for the pedigree simulations: {vcfs:#?}");
         Ok(vcfs)
     }
 }
 
 /// GenotypeReader using a `.vcf`, of `.vcf.gz` file.
 /// # Description 
-/// Reader tries to be as efficient as possible, and will read lines as lazily as possible.  
+/// Reader tries to be as efficient as possible, and will read lines as lazily as possible.
 /// Thus, lines are actually read field by field, as conservatively as possible, making various checks along the way
 /// (e.g. 'is this chromosome coordinate relevant', 'is this line actually a bi-allelic SNP?', etc.) and skipped as soon as
 /// a discrepancy is found out. 
@@ -122,7 +121,7 @@ impl<'a> VCFReader<'a> {
         self.source.read_until(b'\t', &mut self.buf).map_err(FillBuffer).loc(loc_msg)?;
         self.buf.pop();
         self.idx += 1;
-        std::str::from_utf8(&self.buf).map_err(InvalidField).loc(loc_msg)
+        str::from_utf8(&self.buf).map_err(InvalidField).loc(loc_msg)
     }
 
     /// Fill `self.buffer` until an EOL is encountered and reset the `self.idx` counter to 0.
@@ -147,6 +146,7 @@ impl<'a> VCFReader<'a> {
     }
 
     /// Return `true` if the `INFO` field of the current line contains a `MULTI_ALLELIC` tag.
+    #[must_use]
     pub fn is_multiallelic(&self) -> bool {
         self.info.is_multiallelic()
     }
@@ -221,11 +221,12 @@ impl<'a> VCFReader<'a> {
     }
 
     /// Returns `true` if the file has not yet encountered an EOF.
-    pub fn has_data_left(&mut self) -> std::io::Result<bool> {
+    pub fn has_data_left(&mut self) -> io::Result<bool> {
         self.source.fill_buf().map(|b| ! b.is_empty())
     }
 
     /// Clone and return the contents of `self.samples`
+    #[must_use]
     pub fn samples(&self) -> Vec<String> {
         self.samples.clone()
     }
@@ -236,7 +237,7 @@ impl<'a> VCFReader<'a> {
     /// # Arguments 
     /// - `path`   : path leading to the targeted vcf file.
     /// - `threads`: number of user-provided decompression threads for the BGZF decompressor.
-    ///              (Only relevant if the file extension ends with `.gz`)
+    ///   (Only relevant if the file extension ends with `.gz`)
     fn get_reader(path: &Path, threads: usize) -> Result<Box<dyn BufRead>> {
         use VCFReaderError::{InvalidFileExt, Open};
         let path_ext = path.extension().with_loc(||InvalidFileExt)?;
@@ -263,7 +264,7 @@ impl<'a> VCFReader<'a> {
             let split_line: Vec<&str> = line.split('\t').collect();
             if split_line[0] == "#CHROM" {
                 samples.reserve(split_line.len());
-                samples.extend(split_line.iter().map(|ind| ind.to_string()));
+                samples.extend(split_line.iter().map(ToString::to_string));
                 return Ok(samples)
             }
         }
@@ -315,8 +316,8 @@ mod tests {
         
         let file = File::create(&vcf_path)?;
         let mut parz: ParCompress<Bgzf> = ParCompressBuilder::new().from_writer(file);
-        parz.write_all(FAKE_VCF.as_bytes()).unwrap();
-        parz.finish().unwrap();
+        parz.write_all(FAKE_VCF.as_bytes()).expect("Failed to write VCF with ParCompressBuilder");
+        parz.finish().expect("ParCompress should be able to flush its output.");
 
         let reader = VCFReader::new(&vcf_path, 1);
         assert!(reader.is_ok());
@@ -398,7 +399,7 @@ mod tests {
             for (want, sample) in allele_row.iter().zip(samples.iter().enumerate().map(|(i, s)| SampleTag::new(s, Some(i), None))) {
                 let got = reader.get_alleles(&sample)?;
                 println!("{sample} ({want:?}) {got:?}");
-                assert_eq!(*want, got)
+                assert_eq!(*want, got);
             }
             reader.next_line()?;
         }
@@ -430,7 +431,7 @@ mod tests {
             for (want, sample) in allele_row.iter().zip(samples.iter().enumerate().map(|(i, s)| SampleTag::new(s, Some(i), None))) {
                 let got = reader.get_alleles(&sample)?;
                 println!("{sample} ({want:?}) {got:?}");
-                assert_eq!(*want, got)
+                assert_eq!(*want, got);
             }
             reader.next_line()?;
         }
