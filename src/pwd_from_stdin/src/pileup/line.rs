@@ -1,4 +1,5 @@
-use genome::{Nucleotide, SNPCoord, coordinate::{ChrIdx, Position, Coordinate, derive::Coord}, snp::Allele};
+use genome::{Nucleotide, SNPCoord, coordinate::{ChrIdx, Coordinate, Position, derive::Coord}, snp::{Allele, ParseAlleleError}};
+use log::warn;
 use crate::comparisons::Individual;
 //use rand::seq::SliceRandom;
 
@@ -42,7 +43,18 @@ impl Line {
         let fields: Vec<&str>    = line.split('\t').collect();
         let chromosome: ChrIdx   = fields[0].parse().map_err(ParseChr).loc(err_context)?;
         let position  : Position = fields[1].parse().map_err(ParsePos).loc(err_context)?;
-        let reference : Allele   = fields[2].parse().map_err(ParseRef).loc(err_context)?;
+        let reference : Allele   = match fields[2].parse() {
+            Ok(allele) => allele,
+            Err(e) => match e {
+                ParseAlleleError::IUPACAmbiguityCodeCharacterFound => {
+                    warn!("The provided pileup appears to contain IUPAC ambiguity characters as reference alleles (third field of the pileup file). These are currently unhandled by GRUPS-rs, and will be converted to 'N' (unknown) characters.");
+                    Allele::N
+                },
+                _ => return Err(ParseRef(e)).with_loc(|| "While attempting to convert third field of pileup file into a valid Allele.")
+            }
+
+        };
+
         //Loop along individuals
         let mut individuals: Vec<Pileup> = Vec::new();
         for i in (3..fields.len()).step_by(3) {
