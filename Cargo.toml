@@ -1,5 +1,5 @@
 [workspace.package]
-  version           = "0.5.0"
+  version           = "0.5.1"
   authors           = ["Maël Lefeuvre <mael.lefeuvre@mnhn.fr>"]
   description       = "GRUPS-rs: Get Relatedness Using Pedigree Simulations"
   edition           = "2021"
