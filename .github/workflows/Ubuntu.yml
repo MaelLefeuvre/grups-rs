@@ -1,6 +1,7 @@
 name: Ubuntu
-
 on:
+  schedule:
+    - cron: '30 19 * * 5'
   push:
     branches: [ main ]
   pull_request:
