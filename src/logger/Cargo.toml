@@ -20,4 +20,4 @@
   indicatif-log-bridge = {workspace = true} # //MODIFIED
   indicatif            = {workspace = true} # //MODIFIED
   thiserror            = {workspace = true}
-  env_logger           = "0.9.0"
+  env_logger           = "0.10.0"
