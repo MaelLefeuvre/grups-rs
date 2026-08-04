@@ -79,7 +79,7 @@
   thiserror            = "1.0"
   anyhow               = "1.0"
   log                  = "0.4.16"
-  clap                 = {version = "3.2", features = ["derive"]}
+  clap                 = {version = "4.0.27", features = ["derive", "color"]}
   itertools            = "0.12.0"
   tempfile             = "3.3.0"
   serde_yaml           = "0.8"
@@ -117,7 +117,7 @@
   itertools         = {workspace = true}
   rand              = "0.8.6"
   nanorand          = "0.7.0"
-  criterion         = "0.3"
+  criterion         = "0.5"
   pretty_assertions = "1.4.1"
 
 [[bench]]
