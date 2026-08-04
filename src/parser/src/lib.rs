@@ -12,7 +12,10 @@ use std::{
 use located_error::LocatedError;
 
 use anyhow::{anyhow, Result};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    Args, Parser, Subcommand, ValueEnum,
+};
 use log::debug;
 use num::One;
 use serde::{Deserialize, Serialize};
@@ -20,8 +23,17 @@ use serde::{Deserialize, Serialize};
 mod error;
 pub use error::ParserError;
 
+// Clap-rs v4.0+ decided on a more neutral colour scheme for better interop.
+// However, I quite liked it, and I now miss it dearly
+const CLAP_COLOUR_STYLE: Styles = Styles::styled()
+    .header(AnsiColor::Yellow.on_default().underline().bold())
+    .usage(AnsiColor::Green.on_default().underline().bold())
+    .literal(AnsiColor::Green.on_default())
+    .placeholder(AnsiColor::White.on_default().dimmed())
+    .context_value(AnsiColor::Blue.on_default().bold());
+
 #[derive(Parser, Debug, Serialize, Deserialize)]
-#[clap(name="grups-rs", author, version, about, long_about = None)]
+#[clap(name="grups-rs", author, version, about, long_about = None, next_line_help = false, styles = CLAP_COLOUR_STYLE)]
 #[clap(propagate_version = true)]
 /// GRUPS-rs: Get Relatedness Using Pedigree Simulations
 pub struct Cli {
@@ -170,6 +182,7 @@ pub struct Common {
     ///
     /// Nucleotides whose base quality is lower than the provided treshold will be filtered-out.
     /// Value should be expressed in the Phred+33 scale.
+    ///
     #[clap(short('M'), long, default_value("30"))]
     pub min_qual: u8,
 
@@ -177,6 +190,7 @@ pub struct Common {
     ///
     /// By default, grups-rs will use GRCh37 as a reference genome. Use this argument if you wish to specify an alternative reference.
     /// Note that a '.fasta.fai' genome index file must be present at the same directory.
+    ///
     #[clap(short, long, required(false))]
     pub genome: Option<String>,
 
@@ -224,6 +238,7 @@ pub struct Common {
     /// Example: '--sample 0-2 5 6 --sample-names ART04 ART16 ART20'{n}
     ///   - index  0      1      2      5     6{n}
     ///   - name   ART04  ART16  ART20  Ind5  Ind6{n}
+    ///
     #[clap(short = 'n', long, num_args(1..))]
     pub sample_names: Vec<String>,
 
@@ -231,6 +246,7 @@ pub struct Common {
     ///
     /// Note that grups-rs will create the specified leaf directory if it is not present. However, grups-rs does not
     /// allow itself from creating parent directories.
+    ///
     #[clap(short, long, default_value("grups-output"), value_parser=valid_output_dir)]
     pub output_dir: PathBuf,
 
@@ -238,6 +254,7 @@ pub struct Common {
     ///
     /// By default, grups-rs does not allow itself from overwriting existing results files. Use this flag
     /// to force this behaviour.
+    ///
     #[clap(short = 'w', long)]
     pub overwrite: bool,
 
@@ -245,6 +262,7 @@ pub struct Common {
     ///
     /// This mode will trigger specific rules of allele transmission and recombination during pedigree
     /// simulations, reflective of X-chromosomal inheritance rules.
+    ///
     #[clap(short = 'X', long)]
     pub x_chromosome_mode: bool,
 }
@@ -273,6 +291,7 @@ pub struct PwdFromStdin {
     /// coordinates. The given coordinate file must furthermore explicitely provide with REF/ALT alleles.
     ///
     /// See the --targets argument for additional information regarding valid formats.
+    ///
     #[clap(short = 'k', long)]
     pub known_variants: bool,
 
@@ -281,6 +300,7 @@ pub struct PwdFromStdin {
     /// This is a legacy argument from the initial implementation of grups. Note that lines are printed as soon
     /// as there is a valid comparison between ANY pair of individuals. Thus, applying sites filtration may not
     /// prove very effective when using --self-comparison.
+    ///
     #[clap(short = 'f', long)]
     pub filter_sites: bool,
 
@@ -288,6 +308,7 @@ pub struct PwdFromStdin {
     ///
     /// By default, deletion and missing characters ('*') are not counted as selectible nucleotide for comparison.
     /// Using this flag will instead mark them as valid matching positions.
+    ///
     #[clap(long)]
     pub consider_dels: bool,
 
@@ -306,6 +327,7 @@ pub struct PwdFromStdin {
     /// Change the window size of each jackknife block.
     ///
     /// Note that lower block values may drastically increase the memory footprint of grups-rs.
+    ///
     #[clap(short = 'b', long, required(false), default_value("1000000"))]
     pub blocksize: u32,
 
@@ -318,6 +340,7 @@ pub struct PwdFromStdin {
     /// Example:  '--samples 0-4 --min-depth 2 3 5 ' will result in:{n}
     ///   - Ind  : 0 1 2 3 4{n}
     ///   - Depth: 2 3 5 2 3{n}
+    ///
     #[clap(short='x', long, num_args(1..), required(false), default_values(&["1","1"]))]
     pub min_depth: Vec<u16>,
 
@@ -332,6 +355,7 @@ pub struct PwdFromStdin {
     /// Note that samples are specified by 0-based index value. Thus, use --samples 0-3 if you have
     /// 4 samples within your pileup file, and wish to investigate all pairwise comparisons between
     /// them.
+    ///
     #[clap(short='s', long, num_args(1..), default_values(&["0", "1"]))]
     pub samples: Vec<String>,
 
@@ -340,6 +364,7 @@ pub struct PwdFromStdin {
     /// Note that this argument requires the use of --targets to provide the program with a list of coordinates.
     /// The given coordinate file must furthermore explicitely provide with the REF/ALT alleles. See the --targets
     /// argument for additional information regarding valid file formats.
+    ///
     #[clap(long)]
     pub exclude_transitions: bool,
 }
@@ -393,6 +418,7 @@ pub struct PedigreeSims {
     /// ignore positions during pedigree simulations.
     ///
     /// Note that rates are specified as percentages.
+    ///
     #[clap(short='D', long, default_value("0.0"), value_parser=percent_str_to_ratio)]
     pub snp_downsampling_rate: f64,
 
@@ -434,6 +460,7 @@ pub struct PedigreeSims {
     ///
     /// In general, keep in mind that sequencing error rate values are recycled if the number of specified values is lower than the number of
     /// examined pileup individuals.
+    ///
     #[clap(short='U', long, required(false), num_args(1..), value_parser=parse_pedigree_param)]
     pub seq_error_rate: Option<Vec<Vec<f64>>>,
 
@@ -598,6 +625,7 @@ pub struct PedigreeSims {
 ///
 /// Encode large sets of phased VCF reference files in the form of Deterministic Acyclic Finite State Automata
 /// to enable a higher query performance when performing pedigree simulations.
+///
 #[derive(Args, Debug, Default, Serialize, Deserialize)]
 pub struct VCFFst {
     /// Path to an input reference panel definition file.
