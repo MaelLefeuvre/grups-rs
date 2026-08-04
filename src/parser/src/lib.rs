@@ -208,7 +208,7 @@ pub struct Common {
     /// Argument may accept slices (inclusive) such as '--chr 9-11' and/or discrete integers such as '--chr 1 4 13'.{n}
     /// Example:{n}
     ///   specifying          : '--chr 9-11 13 19-22 '{n}
-    ///   ...will be parsed as: [9, 10, 11, 13, 19, 20, 21, 22]
+    ///   ...will be parsed as: [9, 10, 11, 13, 19, 20, 21, 22]{n}
     ///
     #[clap(short, long, num_args(1..))]
     pub chr: Option<Vec<String>>,
@@ -479,11 +479,11 @@ pub struct PedigreeSims {
     /// It is therefore highly recommended that this directory ONLY contains the required recombination map files, and nothing else.
     ///
     /// The expected input is a headed, tab separated file with columns '<chr> <pos(bp)> <rate(cM/Mb)> <Map(cM)>'{n}
-    /// Example:
-    /// Chromosome  Position(bp)    Rate(cM/Mb)     Map(cM)
-    /// chr22       16051347        8.096992        0.000000
-    /// chr22       16052618        8.131520        0.010291
-    /// ...         ...             ...             ...
+    /// Example:{n}
+    /// Chromosome  Position(bp)    Rate(cM/Mb)     Map(cM) {n}
+    /// chr22       16051347        8.096992        0.000000{n}
+    /// chr22       16052618        8.131520        0.010291{n}
+    /// ...         ...             ...             ...{n}
     ///
     ///
     #[clap(short='G', long, required(false), value_parser=valid_input_directory)]
