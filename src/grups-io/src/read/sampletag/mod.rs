@@ -7,7 +7,7 @@ use genome::Sex;
 ///   information  of this sample is located within the vcf file
 #[derive(Debug, Clone)]
 pub struct SampleTag {
-    id : String,
+    id: String,
     idx: Option<usize>,
     sex: Option<Sex>,
     hash_id: u128,
@@ -21,7 +21,12 @@ impl SampleTag {
     #[must_use]
     pub fn new(id: &str, idx: Option<usize>, sex: Option<Sex>) -> Self {
         let sex = sex.or(Some(Sex::Unknown));
-        SampleTag{id: id.to_string(), idx, sex, hash_id: Self::hash_id_u128(id.as_bytes()) }
+        SampleTag {
+            id: id.to_string(),
+            idx,
+            sex,
+            hash_id: Self::hash_id_u128(id.as_bytes()),
+        }
     }
 
     /// Return the name of the sample.
@@ -36,7 +41,7 @@ impl SampleTag {
         &self.idx
     }
 
-    /// Return the sex of the sample 
+    /// Return the sex of the sample
     #[must_use]
     pub fn sex(&self) -> Option<Sex> {
         self.sex
@@ -57,8 +62,17 @@ impl SampleTag {
     pub fn hash_id_u128(id: &[u8]) -> u128 {
         let mut hashed_tag = [0u8; 16];
         hashed_tag[..id.len()].copy_from_slice(&id[..id.len()]);
-        let hashed_tag: u128 = unsafe {std::mem::transmute(hashed_tag)};
+        let hashed_tag = u128::from_be_bytes(hashed_tag);
         hashed_tag
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn unhash_id_u128(hash: u128) -> Vec<u8> {
+        let bytes = hash.to_be_bytes();
+        // remove right-leaning zero-padding
+        let end = bytes.iter().rposition(|&b| b != 0).map_or(0, |i| i + 1);
+        bytes[..end].to_vec()
     }
 }
 
@@ -90,7 +104,10 @@ impl std::cmp::PartialOrd for SampleTag {
 
 impl std::fmt::Display for SampleTag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let idx_str = match self.idx { Some(idx) => format!(" ({idx})"), None => String::new()};
+        let idx_str = match self.idx {
+            Some(idx) => format!(" ({idx})"),
+            None => String::new(),
+        };
         write!(f, "{}{}", self.id, idx_str)
     }
 }
@@ -111,5 +128,14 @@ mod tests {
         let reference = SampleTag::new("HG00096", None, None);
         assert_eq!(reference, SampleTag::new("HG00096", None, None));
         assert_ne!(reference, SampleTag::new("NA02099", None, None));
+    }
+
+    #[test]
+    fn test_hash_unhash_identical() {
+        for id in ["HG00096", "NA02098", "NA01056"] {
+            let hashed = SampleTag::hash_id_u128(id.as_bytes());
+            let dehashed = SampleTag::unhash_id_u128(hashed);
+            assert_eq!(dehashed, id.as_bytes());
+        }
     }
 }
