@@ -23,7 +23,7 @@ use log::{self, debug, info, trace, warn};
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
-use parking_lot::{RwLock, RwLockReadGuard,RwLockWriteGuard};
+use parking_lot::{Mutex, RwLock, RwLockReadGuard,RwLockWriteGuard};
 
 mod pedigree_reps;
 pub use pedigree_reps::PedigreeReps;
@@ -46,6 +46,15 @@ use constants::{
 };
 
 use crate::svm::LibSvmBuilder;
+
+/// libsvm's internally calls the C standard library's rand() to shuffle CV results. 
+/// The state of rand() is not thread localn so concurrent calls of compute_results()
+/// can creates a race-condition on it, making classification non reproducible when
+/// in a multithreaded environment (see Issue #14)...
+/// 
+/// HACK: we use LIBSVM_RAND_LOCK to reseed rand() before running compute_results()
+static LIBSVM_RAND_LOCK: std::sync::LazyLock<Mutex<()>> = std::sync::LazyLock::new(|| Mutex::new(()));
+extern "C" { fn srand(seed: std::os::raw::c_uint); }
 
 /// A Pedigree simulator, aggregating all pileup-comparison pedigree simulation replicates.
 /// # Fields
@@ -789,6 +798,12 @@ impl Pedigrees {
         threads: usize
     ) -> Result<()> {
         let loc_msg = "While attempting to compute corrected summary statistics";
+        // Reseed libsvm's underlying `rand()` calls.
+        // NOTE: seed to 1 is the default value of rand when running it unseeded
+        // (See: https://en.cppreference.com/c/numeric/random/srand)
+        let _libsvm_train_guard = LIBSVM_RAND_LOCK.lock();
+        unsafe { srand(1); }
+
         // ---- Resource acquisition
         let simulations_results = RwLock::new(BTreeMap::new());
         let svm_results = RwLock::new(BTreeMap::new());
