@@ -10,7 +10,7 @@
 
 [package]
   name                   = "grups-rs"
-  rust-version           = "1.70.0"  # io::IsTerminal trait.
+  rust-version           = "1.87.0"  # <=1.86.0 triggers E0658
   edition.workspace      = true 
   version.workspace      = true
   authors.workspace      = true
