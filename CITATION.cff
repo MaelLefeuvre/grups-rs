@@ -1,0 +1,118 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite it using the metadata from this fil
+  When citing GRUPS-rs within a scientific publication, please also cite the
+  associated paper linked in the preferred-citation entry, and consider also
+  citing the original GRUPS publication, which is listed under references.
+title: GRUPS-rs
+type: software
+version: 0.5.2
+date-released: "2026-08-10"
+authors:
+  - family-names: Lefeuvre
+    given-names: Maël
+    orcid: "https://orcid.org/0000-0002-3567-1088"
+repository-code: "https://github.com/MaelLefeuvre/grups-rs"
+license: GPL-3.0-or-later
+keywords:
+  - ancient-DNA
+  - relatedness
+  - paleogenomics
+  - pedigree simulations
+  - kinship
+  - command-line-tool
+  - rust
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.10389506"
+    description: "Zenodo archive of GRUPS-rs (all versions)"
+preferred-citation:
+  scope: >-
+    Cite this article to reference the GRUPS-rs software, as well as its
+    core scientific and methodological concepts.
+  type: article
+  title: >-
+    GRUPS-rs, a high-performance ancient DNA genetic relatedness estimation
+    software relying on pedigree simulations
+  authors:
+    - family-names: Lefeuvre
+      given-names: Maël
+      orcid: "https://orcid.org/0000-0002-3567-1088"
+    - family-names: Martin
+      given-names: Michael D
+      orcid: "https://orcid.org/0000-0002-2010-5139"
+    - family-names: Jay
+      given-names: Flora
+      orcid: "https://orcid.org/0000-0001-5884-4730"
+    - family-names: Marsolier
+      given-names: Marie-Claude
+      orcid: "https://orcid.org/0009-0002-2223-963X"
+    - family-names: Bon
+      given-names: Céline
+      orcid: "https://orcid.org/0000-0001-5422-3232"
+  journal: "Human Population Genetics and Genomics"
+  year: 2024
+  volume: 4
+  issue: 1
+  number: "0001"
+  doi: "10.47248/hpgg2404010001"
+  url: "https://doi.org/10.47248/hpgg2404010001"
+  repository-code: "https://github.com/MaelLefeuvre/grups-rs"
+references:
+  - scope: >-
+      Cite this article to reference the original software behind GRUPS-rs,
+      as well as its general methodological concepts.
+    type: article
+    title: >-
+      Determination of genetic relatedness from low-coverage human genome
+      sequences using pedigree simulations
+    authors:
+      - family-names: Martin
+        given-names: Michael David
+        orcid: "https://orcid.org/0000-0002-2010-5139"
+      - family-names: Jay
+        given-names: Flora
+        orcid: "https://orcid.org/0000-0001-5884-4730"
+      - family-names: Castellano
+        given-names: Sergi
+        orcid: "https://orcid.org/0000-0002-5819-4210"
+      - family-names: Slatkin
+        given-names: Montgomery
+        orcid: "https://orcid.org/0000-0003-3747-6486"
+    journal: "Molecular Ecology"
+    year: 2017
+    volume: 26
+    issue: 16
+    start: 4145
+    end: 4157
+    doi: "10.1111/mec.14188"
+    url: "https://doi.org/10.1111/mec.14188"
+    repository-code: "https://github.com/sameoldmike/grups"
+  - scope: >-
+      Cite this article if you used the 1000-genomes phase 3 variant callset
+      described in the README and examples of GRUPS-rs.
+    type: article
+    title: "A global reference for human genetic variation"
+    authors:
+      - entity: "The 1000 Genomes Project Consortium"
+    journal: "Nature"
+    year: 2015
+    volume: 526
+    start: 68
+    end: 74
+    doi: "10.1038/nature15393"
+    url: "https://doi.org/10.1038/nature15393"
+  - scope: >-
+       Cite this article if you used the HapMap-phaseII-b37 recombination maps
+       described in the README and examples of GRUPS-rs.
+    type: article
+    title: "A second generation human haplotype map of over 3.1 million SNPs"
+    authors:
+      - entity: "The International HapMap Consortium"
+    journal: "Nature"
+    year: 2007
+    volume: 449
+    start: 851
+    end: 861
+    doi: "10.1038/nature06258"
+    url: "https://doi.org/10.1038/nature06258"
